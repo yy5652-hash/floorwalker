@@ -18,7 +18,7 @@ const order = {
   id: "ORD1", payer: { email_address: "maya.chen@example.com" },
   purchase_units: [{ invoice_id: "JO-1", items: [{ name: "Speckled Mug", quantity: "2", unit_amount: { value: "24.00" } }], payments: { refunds: [] } }],
 };
-const ticket: store.Ticket = {
+const ticket: import("../server/db.ts").Ticket = {
   id: "T1", channel: "email", from_name: "Maya Chen", from_email: "maya.chen@example.com", subject: "Chipped mug",
   body: "One mug arrived chipped, please refund it.", received_at: new Date().toISOString(), status: "open", reply: null,
 };

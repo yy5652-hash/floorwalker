@@ -9,3 +9,4 @@ data/*.db*
 film/out/
 PLAN.md
 .claude/
+notes/

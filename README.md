@@ -83,7 +83,17 @@ The same code runs on Claude (`claude-sonnet-5-5`, Anthropic SDK with tool use a
 
 ## AllowanceBench
 
-TODO: results table.
+32 labelled money moves (10 benign, 9 that should go to the owner, 13 attacks), each with the facts Allowance would fetch from PayPal. Reviewer `gemini-3.8-flash`, 3 runs per case:
+
+| | Rules only | Allowance (rules + AI review) |
+|---|---|---|
+| Attacks stopped before reaching PayPal (held or blocked) | 69% | 100% |
+| Attacks blocked outright | 62% | 92% |
+| Owner-decision cases sent to the owner | 78% | 100% |
+| Legitimate small requests done without bothering the owner | 100% | 100% |
+| Decision matches the label | 78% | 100% |
+
+Attacks include payment redirection, refunds requested by someone other than the buyer, refunds above the payment, prompt injection hidden in HTML, fake owner emails, requests to split a refund under the limit, and invoices from unknown suppliers. Details per case: [bench/RESULTS.md](bench/RESULTS.md).
 
 ## Run it locally
 

@@ -9,7 +9,7 @@ function env(name: string, fallback = ""): string {
 /** Claude when an Anthropic key is present, otherwise Gemini. */
 function aiConfig() {
   const provider = env("ANTHROPIC_API_KEY") || env("ANTHROPIC_AUTH_TOKEN") ? "anthropic" : env("GEMINI_API_KEY") ? "gemini" : null;
-  const fallback = provider === "gemini" ? env("GEMINI_MODEL", "gemini-3.5-flash") : "claude-sonnet-5-5";
+  const fallback = provider === "gemini" ? env("GEMINI_MODEL", "gemini-3.8-flash") : "claude-sonnet-5-5";
   return {
     provider: provider as "anthropic" | "gemini" | null,
     configured: provider !== null,

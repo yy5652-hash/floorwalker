@@ -190,6 +190,10 @@ export function transition(id: number, from: LedgerStatus, to: LedgerStatus): bo
   return db.prepare("UPDATE ledger SET status = ? WHERE id = ? AND status = ?").run(to, id, from).changes === 1;
 }
 
+export function setPaypalResult(id: number, result: unknown) {
+  db.prepare("UPDATE ledger SET paypal_result = ? WHERE id = ?").run(JSON.stringify(result), id);
+}
+
 export function ledger(): LedgerRow[] {
   return db.prepare("SELECT * FROM ledger ORDER BY id DESC").all() as any;
 }

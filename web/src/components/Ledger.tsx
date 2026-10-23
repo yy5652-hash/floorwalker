@@ -27,6 +27,12 @@ function why(l: LedgerEntry): string {
   return hit ? `${hit.label}: ${hit.detail}` : "All checks passed";
 }
 
+function paypalStatus(l?: LedgerEntry): string {
+  const r = l?.paypal_result;
+  if (!r) return "";
+  return r.items?.[0]?.transaction_status ?? r.batch_header?.batch_status ?? r.status ?? "";
+}
+
 export function Ledger({ state }: { state: State }) {
   const grid = useRef<AgGridReact<LedgerEntry>>(null);
   const [selected, setSelected] = useState<LedgerEntry | null>(null);
@@ -44,6 +50,7 @@ export function Ledger({ state }: { state: State }) {
     { headerName: "Why", flex: 2, minWidth: 260, valueGetter: (p) => (p.data ? why(p.data) : ""), tooltipValueGetter: (p) => p.value },
     { field: "ticket_id", headerName: "Inbox item", flex: 1, minWidth: 170, valueFormatter: (p) => (p.value === "ATTACK" ? "Hijacked-agent simulation" : subjects[p.value] ?? "") },
     { field: "paypal_ref", headerName: "PayPal ref", width: 180, cellClass: "mono" },
+    { headerName: "PayPal status", width: 140, valueGetter: (p) => paypalStatus(p.data) },
   ], [subjects]);
 
   const moved = state.ledger.filter((l) => l.status === "executed" || l.status === "approved");

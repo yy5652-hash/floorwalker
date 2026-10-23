@@ -7,6 +7,7 @@ import * as store from "./db.ts";
 import { seedDemo } from "./demo.ts";
 import { compilePolicy } from "./guard/compile.ts";
 import { approve, declineRequest } from "./guard/index.ts";
+import { getPayoutBatch } from "./paypal/api.ts";
 import { validatePolicy } from "./guard/policy.ts";
 
 const app = express();
@@ -139,6 +140,20 @@ if (config.production) {
   const vite = await createServer({ server: { middlewareMode: true }, appType: "spa" });
   app.use(vite.middlewares);
 }
+
+// Payout batches settle a few seconds after they are sent; keep the ledger's copy current.
+setInterval(async () => {
+  if (!paypalConfigured()) return;
+  const pending = store.ledger().filter((r) => r.tool === "send_payout" && r.paypal_ref && ["executed", "approved"].includes(r.status)
+    && ["PENDING", "PROCESSING"].includes(JSON.parse(r.paypal_result ?? "{}")?.batch_header?.batch_status));
+  for (const r of pending.slice(0, 5)) {
+    try {
+      store.setPaypalResult(r.id, await getPayoutBatch(r.paypal_ref!));
+    } catch {
+      // Try again on the next tick.
+    }
+  }
+}, 15_000).unref();
 
 app.listen(config.port, () => {
   console.log(`Allowance on http://localhost:${config.port}  (PayPal sandbox: ${paypalConfigured() ? "ready" : "missing credentials"}, Claude: ${config.anthropic.configured ? "ready" : "missing key"})`);

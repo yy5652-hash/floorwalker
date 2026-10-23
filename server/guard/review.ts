@@ -51,5 +51,5 @@ export async function reviewAction(input: {
       ? `<source_message from="${input.source.from}" subject="${input.source.subject.replace(/"/g, "'")}">\n${input.source.body}\n</source_message>`
       : "<source_message>(none: the agent acted without an inbound message)</source_message>",
   ].join("\n\n");
-  return structured({ model: config.anthropic.reviewModel, system: SYSTEM, prompt, schema: ReviewSchema, effort: "medium" });
+  return structured({ model: config.ai.reviewModel, system: SYSTEM, prompt, schema: ReviewSchema, effort: "medium" });
 }

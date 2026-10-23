@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getState, money, post, type State } from "./api";
+import { getState, modelName, money, post, type State } from "./api";
 import { Approvals } from "./components/Approvals";
 import { Inbox } from "./components/Inbox";
 import { Ledger } from "./components/Ledger";
@@ -48,7 +48,7 @@ export function App() {
         </div>
         <span className="spacer" />
         <span className="status-chip"><span className={`dot ${state.configured.paypal ? "on" : ""}`} />PayPal sandbox</span>
-        <span className="status-chip"><span className={`dot ${state.configured.anthropic ? "on" : ""}`} />Claude</span>
+        <span className="status-chip"><span className={`dot ${state.configured.ai ? "on" : ""}`} />{modelName(state.configured)}</span>
         <button className="btn ghost-dark" disabled={resetting || !state.configured.paypal} onClick={reset}>{resetting ? "Creating orders…" : "Reset demo"}</button>
       </header>
       <nav className="tabs">

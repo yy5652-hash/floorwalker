@@ -26,7 +26,7 @@ export function ReviewNote({ review }: { review: Review | null }) {
   const quote = review.concerns.find((c) => c.evidence)?.evidence;
   return (
     <div className="review">
-      <b>Claude review:</b> {review.summary}
+      <b>AI review:</b> {review.summary}
       {review.verdict !== "approve" && quote && <span className="quote">“{quote}”</span>}
     </div>
   );

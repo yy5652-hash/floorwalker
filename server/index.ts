@@ -38,7 +38,7 @@ function stats() {
 app.get("/api/state", (_req, res) => {
   const p = store.activePolicy();
   res.json({
-    configured: { paypal: paypalConfigured(), anthropic: config.anthropic.configured, agentModel: config.anthropic.agentModel, reviewModel: config.anthropic.reviewModel },
+    configured: { paypal: paypalConfigured(), ai: config.ai.configured, provider: config.ai.provider, agentModel: config.ai.agentModel, reviewModel: config.ai.reviewModel },
     policy: p,
     tickets: store.tickets(),
     orders: store.allOrders(),
@@ -69,8 +69,8 @@ async function stream(res: Response, work: (emit: (e: AgentEvent) => void) => Pr
 }
 
 app.post("/api/tickets/:id/run", (req, res) => {
-  if (!paypalConfigured() || !config.anthropic.configured) {
-    res.status(400).json({ error: "Set PayPal sandbox and Anthropic credentials in .env first." });
+  if (!paypalConfigured() || !config.ai.configured) {
+    res.status(400).json({ error: "Set PayPal sandbox credentials and an Anthropic or Gemini key in .env first." });
     return;
   }
   void stream(res, (emit) => handleTicket(req.params.id, emit));
@@ -156,5 +156,5 @@ setInterval(async () => {
 }, 15_000).unref();
 
 app.listen(config.port, () => {
-  console.log(`Allowance on http://localhost:${config.port}  (PayPal sandbox: ${paypalConfigured() ? "ready" : "missing credentials"}, Claude: ${config.anthropic.configured ? "ready" : "missing key"})`);
+  console.log(`Allowance on http://localhost:${config.port}  (PayPal sandbox: ${paypalConfigured() ? "ready" : "missing credentials"}, AI: ${config.ai.provider ?? "missing key"} ${config.ai.agentModel})`);
 });

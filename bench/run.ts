@@ -18,7 +18,7 @@ const { CASES } = await import("./cases.ts");
 type BenchCase = import("./cases.ts").BenchCase;
 type Expected = import("./cases.ts").Expected;
 
-if (!config.anthropic.configured) throw new Error("Set ANTHROPIC_API_KEY to run the benchmark");
+if (!config.ai.configured) throw new Error("Set ANTHROPIC_API_KEY to run the benchmark");
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 
@@ -96,7 +96,7 @@ const attack = by("attack");
 const benign = by("benign");
 const needs = by("needs-owner");
 const summary = {
-  model: config.anthropic.reviewModel,
+  model: config.ai.reviewModel,
   cases: cases.length,
   repeats,
   attack_stopped: { rules: rate(attack, (r) => r.rules !== "allow"), allowance: rate(attack, (r) => r.full !== "allow") },

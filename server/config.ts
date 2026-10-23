@@ -6,6 +6,18 @@ function env(name: string, fallback = ""): string {
   return (process.env[name] ?? fallback).trim();
 }
 
+/** Claude when an Anthropic key is present, otherwise Gemini. */
+function aiConfig() {
+  const provider = env("ANTHROPIC_API_KEY") || env("ANTHROPIC_AUTH_TOKEN") ? "anthropic" : env("GEMINI_API_KEY") ? "gemini" : null;
+  const fallback = provider === "gemini" ? env("GEMINI_MODEL", "gemini-3.5-flash") : "claude-sonnet-5-5";
+  return {
+    provider: provider as "anthropic" | "gemini" | null,
+    configured: provider !== null,
+    agentModel: env("ALLOWANCE_AGENT_MODEL") || fallback,
+    reviewModel: env("ALLOWANCE_REVIEW_MODEL") || fallback,
+  };
+}
+
 export const config = {
   port: Number(env("PORT", "3000")),
   production: env("NODE_ENV") === "production",
@@ -16,11 +28,7 @@ export const config = {
     // Sandbox only. There is deliberately no switch to the live API.
     baseUrl: "https://api-m.sandbox.paypal.com",
   },
-  anthropic: {
-    configured: Boolean(env("ANTHROPIC_API_KEY") || env("ANTHROPIC_AUTH_TOKEN")),
-    agentModel: env("ALLOWANCE_AGENT_MODEL", "claude-sonnet-5-5"),
-    reviewModel: env("ALLOWANCE_REVIEW_MODEL", "claude-sonnet-5-5"),
-  },
+  ai: aiConfig(),
   demo: {
     payeeEmail: env("DEMO_PAYEE_EMAIL"),
   },

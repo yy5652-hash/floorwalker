@@ -1,6 +1,6 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import * as store from "../db.ts";
 import { GUARDED_TOOLS, guardedCall, type GuardEvent } from "../guard/index.ts";
+import type { ToolDef } from "../llm.ts";
 import { callToolkit, toolkitToolDefs } from "../toolkit.ts";
 
 const REASON = {
@@ -8,7 +8,7 @@ const REASON = {
   description: "Why this is the right action, citing the customer's message and the order facts. Allowance shows this to the owner.",
 };
 
-const OWN_TOOLS: Anthropic.Tool[] = [
+const OWN_TOOLS: ToolDef[] = [
   {
     name: "find_customer_orders",
     description: "List this shop's PayPal orders for a customer email: order id, capture id (needed for refunds), items, amount, date and shipment tracking.",
@@ -34,8 +34,8 @@ const OWN_TOOLS: Anthropic.Tool[] = [
  * The agent's tools: PayPal Agent Toolkit tools plus Allowance's own. Money-moving tools
  * get a required `reason`, and any `extra` properties (the MCP server adds the requester).
  */
-export function agentTools(extra: Record<string, unknown> = {}, extraRequired: string[] = []): Anthropic.Tool[] {
-  const addReason = (t: Anthropic.Tool): Anthropic.Tool => {
+export function agentTools(extra: Record<string, unknown> = {}, extraRequired: string[] = []): ToolDef[] {
+  const addReason = (t: ToolDef): ToolDef => {
     if (!GUARDED_TOOLS.has(t.name)) return t;
     const schema = t.input_schema as any;
     return {

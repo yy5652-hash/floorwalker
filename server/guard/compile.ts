@@ -11,7 +11,7 @@ const SYSTEM = `You turn a small-business owner's plain-language spending rules 
 
 export async function compilePolicy(text: string, current: Policy): Promise<Policy> {
   const raw = await structured({
-    model: config.anthropic.reviewModel,
+    model: config.ai.reviewModel,
     system: SYSTEM,
     prompt: `<current_policy>\n${JSON.stringify(current, null, 2)}\n</current_policy>\n\n<owner_rules>\n${text}\n</owner_rules>`,
     schema: PolicySchema,

@@ -49,7 +49,7 @@ export type Policy = {
 };
 
 export type State = {
-  configured: { paypal: boolean; anthropic: boolean; agentModel: string; reviewModel: string };
+  configured: { paypal: boolean; ai: boolean; provider: "anthropic" | "gemini" | null; agentModel: string; reviewModel: string };
   policy: { id: number; text: string; policy: Policy };
   tickets: Ticket[];
   orders: any[];
@@ -117,6 +117,8 @@ export async function streamEvents(path: string, onEvent: (e: AgentEvent) => voi
 }
 
 export const money = (n: number) => `$${n.toFixed(2)}`;
+
+export const modelName = (c: State["configured"]) => (c.provider === "gemini" ? "Gemini" : "Claude");
 
 export function describe(e: { tool: string; amount: number; counterparty: string | null; params?: any }): string {
   if (e.tool === "create_refund") return `Refund ${money(e.amount)} to ${e.counterparty}`;

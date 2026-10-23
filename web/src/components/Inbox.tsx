@@ -84,7 +84,7 @@ export function Inbox({ state, refresh, notify }: { state: State; refresh: () =>
   const [events, setEvents] = useState<Record<string, AgentEvent[]>>({});
   const [running, setRunning] = useState<string | null>(null);
   const ticket = state.tickets.find((t) => t.id === selected) ?? state.tickets[0];
-  const ready = state.configured.paypal && state.configured.anthropic;
+  const ready = state.configured.paypal && state.configured.ai;
 
   async function run(path: string, key: string) {
     setRunning(key);
@@ -179,7 +179,7 @@ export function Inbox({ state, refresh, notify }: { state: State; refresh: () =>
             <div className="card-b">
               <MessageBody body={ticket.body} />
               {events[ticket.id]?.length ? <Trace events={events[ticket.id]} /> : tracePast(ticket)}
-              {!ready && <p className="hint">Add PayPal sandbox and Anthropic credentials to .env to run the agent.</p>}
+              {!ready && <p className="hint">Add PayPal sandbox credentials and an Anthropic or Gemini key to .env to run the agent.</p>}
             </div>
           </>
         )}

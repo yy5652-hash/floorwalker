@@ -1,6 +1,6 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { PayPalAgentToolkit } from "@paypal/agent-toolkit/bedrock";
 import { config } from "./config.ts";
+import type { ToolDef } from "./llm.ts";
 
 // The subset of PayPal Agent Toolkit tools the support agent gets.
 // create_refund moves money, so Allowance intercepts it; the rest are reads.
@@ -25,10 +25,10 @@ function toolkit(requestId?: string) {
   });
 }
 
-let defs: Anthropic.Tool[] | null = null;
+let defs: ToolDef[] | null = null;
 
-/** Toolkit tool definitions converted to Claude tool definitions. */
-export function toolkitToolDefs(): Anthropic.Tool[] {
+/** Toolkit tool definitions in the shape the model APIs take. */
+export function toolkitToolDefs(): ToolDef[] {
   defs ??= toolkit()
     .getTools()
     .filter((t) => (TOOLKIT_TOOLS as readonly string[]).includes(t.toolSpec.name))

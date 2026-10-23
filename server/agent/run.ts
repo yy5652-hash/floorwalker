@@ -1,8 +1,7 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config.ts";
 import * as store from "../db.ts";
 import { GUARDED_TOOLS, type GuardEvent } from "../guard/index.ts";
-import { anthropic } from "../llm.ts";
+import { toolLoop } from "../llm.ts";
 import { agentTools, runTool } from "./tools.ts";
 
 export type AgentEvent =
@@ -33,45 +32,25 @@ export async function handleTicket(ticketId: string, emit: (e: AgentEvent) => vo
   const header = ticket.channel === "email"
     ? `New customer email.\nFrom: ${ticket.from_name} <${ticket.from_email}>\nSubject: ${ticket.subject}\nReceived: ${ticket.received_at}`
     : `New to-do note from the owner (${ticket.from_name}).\nSubject: ${ticket.subject}`;
-  const messages: Anthropic.MessageParam[] = [
-    { role: "user", content: `${header}\n\n<message>\n${ticket.body}\n</message>` },
-  ];
-  let reply = "";
-  for (let turn = 0; turn < 12; turn++) {
-    const res = await anthropic().messages.create({
-      model: config.anthropic.agentModel,
-      max_tokens: 16000,
-      system: SYSTEM,
-      tools: agentTools(),
-      output_config: { effort: "medium" },
-      messages,
-    });
-    if (res.stop_reason === "refusal") {
-      emit({ type: "error", message: "The model declined this item." });
-      break;
-    }
-    const texts = res.content.filter((b): b is Anthropic.TextBlock => b.type === "text").map((b) => b.text.trim()).filter(Boolean);
-    const calls = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-    messages.push({ role: "assistant", content: res.content });
-    if (calls.length === 0) {
-      reply = texts.join("\n\n");
-      break;
-    }
-    for (const t of texts) emit({ type: "note", text: t });
-    const results: Anthropic.ToolResultBlockParam[] = [];
-    for (const call of calls) {
+  const reply = await toolLoop({
+    model: config.ai.agentModel,
+    system: SYSTEM,
+    user: `${header}\n\n<message>\n${ticket.body}\n</message>`,
+    tools: agentTools(),
+    maxTurns: 12,
+    onNote: (text) => emit({ type: "note", text }),
+    onCall: async (call) => {
       emit({ type: "tool_call", id: call.id, name: call.name, input: call.input, guarded: GUARDED_TOOLS.has(call.name) });
       try {
         const r = await runTool(call.name, call.input, ticket, emit);
         emit({ type: "tool_result", id: call.id, name: call.name, summary: r.summary, isError: r.isError });
-        results.push({ type: "tool_result", tool_use_id: call.id, content: r.text, is_error: r.isError });
+        return { content: r.text, isError: r.isError };
       } catch (e: any) {
         emit({ type: "tool_result", id: call.id, name: call.name, summary: e.message, isError: true });
-        results.push({ type: "tool_result", tool_use_id: call.id, content: `Error: ${e.message}`, is_error: true });
+        return { content: `Error: ${e.message}`, isError: true };
       }
-    }
-    messages.push({ role: "user", content: results });
-  }
+    },
+  });
   if (reply) {
     store.closeTicket(ticketId, reply);
     emit({ type: "reply", text: reply });

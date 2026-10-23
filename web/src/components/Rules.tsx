@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { money, post, type Policy, type State } from "../api";
+import { modelName, money, post, type Policy, type State } from "../api";
 
 function get(p: any, path: string) {
   return path.split(".").reduce((o, k) => o?.[k], p);
@@ -90,8 +90,8 @@ export function Rules({ state, refresh, notify }: { state: State; refresh: () =>
         <div className="card-b">
           <textarea value={text} onChange={(e) => setText(e.target.value)} />
           <div className="row" style={{ marginTop: 10 }}>
-            <button className="btn primary" disabled={busy || !state.configured.anthropic} onClick={compile}>{busy ? "Claude is reading…" : "Turn into rules"}</button>
-            <span className="hint">Claude turns this into the limits on the right. Nothing changes until you activate it.</span>
+            <button className="btn primary" disabled={busy || !state.configured.ai} onClick={compile}>{busy ? `${modelName(state.configured)} is reading…` : "Turn into rules"}</button>
+            <span className="hint">{modelName(state.configured)} turns this into the limits on the right. Nothing changes until you activate it.</span>
           </div>
           {error && <p className="err">{error}</p>}
         </div>

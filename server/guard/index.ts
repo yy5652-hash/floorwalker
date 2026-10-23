@@ -162,7 +162,7 @@ export async function guardedCall(tool: string, input: unknown, ctx: GuardContex
   const { policy } = store.activePolicy();
   let review: Review | null = null;
   let reviewError: string | undefined;
-  if (config.anthropic.configured) {
+  if (config.ai.configured) {
     try {
       review = await deps.reviewAction({
         action: prepared.action, tool, justification: ctx.justification, facts: prepared.facts, checks: prepared.checks, policy,

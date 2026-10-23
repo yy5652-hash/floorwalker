@@ -88,6 +88,12 @@ test("when the reviewer fails, nothing goes through on its own", async () => {
   assert.equal(paypalCalls.length, 0);
 });
 
+test("a payout an email asks for waits for the owner even when the payee is known", async () => {
+  const msg = await guard.guardedCall("send_payout", { email: "sam.rivera@example.com", amount: 35, note: "Windows" }, { ticket, justification: "Sam asked" });
+  assert.match(msg, /held/);
+  assert.equal(paypalCalls.length, 0);
+});
+
 test("a payout to an address that is not on the payee list never reaches PayPal", async () => {
   const msg = await guard.guardedCall("send_payout", { email: "sam.rivera.windows@gmail.com", amount: 35, note: "Windows" }, { ticket, justification: "Sam asked" });
   assert.match(msg, /blocked/);
@@ -95,8 +101,9 @@ test("a payout to an address that is not on the payee list never reaches PayPal"
 });
 
 test("budgets count what was already paid: the second $35 to Sam in a day is held as a duplicate", async () => {
-  await guard.guardedCall("send_payout", { email: "sam.rivera@example.com", amount: 35, note: "Windows" }, { justification: "Owner's to-do" });
-  const msg = await guard.guardedCall("send_payout", { email: "sam.rivera@example.com", amount: 35, note: "Windows" }, { justification: "Owner's to-do" });
+  const todo = { ...ticket, id: "T3", channel: "task" as const, from_name: "Elena (owner)", from_email: "owner@juniperandoak.example", body: "Pay Sam $35 for the windows." };
+  await guard.guardedCall("send_payout", { email: "sam.rivera@example.com", amount: 35, note: "Windows" }, { ticket: todo, justification: "Owner's to-do" });
+  const msg = await guard.guardedCall("send_payout", { email: "sam.rivera@example.com", amount: 35, note: "Windows" }, { ticket: todo, justification: "Owner's to-do" });
   assert.match(msg, /held/);
   assert.deepEqual(paypalCalls, ["payout:sam.rivera@example.com:35.00"]);
 });

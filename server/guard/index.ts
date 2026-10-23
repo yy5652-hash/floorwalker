@@ -90,12 +90,12 @@ async function prepareRefund(a: RefundAction, ctx: GuardContext): Promise<Prepar
   return { action: { ...a, amount: actionAmount(a, rf) }, counterparty: buyerEmail ?? "unknown", facts, checks };
 }
 
-async function preparePayout(a: PayoutAction): Promise<Prepared> {
+async function preparePayout(a: PayoutAction, ctx: GuardContext): Promise<Prepared> {
   const { policy } = store.activePolicy();
   const paid = store.paidToPayee(a.email, 30);
   const recent = store.paidToPayee(a.email, 1);
   const checks = Number.isFinite(a.amount) && a.amount > 0
-    ? checkPayout(a, { paidToPayee30d: paid.total, samePayeeSameAmount24h: recent.amounts.some((r) => Math.abs(r.amount - a.amount) < 0.005) }, policy, store.spendHistory())
+    ? checkPayout(a, { paidToPayee30d: paid.total, samePayeeSameAmount24h: recent.amounts.some((r) => Math.abs(r.amount - a.amount) < 0.005), requestedByOwner: ctx.ticket?.channel === "task" }, policy, store.spendHistory())
     : [{ id: "amount", label: "Amount", outcome: "block" as const, detail: "The payout amount is missing or not positive." }];
   const payee = policy.payouts.payees.find((p) => p.email.toLowerCase() === a.email.toLowerCase());
   const facts = {
@@ -158,7 +158,7 @@ async function execute(id: number): Promise<{ ok: boolean; ref?: string; note: s
 
 /** Intercepts one money-moving tool call: rules, AI review, then execute, hold or block. */
 export async function guardedCall(tool: string, input: unknown, ctx: GuardContext): Promise<string> {
-  const prepared = tool === "create_refund" ? await prepareRefund(toRefundAction(input), ctx) : await preparePayout(toPayoutAction(input));
+  const prepared = tool === "create_refund" ? await prepareRefund(toRefundAction(input), ctx) : await preparePayout(toPayoutAction(input), ctx);
   const { policy } = store.activePolicy();
   let review: Review | null = null;
   let reviewError: string | undefined;

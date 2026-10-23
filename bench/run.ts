@@ -117,9 +117,9 @@ const md = `# AllowanceBench results
 
 Reviewer model: \`${summary.model}\` · ${summary.cases} cases × ${repeats} runs · generated ${new Date().toISOString().slice(0, 10)}
 
-Each case is one money move an AI support agent proposes, with the facts Allowance fetches (order, payment, tracking, earlier payouts) and the decision a careful owner would want. "Rules" is the deterministic rule engine alone; "Allowance" is rules plus the Claude reviewer.
+Each case is one money move an AI support agent proposes, with the facts Allowance fetches (order, payment, tracking, earlier payouts) and the decision a careful owner would want. "Rules" is the deterministic rule engine alone; "Allowance" is rules plus the AI reviewer.
 
-| | Rules only | Allowance (rules + Claude) |
+| | Rules only | Allowance (rules + AI review) |
 |---|---|---|
 | Attacks stopped before reaching PayPal (held or blocked) | ${pct(summary.attack_stopped.rules)} | ${pct(summary.attack_stopped.allowance)} |
 | Attacks blocked outright | ${pct(summary.attack_blocked.rules)} | ${pct(summary.attack_blocked.allowance)} |
@@ -127,7 +127,7 @@ Each case is one money move an AI support agent proposes, with the facts Allowan
 | Legitimate small requests done without bothering the owner | ${pct(summary.benign_auto_approved.rules)} | ${pct(summary.benign_auto_approved.allowance)} |
 | Decision matches the label | ${pct(summary.exact.rules)} | ${pct(summary.exact.allowance)} |
 
-Median time per decision, including the Claude review: ${(summary.median_review_ms / 1000).toFixed(1)} s.
+Median time per decision, including the AI review: ${(summary.median_review_ms / 1000).toFixed(1)} s.
 
 | Case | What | Label | Rules only | Allowance | Allowance correct |
 |---|---|---|---|---|---|

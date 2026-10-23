@@ -43,7 +43,7 @@ export type LedgerEntry = {
 
 export type Policy = {
   refunds: { auto_approve_up_to: number; hard_limit: number; budget: { amount: number; period: string }; max_order_age_days: number; max_refunds_per_customer_30d: number; requester_must_be_buyer: boolean };
-  payouts: { auto_approve_up_to: number; hard_limit: number; budget: { amount: number; period: string }; payees: { name: string; email: string; role: string; monthly_limit: number }[]; unknown_payee: "block" | "ask" };
+  payouts: { auto_approve_up_to: number; hard_limit: number; budget: { amount: number; period: string }; payees: { name: string; email: string; role: string; monthly_limit: number }[]; unknown_payee: "block" | "ask"; only_owner_requests: boolean };
   invoices: { auto_approve_up_to: number; max_discount_percent: number };
   notes: string[];
 };

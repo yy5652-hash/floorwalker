@@ -61,18 +61,23 @@ test("old orders and repeat refunds need approval", () => {
 });
 
 test("payout to a known payee within limits is allowed", () => {
-  const checks = checkPayout({ kind: "payout", email: "sam.rivera@example.com", amount: 35, note: "Windows, Tue" }, { paidToPayee30d: 0, samePayeeSameAmount24h: false }, DEFAULT_POLICY, [], now);
+  const checks = checkPayout({ kind: "payout", email: "sam.rivera@example.com", amount: 35, note: "Windows, Tue" }, { paidToPayee30d: 0, samePayeeSameAmount24h: false, requestedByOwner: true }, DEFAULT_POLICY, [], now);
   assert.equal(decide(checks), "allow");
 });
 
 test("payout to a changed bank address is blocked", () => {
-  const checks = checkPayout({ kind: "payout", email: "sam.rivera.payments@gmail.com", amount: 35, note: "" }, { paidToPayee30d: 0, samePayeeSameAmount24h: false }, DEFAULT_POLICY, [], now);
+  const checks = checkPayout({ kind: "payout", email: "sam.rivera.payments@gmail.com", amount: 35, note: "" }, { paidToPayee30d: 0, samePayeeSameAmount24h: false, requestedByOwner: true }, DEFAULT_POLICY, [], now);
   assert.equal(decide(checks), "block");
 });
 
 test("payout over the payee's monthly limit or duplicated needs approval", () => {
-  assert.equal(decide(checkPayout({ kind: "payout", email: "sam.rivera@example.com", amount: 35, note: "" }, { paidToPayee30d: 70, samePayeeSameAmount24h: false }, DEFAULT_POLICY, [], now)), "hold");
-  assert.equal(decide(checkPayout({ kind: "payout", email: "sam.rivera@example.com", amount: 35, note: "" }, { paidToPayee30d: 35, samePayeeSameAmount24h: true }, DEFAULT_POLICY, [], now)), "hold");
+  assert.equal(decide(checkPayout({ kind: "payout", email: "sam.rivera@example.com", amount: 35, note: "" }, { paidToPayee30d: 70, samePayeeSameAmount24h: false, requestedByOwner: true }, DEFAULT_POLICY, [], now)), "hold");
+  assert.equal(decide(checkPayout({ kind: "payout", email: "sam.rivera@example.com", amount: 35, note: "" }, { paidToPayee30d: 35, samePayeeSameAmount24h: true, requestedByOwner: true }, DEFAULT_POLICY, [], now)), "hold");
+});
+
+test("a payout that an email asked for, rather than the owner, needs approval", () => {
+  const checks = checkPayout({ kind: "payout", email: "priya.shah@example.com", amount: 45, note: "" }, { paidToPayee30d: 0, samePayeeSameAmount24h: false, requestedByOwner: false }, DEFAULT_POLICY, [], now);
+  assert.equal(decide(checks), "hold");
 });
 
 test("invoice discount above the cap needs approval", () => {

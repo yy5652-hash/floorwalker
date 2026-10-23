@@ -20,7 +20,7 @@ export type RefundFacts = {
   requesterEmail?: string;
   customerRefunds30d: number;
 };
-export type PayoutFacts = { paidToPayee30d: number; samePayeeSameAmount24h: boolean };
+export type PayoutFacts = { paidToPayee30d: number; samePayeeSameAmount24h: boolean; requestedByOwner: boolean };
 
 /** Money the agent has already moved, from the ledger. */
 export type Spend = { kind: MoneyAction["kind"]; amount: number; at: string };
@@ -119,6 +119,13 @@ export function checkPayout(a: PayoutAction, f: PayoutFacts, policy: Policy, his
       after > payee.monthly_limit
         ? { id: "payee_limit", label: "Payee monthly limit", outcome: "hold", detail: `${payee.name} would get ${money(after)} in 30 days; the limit is ${money(payee.monthly_limit)}.` }
         : { id: "payee_limit", label: "Payee monthly limit", outcome: "pass", detail: `${money(after)} of ${payee.name}'s ${money(payee.monthly_limit)} monthly limit.` },
+    );
+  }
+  if (p.only_owner_requests) {
+    checks.push(
+      f.requestedByOwner
+        ? { id: "requested_by", label: "Requested by", outcome: "pass", detail: "The owner asked for this payment." }
+        : { id: "requested_by", label: "Requested by", outcome: "hold", detail: "An incoming message asked for this payment, not the owner." },
     );
   }
   if (f.samePayeeSameAmount24h) {

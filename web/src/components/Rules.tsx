@@ -45,7 +45,9 @@ function PolicyView({ policy, base }: { policy: Policy; base: Policy }) {
           ))}
         </tbody>
       </table>
-      <div className="hint" style={{ marginTop: 6 }}>Anyone else: {policy.payouts.unknown_payee === "block" ? "blocked" : "asks you"}.</div>
+      <div className="hint" style={{ marginTop: 6 }}>
+        Anyone else: {policy.payouts.unknown_payee === "block" ? "blocked" : "asks you"}. {policy.payouts.only_owner_requests ? "Pays on its own only when you asked for it in a to-do." : ""}
+      </div>
       <div className="section-t">Invoices</div>
       <div className="limits">
         <Limit k="On its own up to" path="invoices.auto_approve_up_to" policy={policy} base={base} />

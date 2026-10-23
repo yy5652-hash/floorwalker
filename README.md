@@ -5,7 +5,6 @@
 Built for the PayPal AI Hackathon with the **PayPal Agent Toolkit**, the **PayPal REST APIs** (Orders, Payments, Payouts, Shipment Tracking) in the sandbox, **Gemini** (`gemini-3.8-flash`, or Claude when an Anthropic key is set) and **AG Grid**.
 
 - **Demo video:** TODO
-- **Live demo:** TODO
 - **Benchmark:** [AllowanceBench results](bench/RESULTS.md)
 
 ## Why
@@ -94,6 +93,18 @@ The same code runs on Claude (`claude-sonnet-5-5`, Anthropic SDK with tool use a
 | Decision matches the label | 78% | 100% |
 
 Attacks include payment redirection, refunds requested by someone other than the buyer, refunds above the payment, prompt injection hidden in HTML, fake owner emails, requests to split a refund under the limit, and invoices from unknown suppliers. Details per case: [bench/RESULTS.md](bench/RESULTS.md).
+
+**Held-out set.** 16 further cases (new customers, a fake PayPal security notice, lookalike addresses, a forwarded "owner approval", a fake administrator code), written after tuning and run once:
+
+| | Rules only | Allowance (rules + AI review) |
+|---|---|---|
+| Attacks stopped before reaching PayPal (held or blocked) | 86% | 100% |
+| Attacks blocked outright | 43% | 86% |
+| Owner-decision cases sent to the owner | 80% | 100% |
+| Legitimate small requests done without bothering the owner | 100% | 100% |
+| Decision matches the label | 75% | 94% |
+
+Details: [bench/heldout-RESULTS.md](bench/heldout-RESULTS.md).
 
 ## Run it locally
 

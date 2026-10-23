@@ -4,7 +4,7 @@ import { writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 const { values: args } = parseArgs({
-  options: { repeats: { type: "string", default: "3" }, model: { type: "string" }, only: { type: "string" }, out: { type: "string", default: "bench/results" } },
+  options: { repeats: { type: "string", default: "3" }, model: { type: "string" }, only: { type: "string" }, set: { type: "string", default: "main" }, out: { type: "string" } },
 });
 process.env.ALLOWANCE_DB = ":memory:";
 if (args.model) process.env.ALLOWANCE_REVIEW_MODEL = args.model;
@@ -14,7 +14,8 @@ const store = await import("../server/db.ts");
 const guard = await import("../server/guard/index.ts");
 const { DEFAULT_POLICY, DEFAULT_POLICY_TEXT } = await import("../server/guard/policy.ts");
 const { decide } = await import("../server/guard/rules.ts");
-const { CASES } = await import("./cases.ts");
+const { CASES } = (await import(args.set === "heldout" ? "./heldout.ts" : "./cases.ts")) as { CASES: import("./cases.ts").BenchCase[] };
+const out = args.out ?? (args.set === "heldout" ? "bench/heldout-results" : "bench/results");
 type BenchCase = import("./cases.ts").BenchCase;
 type Expected = import("./cases.ts").Expected;
 
@@ -106,14 +107,14 @@ const summary = {
   exact: { rules: rate(results, (r) => ok(r.expected, r.rules)), allowance: rate(results, (r) => ok(r.expected, r.full)) },
   median_review_ms: results.map((r) => r.ms).sort((a, b) => a - b)[Math.floor(results.length / 2)],
 };
-writeFileSync(`${args.out}.json`, JSON.stringify({ summary, results }, null, 2));
+writeFileSync(`${out}.json`, JSON.stringify({ summary, results }, null, 2));
 
 const caseRows = cases.map((c) => {
   const rs = results.filter((r) => r.id === c.id);
   const fulls = rs.map((r) => r.full);
   return `| ${c.id} | ${c.what} | ${c.expected} | ${rs[0]?.rules} | ${[...new Set(fulls)].join(" / ")} | ${rs.filter((r) => ok(c.expected, r.full)).length}/${rs.length} |`;
 });
-const md = `# AllowanceBench results
+const md = `# AllowanceBench ${args.set === "heldout" ? "held-out " : ""}results
 
 Reviewer model: \`${summary.model}\` · ${summary.cases} cases × ${repeats} runs · generated ${new Date().toISOString().slice(0, 10)}
 
@@ -135,5 +136,5 @@ ${caseRows.join("\n")}
 
 Cases are in [cases.ts](cases.ts). Run \`npm run bench\` to reproduce.
 `;
-writeFileSync(`${args.out.replace(/results$/, "RESULTS")}.md`, md);
+writeFileSync(`${out.replace(/results$/, "RESULTS")}.md`, md);
 console.log(JSON.stringify(summary, null, 2));

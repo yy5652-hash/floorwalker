@@ -11,7 +11,24 @@ import { getPayoutBatch } from "./paypal/api.ts";
 import { validatePolicy } from "./guard/policy.ts";
 
 const app = express();
+app.set("trust proxy", "loopback");
 app.use(express.json({ limit: "200kb" }));
+
+// A hosted demo spends real model calls, so each visitor gets a fair share per hour.
+const RUNS_PER_HOUR = Number(process.env.ALLOWANCE_RUNS_PER_HOUR ?? 60);
+const runLog = new Map<string, number[]>();
+app.use(["/api/tickets", "/api/attack", "/api/demo/reset", "/api/policy/compile"], (req, res, next) => {
+  if (req.method !== "POST") return next();
+  const key = req.ip ?? "local";
+  const since = Date.now() - 3_600_000;
+  const recent = (runLog.get(key) ?? []).filter((t) => t > since);
+  if (recent.length >= RUNS_PER_HOUR) {
+    res.status(429).json({ error: "That's a lot of runs for one hour. Please try again a little later." });
+    return;
+  }
+  runLog.set(key, [...recent, Date.now()]);
+  next();
+});
 
 function parseRow(r: store.LedgerRow) {
   return {

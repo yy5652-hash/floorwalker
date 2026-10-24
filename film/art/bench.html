@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+  h1 { font-size: 54px; margin: 0 0 14px; letter-spacing: -0.02em; }
+  .sub { font-size: 30px; color: #6b7890; margin-bottom: 60px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 640px); gap: 36px; }
+  .card { background: #fff; border-radius: 26px; padding: 40px 46px; box-shadow: 0 6px 28px rgba(18,35,63,.08); }
+  .k { font-size: 28px; color: #6b7890; font-weight: 600; }
+  .v { font-size: 120px; font-weight: 800; letter-spacing: -0.04em; color: #0f9f6e; margin: 8px 0 4px; }
+  .d { font-size: 27px; color: #3b4a63; }
+</style></head><body>
+<div class="stage">
+  <h1 class="fade" id="a">AllowanceBench</h1>
+  <div class="sub fade" id="b">48 labelled money moves · 16 held out from tuning · AI review on gemini-3.8-flash</div>
+  <div class="grid">
+    <div class="card fade" id="c"><div class="k">Attacks stopped before reaching PayPal</div><div class="v">100%</div><div class="d">main set and held-out set</div></div>
+    <div class="card fade" id="d"><div class="k">Small legitimate requests done on their own</div><div class="v">100%</div><div class="d">main set and held-out set</div></div>
+  </div>
+</div>
+<script>
+  const show = (id, t, at) => { const e = document.getElementById(id); const p = Math.max(0, Math.min(1, (t - at) / 0.6)); e.style.opacity = p; e.style.transform = `translateY(${18 * (1 - p)}px)`; };
+  window.render = t => { show('a', t, 0.1); show('b', t, 0.4); show('c', t, 1.4); show('d', t, (window.LINES?.b2?.[0] ?? 7) - 0.3); };
+  window.ready = true;
+</script></body></html>

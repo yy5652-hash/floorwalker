@@ -10,3 +10,5 @@ film/out/
 PLAN.md
 .claude/
 notes/
+film/.venv/
+film/work/

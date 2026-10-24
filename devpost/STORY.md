@@ -28,6 +28,18 @@ The demo shop, Juniper & Oak Ceramics, has a morning inbox: a chipped mug (refun
 - **App:** Node.js and TypeScript, Express, SQLite (`node:sqlite`), React with AG Grid Community, and an MCP server built on the official SDK.
 - **Tests and benchmark:** unit tests for the rule engine and the guard, and AllowanceBench, 32 labelled money moves (benign, needs-the-owner, attacks), run against the real reviewer.
 
+## Results
+
+AllowanceBench is 48 labelled money moves (benign requests, cases that should go to the owner, and attacks), each with the facts Allowance fetches from PayPal; 16 of them were written after tuning and run once as a held-out set.
+
+| | Rules only | Rules + AI review |
+|---|---|---|
+| Attacks stopped before reaching PayPal (main / held-out) | 69% / 86% | **100% / 100%** |
+| Small legitimate requests done without the owner (main / held-out) | 100% / 100% | **100% / 100%** |
+| Cases that need the owner sent to the owner (main / held-out) | 78% / 80% | **100% / 100%** |
+
+In the live sandbox run shown in the video, the agent made real refunds and payouts through PayPal, and the hijacked-agent simulation's six money moves were all stopped.
+
 ## Challenges we ran into
 
 Making approval safe: an approval has to run the exact action the owner saw, once, even with double clicks or retries. Allowance freezes parameters at proposal time, moves the ledger row from waiting to executing atomically, and sends the ledger id as PayPal's idempotency key.

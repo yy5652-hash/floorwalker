@@ -115,7 +115,7 @@ export async function seedDemo(log: (s: string) => void = () => {}) {
     const paid = await createPaidCustomerOrder({ ...o, invoiceId });
     log(`order ${invoiceId}: ${paid.orderId} captured $${paid.amount} (${paid.captureId})`);
     try {
-      await addTracking({ captureId: paid.captureId, trackingNumber: o.tracking.number, carrier: o.tracking.carrier, status: o.tracking.status });
+      await addTracking({ orderId: paid.orderId, captureId: paid.captureId, trackingNumber: o.tracking.number, carrier: o.tracking.carrier });
     } catch (e: any) {
       log(`tracking for ${invoiceId} not added: ${e.message}`);
     }

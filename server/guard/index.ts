@@ -59,7 +59,8 @@ async function prepareRefund(a: RefundAction, ctx: GuardContext): Promise<Prepar
   }
   const refunds = (order?.purchase_units?.[0]?.payments?.refunds ?? []) as any[];
   const refundedSoFar = refunds.filter((r) => r.status === "COMPLETED" || r.status === "PENDING").reduce((t, r) => t + Number(r.amount.value), 0);
-  const buyerEmail = order?.payer?.email_address ?? local?.customer_email;
+  // Card payments carry no payer email; the order's custom_id holds the buyer's email from checkout.
+  const buyerEmail = order?.payer?.email_address ?? order?.purchase_units?.[0]?.custom_id ?? local?.customer_email;
   const rf: RefundFacts = {
     captureFound: Boolean(capture),
     captureStatus: capture?.status,
@@ -82,7 +83,8 @@ async function prepareRefund(a: RefundAction, ctx: GuardContext): Promise<Prepar
           refunds_so_far: refunds.map((r) => ({ amount: r.amount.value, status: r.status })),
         }
       : null,
-    shipment_tracking: local?.tracking ? JSON.parse(local.tracking) : "no tracking on record",
+    paypal_trackers: (order?.purchase_units?.[0]?.shipping?.trackers ?? []).map((t: any) => ({ id: t.id, status: t.status })),
+    carrier_status: local?.tracking ? JSON.parse(local.tracking) : "no tracking on record",
     refunds_to_this_customer_last_30d: rf.customerRefunds30d,
     requester: ctx.ticket ? `${ctx.ticket.from_name} <${ctx.ticket.from_email}>` : "none",
   };

@@ -15,6 +15,11 @@ const OWN_TOOLS: ToolDef[] = [
     input_schema: { type: "object", properties: { email: { type: "string" } }, required: ["email"] },
   },
   {
+    name: "lookup_contact",
+    description: "Find a person the shop works with (contractors, freelancers) by name. Returns their PayPal email and what they do.",
+    input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
+  },
+  {
     name: "send_payout",
     description: "Pay a person (contractor, freelancer) from the shop's PayPal balance with PayPal Payouts. Use only for work the business asked to be paid for.",
     input_schema: {
@@ -76,6 +81,13 @@ export async function runTool(name: string, input: any, ticket: store.Ticket | u
       tracking: o.tracking ? JSON.parse(o.tracking) : null,
     }));
     return { text: JSON.stringify(rows), isError: false, summary: summarize(name, rows) };
+  }
+  if (name === "lookup_contact") {
+    const q = String(rest.name ?? "").toLowerCase();
+    const found = store.activePolicy().policy.payouts.payees
+      .filter((p) => p.name.toLowerCase().includes(q) || q.includes(p.name.split(" ")[0].toLowerCase()))
+      .map((p) => ({ name: p.name, paypal_email: p.email, role: p.role }));
+    return { text: JSON.stringify(found), isError: false, summary: found.length ? found.map((f) => f.name).join(", ") : "no match" };
   }
   const out = await callToolkit(name, rest);
   return { text: JSON.stringify(out), isError: Boolean(out?.error), summary: summarize(name, out) };

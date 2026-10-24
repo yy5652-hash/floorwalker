@@ -223,5 +223,5 @@ export function paidToPayee(email: string, days: number): { total: number; amoun
 }
 
 export function resetDemo() {
-  db.exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies;");
+  db.exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders;");
 }

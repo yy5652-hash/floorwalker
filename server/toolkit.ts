@@ -2,15 +2,15 @@ import { PayPalAgentToolkit } from "@paypal/agent-toolkit/bedrock";
 import { config } from "./config.ts";
 import type { ToolDef } from "./llm.ts";
 
-// The subset of PayPal Agent Toolkit tools the support agent gets.
+// The subset of PayPal Agent Toolkit tools the support agent gets. Shipment tracking reaches
+// the agent through find_customer_orders (Orders v2 trackers plus the carrier status).
 // create_refund moves money, so Allowance intercepts it; the rest are reads.
 const ACTIONS = {
   orders: { get: true },
   payments: { createRefund: true, getRefunds: true },
-  shipment: { get: true },
 };
 
-export const TOOLKIT_TOOLS = ["get_order", "create_refund", "get_refund", "get_shipment_tracking"] as const;
+export const TOOLKIT_TOOLS = ["get_order", "create_refund", "get_refund"] as const;
 
 /**
  * A fresh toolkit per call: the toolkit caches its OAuth token for the life of the

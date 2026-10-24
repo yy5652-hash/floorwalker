@@ -102,8 +102,12 @@ export async function getPayoutBatch(batchId: string) {
   return paypal("GET", `/v1/payments/payouts/${batchId}`);
 }
 
-export async function addTracking(p: { captureId: string; trackingNumber: string; carrier: string; status: "SHIPPED" | "DELIVERED" | "IN_PROCESS" }) {
-  return paypal("POST", "/v1/shipping/trackers-batch", {
-    trackers: [{ transaction_id: p.captureId, tracking_number: p.trackingNumber, status: p.status, carrier: p.carrier }],
-  });
+/** Attaches a shipment tracking number to the order's capture (Orders v2 /track). */
+export async function addTracking(p: { orderId: string; captureId: string; trackingNumber: string; carrier: string }) {
+  return paypal("POST", `/v2/checkout/orders/${p.orderId}/track`, {
+    capture_id: p.captureId,
+    tracking_number: p.trackingNumber,
+    carrier: p.carrier,
+    notify_payer: false,
+  }, { requestId: `track-${p.captureId}` });
 }

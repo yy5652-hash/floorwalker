@@ -2,10 +2,20 @@ import { useState } from "react";
 import { streamEvents, type AgentEvent, type LedgerEntry, type State, type Ticket } from "../api";
 import { Verdict } from "./Verdict";
 
+const PILL: Record<LedgerEntry["status"], string> = {
+  executed: "Approved",
+  approved: "Approved by you",
+  awaiting_approval: "Needs you",
+  executing: "Running",
+  declined: "Declined",
+  blocked: "Blocked",
+  failed: "PayPal error",
+};
+
 const TOOL_LABEL: Record<string, string> = {
   find_customer_orders: "Looked up the customer's orders",
   get_order: "Read the order from PayPal",
-  get_shipment_tracking: "Checked shipment tracking in PayPal",
+  lookup_contact: "Looked up a contact",
   get_refund: "Read a refund from PayPal",
   create_refund: "Asked to refund",
   send_payout: "Asked to send a payout",
@@ -144,7 +154,7 @@ export function Inbox({ state, refresh, notify }: { state: State; refresh: () =>
                 <span className="subject">{t.subject}</span>
                 <span className="meta">
                   {t.status === "handled" ? <span className="pill neutral">Handled</span> : <span>Open</span>}
-                  {last && <span className={`pill ${last.status}`}>{last.decision === "allow" ? "Approved" : last.decision === "hold" ? "Needs you" : "Blocked"}</span>}
+                  {last && <span className={`pill ${last.status}`}>{PILL[last.status]}</span>}
                 </span>
               </button>
             );

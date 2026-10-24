@@ -153,7 +153,7 @@ function click(B, at, spec, sceneStart) {
   B.span(at, 0.35, async p => { await js(`film.press(${p})`); });
   B.do(at, async () => {
     const r = await rect(spec);
-    if (!r) throw new Error(`click target not found: ${JSON.stringify(spec)}`);
+    if (!r) { console.error(`click target not found at ${at}s: ${JSON.stringify(spec)}`); return; }
     const x = r.x + r.w / 2, y = r.y + r.h / 2;
     for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
     events.push({ t: sceneStart + at, kind: 'click' });
@@ -285,10 +285,11 @@ S.daniel = async (B, sc) => {
   const end = lineAt(sc, 'd2') + 1.2, speed = st.events.at(-1).t / Math.max(1, end - 1.7);
   replay(B, 1.7, end - 1.7, 'T2', speed, () => setState(st.after));
   follow(B, 1.7, end - 1.7 + 0.6);
-  click(B, lineAt(sc, 'd3') - 0.3, { sel: '.tab', has: 'Approvals' }, sc.start);
-  B.do(lineAt(sc, 'd3') - 0.25, () => js('window.scrollTo(0, 0); true'));
-  click(B, lineAt(sc, 'd3') + 1.3, { sel: '.btn.go' }, sc.start);
-  B.do(lineAt(sc, 'd3') + 1.4, async () => { await setState(ap.after); await js(`__film.release('approve')`); });
+  scrollTo(B, lineAt(sc, 'd3') - 1.4, 0.6, 0);
+  click(B, lineAt(sc, 'd3') + 0.1, { sel: '.tab', has: 'Approvals' }, sc.start);
+  scrollTo(B, lineAt(sc, 'd3') + 0.5, 0.6, scrollToShow('.btn.go'));
+  click(B, lineAt(sc, 'd3') + 1.9, { sel: '.btn.go' }, sc.start);
+  B.do(lineAt(sc, 'd3') + 2.0, async () => { await setState(ap.after); await js(`__film.release('approve')`); });
 };
 S.sam = async (B, sc) => {
   const t3 = stepOf('T3'), t4 = stepOf('T4');
@@ -296,11 +297,11 @@ S.sam = async (B, sc) => {
   cam = { ...WIDE };
   click(B, 0.5, item('Pay Sam for the windows'), sc.start);
   click(B, 1.4, { sel: '.card-h .btn.primary' }, sc.start);
-  const end1 = lineAt(sc, 's2') - 0.6;
+  const end1 = lineAt(sc, 's1') + 4.1;
   replay(B, 1.6, end1 - 1.6, 'T3', t3.events.at(-1).t / Math.max(1, end1 - 1.6), () => setState(t3.after));
   follow(B, 1.6, end1 - 1.6);
-  B.do(end1 + 0.05, () => js('window.scrollTo(0, 0); true'));
-  click(B, lineAt(sc, 's2') + 0.2, item('New PayPal for my payments'), sc.start);
+  scrollTo(B, lineAt(sc, 's2') - 1.0, 0.5, 0);
+  click(B, lineAt(sc, 's2') + 0.3, item('New PayPal for my payments'), sc.start);
   click(B, lineAt(sc, 's2') + 1.4, { sel: '.card-h .btn.primary' }, sc.start);
   const end2 = lineAt(sc, 's3', true) - 0.5;
   replay(B, lineAt(sc, 's2') + 1.6, end2 - lineAt(sc, 's2') - 1.6, 'T4', t4.events.at(-1).t / Math.max(1, end2 - lineAt(sc, 's2') - 1.6), () => setState(t4.after));

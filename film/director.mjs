@@ -18,6 +18,7 @@ const PORT = 3190, DEBUG = 9352, FPS = 30, VW = 1440, VH = 810, DSF = 2;
 const arg = name => process.argv.find(a => a.startsWith(`--${name}=`))?.split('=')[1];
 const ONLY = arg('only')?.split(',');
 const EVERY = Number(arg('every') || 1);
+const PATCH = process.argv.includes('--patch');   // with --only: re-render those scenes in place in work/frames
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const lerp = (a, b, p) => a + (b - a) * p;
@@ -26,8 +27,9 @@ const ease = p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
 const timeline = JSON.parse(readFileSync(join(HERE, 'work/timeline.json'), 'utf8'));
 const run = JSON.parse(readFileSync(join(HERE, 'data/run.json'), 'utf8'));
 const stepOf = id => run.steps.find(s => s.id === id) ?? (() => { throw new Error(`no recorded step ${id}`); })();
-const framesDir = join(HERE, ONLY ? 'work/preview' : 'work/frames');
-rmSync(framesDir, { recursive: true, force: true });
+const framesDir = join(HERE, ONLY && !PATCH ? 'work/preview' : 'work/frames');
+if (!PATCH) rmSync(framesDir, { recursive: true, force: true });
+const frameOffset = id => { let n = 0; for (const sc of timeline.scenes) { if (sc.id === id) break; n += Math.round((sc.end - sc.start) * FPS); } return n; };
 mkdirSync(framesDir, { recursive: true });
 
 // ---------------------------------------------------------------- servers and browser
@@ -325,10 +327,11 @@ S.hijack = async (B, sc) => {
   const st = stepOf('attack');
   await prime(st.before, { ATTACK: st.events });
   cam = { ...WIDE };
-  click(B, 0.6, { sel: '.btn.danger' }, sc.start);
+  scrollTo(B, 0.1, 0.5, scrollToShow('.btn.danger'));
+  click(B, 1.3, { sel: '.btn.danger' }, sc.start);
   const end = lineAt(sc, 'x3') + 0.5;
-  replay(B, 0.8, end - 0.8, 'ATTACK', st.events.at(-1).t / Math.max(1, end - 0.8), () => setState(st.after));
-  follow(B, 0.8, end - 0.8 + 0.4);
+  replay(B, 1.5, end - 1.5, 'ATTACK', st.events.at(-1).t / Math.max(1, end - 0.8), () => setState(st.after));
+  follow(B, 1.6, end - 1.6 + 0.4);
   hit(B, lineAt(sc, 'x3') + 0.9);
   B.do(lineAt(sc, 'x3') + 0.6, () => setState(st.after));
   scrollTo(B, lineAt(sc, 'x3') + 0.8, 1.0, 0);
@@ -351,10 +354,11 @@ S.rules = async (B, sc) => {
 for (const sc of timeline.scenes) {
   if (ONLY && !ONLY.includes(sc.id)) continue;
   const t0 = Date.now();
+  if (PATCH) frameNo = frameOffset(sc.id);
   if (sc.kind === 'art') await artScene(sc);
   else await appScene(sc, B => S[sc.id](B, sc));
   console.log(`${sc.id.padEnd(8)} ${((sc.end - sc.start) * FPS).toFixed(0)} frames in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 }
-writeFileSync(join(HERE, ONLY ? 'work/events.preview.json' : 'work/events.json'), JSON.stringify({ events }));
+if (!PATCH) writeFileSync(join(HERE, ONLY ? 'work/events.preview.json' : 'work/events.json'), JSON.stringify({ events }));
 console.log(`${frameNo} frames -> ${framesDir}`);
 process.exit(0);

@@ -23,7 +23,7 @@ export function Overview(props: PageProps & { reset: () => void; resetting: bool
   const total = Object.values(m.funnel).reduce((a, b) => a + b, 0);
   const metrics = [
     { key: "moved", label: "Moved by your agents", value: money(m.moved), sub: plural(m.movedCount, "refund or payout", "refunds and payouts"), icon: ArrowDownLeft, tone: "allow" },
-    { key: "waiting", label: "Waiting for you", value: money(m.waiting), sub: `${m.waitingCount} requests to review`, icon: Clock3, tone: "hold" },
+    { key: "waiting", label: "Waiting for you", value: money(m.waiting), sub: plural(m.waitingCount, "request to review", "requests to review"), icon: Clock3, tone: "hold" },
     { key: "stopped", label: "Stopped before PayPal", value: money(m.stopped), sub: `${m.stoppedCount} blocked or declined`, icon: ShieldCheck, tone: "block" },
     { key: "auto", label: "Done without you", value: m.automationRate === null ? "—" : `${Math.round(m.automationRate * 100)}%`, sub: m.medianApprovalMinutes === null ? "No approvals yet" : `Median approval ${Math.round(m.medianApprovalMinutes)} min`, icon: Sparkles, tone: "blue" },
   ];

@@ -36,7 +36,9 @@ mkdirSync(framesDir, { recursive: true });
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
 const server = createServer((req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  const file = path.startsWith('/film/') ? join(HERE, path.slice(6)) : join(ROOT, 'dist/web', path === '/' ? 'index.html' : path);
+  let file = path.startsWith('/film/') ? join(HERE, path.slice(6)) : join(ROOT, 'dist/web', path === '/' ? 'index.html' : path);
+  // The app routes /app and /approve on the client, like the real server's catch-all.
+  if (!path.startsWith('/film/') && !path.includes('.') && !existsSync(file)) file = join(ROOT, 'dist/web/index.html');
   if (!existsSync(file) || statSync(file).isDirectory()) { res.writeHead(404).end(); return; }
   res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' });
   createReadStream(file).pipe(res);
@@ -151,6 +153,17 @@ function cursorTo(B, at, dur, spec) {
 }
 // Moves the drawn cursor to the element, then clicks it for real (the app handles a genuine mouse event).
 function click(B, at, spec, sceneStart) {
+  // An off-screen target is scrolled into view first, the way a person would.
+  let from, to;
+  B.span(at - 1.3, 0.5, async p => {
+    if (from === undefined) {
+      from = await js('window.scrollY');
+      to = from;
+      const r = await rect(spec);
+      if (r && (r.y < 70 || r.y + r.h > VH - 40)) to = clamp(from + r.y + r.h / 2 - VH * 0.5, 0, await js('document.documentElement.scrollHeight - innerHeight'));
+    }
+    if (to !== from) await js(`window.scrollTo(0, ${lerp(from, to, ease(p))}); true`);
+  });
   cursorTo(B, at - 0.7, 0.65, spec);
   B.span(at, 0.35, async p => { await js(`film.press(${p})`); });
   B.do(at, async () => {
@@ -238,12 +251,16 @@ async function appScene(sc, script) {
 }
 
 // Each app scene loads the app fresh, with that scene's recorded state, streams and responses.
-let initScript = null;
-const prime = async (state, streams = {}, responses = {}) => {
+let initScript = null, takes = 0;
+const setInit = async (state, streams = {}, responses = {}) => {
   if (initScript) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: initScript });
   initScript = (await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__filmInit = ${JSON.stringify({ state, streams, responses })};` })).identifier;
-  await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
-  await until(() => js(`document.readyState === 'complete' && !!document.querySelector('.kpis')`), 'app');
+};
+const prime = async (state, streams = {}, responses = {}, page = 'inbox') => {
+  await setInit(state, streams, responses);
+  // A fresh query string per scene forces a full load (a hash-only change would keep the previous scene's data).
+  await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/app?take=${++takes}#${page}` });
+  await until(() => js(`document.readyState === 'complete' && !!document.querySelector('.sidebar') && !!document.querySelector('main')`), 'app');
   await js('document.fonts.ready.then(() => true)');
   await js(UI);
   await js('window.scrollTo(0, 0); true');
@@ -253,101 +270,149 @@ const prime = async (state, streams = {}, responses = {}) => {
 };
 
 const item = name => ({ sel: '.item', has: name });
+const film = id => `[data-film="${id}"]`;
 const S = {};
 
 S.hook = async (B, sc) => {
-  const T5 = stepOf('T5');
   await prime(stepOf('T1').before);
   cam = { ...WIDE };
-  click(B, 0.6, item('Jordan Blake'), sc.start);
+  click(B, 1.5, item('Jordan Blake'), sc.start);
+  scrollTo(B, 1.9, 0.6, 0);
   camTo(B, lineAt(sc, 'h2') - 0.3, 1.4, async () => fit(await rect('.message'), { pad: 30, minW: 820 }));
-  ring(B, lineAt(sc, 'h2') + 0.8, lineAt(sc, 'h3', true) - lineAt(sc, 'h2') + 0.2, 'hidden', '.hidden-part', '#d14343');
-  void T5;
+  ring(B, lineAt(sc, 'h2') + 0.8, lineAt(sc, 'h3', true) - lineAt(sc, 'h2') + 0.2, 'hidden', '.hidden-part', '#dc2626');
 };
 S.maya = async (B, sc) => {
   const st = stepOf('T1');
   await prime(st.before, { T1: st.events });
   cam = { ...WIDE };
   click(B, 0.5, item('Maya Chen'), sc.start);
-  click(B, 1.6, { sel: '.card-h .btn.primary' }, sc.start);
-  const end = lineAt(sc, 'm3') - 0.6, speed = st.events.at(-1).t / Math.max(1, end - 1.8);
+  click(B, 1.6, film('run'), sc.start);
+  const end = lineAt(sc, 'm2') + 0.5, speed = st.events.at(-1).t / Math.max(1, end - 1.8);
   replay(B, 1.8, end - 1.8, 'T1', speed, () => setState(st.after));
   follow(B, 1.8, end - 1.8 + 1.0);
   follow(B, end + 0.8, 1.2, { sel: '.verdict' });
-  camTo(B, end + 2.1, 1.2, async () => fit(await rect('.verdict'), { pad: 24, minW: 900 }));
-  ring(B, lineAt(sc, 'm4') + 0.2, lineAt(sc, 'm4', true) - lineAt(sc, 'm4'), 'ref', '.paypal-ref', '#0f9f6e');
-  camTo(B, lineAt(sc, 'm4', true) + 0.2, 0.9, WIDE);
+  camTo(B, lineAt(sc, 'm3') - 0.2, 1.2, async () => fit(await rect('.verdict'), { pad: 24, minW: 900 }));
+  ring(B, lineAt(sc, 'm3') + 0.6, 2.6, 'rule', '.verdict .cited-rule', '#059669');
+  ring(B, lineAt(sc, 'm3') + 3.4, lineAt(sc, 'm3', true) - lineAt(sc, 'm3') - 3.0, 'ref', '.verdict .paypal-ref', '#059669');
 };
 S.daniel = async (B, sc) => {
-  const st = stepOf('T2'), ap = stepOf('approve');
-  await prime(st.before, { T2: st.events }, { approve: ap.response });
+  const st = stepOf('T2');
+  await prime(st.before, { T2: st.events });
   cam = { ...WIDE };
   click(B, 0.5, item('Daniel Okafor'), sc.start);
-  click(B, 1.5, { sel: '.card-h .btn.primary' }, sc.start);
-  const end = lineAt(sc, 'd2') + 1.2, speed = st.events.at(-1).t / Math.max(1, end - 1.7);
-  replay(B, 1.7, end - 1.7, 'T2', speed, () => setState(st.after));
-  follow(B, 1.7, end - 1.7 + 0.6);
-  scrollTo(B, lineAt(sc, 'd3') - 1.4, 0.6, 0);
-  click(B, lineAt(sc, 'd3') + 0.1, { sel: '.tab', has: 'Approvals' }, sc.start);
-  scrollTo(B, lineAt(sc, 'd3') + 0.5, 0.6, scrollToShow('.btn.go'));
-  click(B, lineAt(sc, 'd3') + 1.9, { sel: '.btn.go' }, sc.start);
-  B.do(lineAt(sc, 'd3') + 2.0, async () => { await setState(ap.after); await js(`__film.release('approve')`); });
+  click(B, 1.4, film('run'), sc.start);
+  const end = sc.end - sc.start - 1.0;
+  replay(B, 1.6, end - 1.6, 'T2', st.events.at(-1).t / Math.max(1, end - 1.6), () => setState(st.after));
+  follow(B, 1.6, end - 1.6 + 0.8);
 };
+// The phone: the real /approve page inside a phone frame (film/art/phone.html), tapped for real.
+async function phoneScene(sc) {
+  await setMode('art');
+  cam = { x: 0, y: 0, w: 1920 };
+  const st = stepOf('T2'), ap = stepOf('approve');
+  await setInit(st.after, {}, { approve: ap.response });
+  await open(`http://127.0.0.1:${PORT}/film/${sc.page}`, `window.ready === true && !!document.getElementById('app').contentDocument?.querySelector('[data-film="approve"]')`);
+  await js('document.getElementById("app").contentDocument.fonts.ready.then(() => true)');
+  const rel = Object.fromEntries(sc.lines.map(l => [l.id, [l.start - sc.start, l.end - sc.start]]));
+  await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); true`);
+  const inner = sel => js(`(() => { const f = document.getElementById('app'), r = f.getBoundingClientRect(), e = f.contentDocument.querySelector(${JSON.stringify(sel)}); if (!e) return null; const b = e.getBoundingClientRect(); return { x: r.left + b.left + b.width / 2, y: r.top + b.top + b.height / 2 }; })()`);
+  const tapAt = lineAt(sc, 'p2') + 0.3;
+  let from = { x: 1700, y: 900 }, to = null, tapped = false;
+  const n = Math.round((sc.end - sc.start) * FPS);
+  for (let f = 0; f < n; f++) {
+    const t = f / FPS;
+    if (t >= tapAt - 1.2 && t < tapAt) {
+      to ??= await inner('[data-film="approve"]');
+      const p = ease(clamp((t - (tapAt - 1.2)) / 1.1));
+      if (to) await js(`film.cursor(${lerp(from.x, to.x, p)}, ${lerp(from.y, to.y, p)}, true); true`);
+    }
+    if (t >= tapAt && t < tapAt + 0.35) await js(`film.press(${(t - tapAt) / 0.35}); true`);
+    if (!tapped && t >= tapAt) {
+      tapped = true;
+      const p = await inner('[data-film="approve"]');
+      for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: p.x, y: p.y, button: 'left', clickCount: 1 });
+      events.push({ t: sc.start + t, kind: 'click' });
+      await js(`(() => { const w = document.getElementById('app').contentWindow; w.__film.state = ${JSON.stringify(ap.after)}; setTimeout(() => w.__film.release('approve'), 250); return true; })()`);
+      events.push({ t: sc.start + t + 0.3, kind: 'verdict', label: 'allow' });
+    }
+    if (f % EVERY) continue;
+    const c = captionAt(sc, t);
+    await js(`render(${t}); film.caption(${JSON.stringify(c.text)}, ${c.a}); film.frame(${sc.start + t}); true`);
+    await capture();
+  }
+}
 S.sam = async (B, sc) => {
   const t3 = stepOf('T3'), t4 = stepOf('T4');
   await prime(t3.before, { T3: t3.events, T4: t4.events });
   cam = { ...WIDE };
   click(B, 0.5, item('Pay Sam for the windows'), sc.start);
-  click(B, 1.4, { sel: '.card-h .btn.primary' }, sc.start);
-  const end1 = lineAt(sc, 's1') + 4.1;
+  click(B, 1.4, film('run'), sc.start);
+  const end1 = lineAt(sc, 's1', true) + 0.2;
   replay(B, 1.6, end1 - 1.6, 'T3', t3.events.at(-1).t / Math.max(1, end1 - 1.6), () => setState(t3.after));
-  follow(B, 1.6, end1 - 1.6);
-  scrollTo(B, lineAt(sc, 's2') - 1.0, 0.5, 0);
-  click(B, lineAt(sc, 's2') + 0.3, item('New PayPal for my payments'), sc.start);
-  click(B, lineAt(sc, 's2') + 1.4, { sel: '.card-h .btn.primary' }, sc.start);
-  const end2 = lineAt(sc, 's3', true) - 0.5;
-  replay(B, lineAt(sc, 's2') + 1.6, end2 - lineAt(sc, 's2') - 1.6, 'T4', t4.events.at(-1).t / Math.max(1, end2 - lineAt(sc, 's2') - 1.6), () => setState(t4.after));
-  follow(B, lineAt(sc, 's2') + 1.6, end2 - lineAt(sc, 's2') - 1.6 + 1.0);
+  follow(B, 1.6, end1 - 1.6 + 0.4);
+  scrollTo(B, lineAt(sc, 's2') - 0.2, 0.5, 0);
+  click(B, lineAt(sc, 's2') + 0.6, item('New PayPal for my payments'), sc.start);
+  click(B, lineAt(sc, 's2') + 1.6, film('run'), sc.start);
+  const end2 = lineAt(sc, 's2', true) - 0.2;
+  replay(B, lineAt(sc, 's2') + 1.8, end2 - lineAt(sc, 's2') - 1.8, 'T4', t4.events.at(-1).t / Math.max(1, end2 - lineAt(sc, 's2') - 1.8), () => setState(t4.after));
+  follow(B, lineAt(sc, 's2') + 1.8, end2 - lineAt(sc, 's2') - 1.8 + 1.0);
 };
 S.jordan = async (B, sc) => {
   const st = stepOf('T5');
   await prime(st.before, { T5: st.events });
   cam = { ...WIDE };
-  click(B, 0.5, item('Jordan Blake'), sc.start);
-  click(B, 1.4, { sel: '.card-h .btn.primary' }, sc.start);
-  const end = lineAt(sc, 'j2') + 1.0;
-  replay(B, 1.6, end - 1.6, 'T5', st.events.at(-1).t / Math.max(1, end - 1.6), () => setState(st.after));
-  follow(B, 1.6, end - 1.6 + 0.4);
+  click(B, 1.4, item('Jordan Blake'), sc.start);
+  scrollTo(B, 1.8, 0.5, 0);
+  click(B, 3.0, film('run'), sc.start);
+  const end = lineAt(sc, 'j2') + 0.6;
+  replay(B, 3.2, end - 3.2, 'T5', st.events.at(-1).t / Math.max(1, end - 3.2), () => setState(st.after));
+  follow(B, 3.2, end - 3.2 + 0.4);
   follow(B, end + 0.3, 1.0, { sel: '.verdict' });
-  camTo(B, end + 1.4, 1.1, async () => fit(await rect('.verdict'), { pad: 24, minW: 900 }));
-  hit(B, lineAt(sc, 'j3'));
-  ring(B, lineAt(sc, 'j3') - 0.2, lineAt(sc, 'j3', true) - lineAt(sc, 'j3') + 0.9, 'quote', '.verdict .quote', '#d14343');
+  camTo(B, end + 1.4, 1.1, async () => fit(await rect('.verdict .review'), { pad: 30, minW: 900 }));
+  hit(B, end + 1.6);
+  ring(B, end + 2.4, sc.end - sc.start - end - 2.6, 'inj', '.verdict .injection', '#dc2626');
 };
 S.hijack = async (B, sc) => {
   const st = stepOf('attack');
   await prime(st.before, { ATTACK: st.events });
   cam = { ...WIDE };
-  scrollTo(B, 0.1, 0.5, scrollToShow('.btn.danger'));
-  click(B, 1.3, { sel: '.btn.danger' }, sc.start);
-  const end = lineAt(sc, 'x3') + 0.5;
-  replay(B, 1.5, end - 1.5, 'ATTACK', st.events.at(-1).t / Math.max(1, end - 0.8), () => setState(st.after));
+  scrollTo(B, 0.1, 0.5, scrollToShow(film('hijack')));
+  click(B, 1.3, film('hijack'), sc.start);
+  const end = lineAt(sc, 'x2', true) - 0.6;
+  replay(B, 1.5, end - 1.5, 'ATTACK', st.events.at(-1).t / Math.max(1, end - 1.5), () => setState(st.after));
   follow(B, 1.6, end - 1.6 + 0.4);
-  hit(B, lineAt(sc, 'x3') + 0.9);
-  B.do(lineAt(sc, 'x3') + 0.6, () => setState(st.after));
-  scrollTo(B, lineAt(sc, 'x3') + 0.8, 1.0, 0);
-  ring(B, lineAt(sc, 'x3') + 1.5, sc.end - sc.start - lineAt(sc, 'x3') - 1.6, 'stopped', { sel: '.kpi', i: 3 }, '#d14343');
+};
+S.freeze = async (B, sc) => {
+  const st = stepOf('freeze');
+  await prime(st.before, {}, {}, 'agents');
+  cam = { ...WIDE };
+  ring(B, 0.4, 1.6, 'perm', `${film('agent-support')} .permissions`, '#2563eb');
+  // The recorded frozen state is in place before the click, so the page's refresh after the click shows it.
+  B.do(lineAt(sc, 'f1', true) - 0.65, () => setState(st.after));
+  click(B, lineAt(sc, 'f1', true) - 0.6, film('freeze-support'), sc.start);
+  hit(B, lineAt(sc, 'f1', true) - 0.4);
+  ring(B, lineAt(sc, 'f1', true) + 0.2, sc.end - sc.start - lineAt(sc, 'f1', true) - 0.3, 'frozen', '.frozen-banner', '#dc2626');
 };
 S.rules = async (B, sc) => {
-  const st = stepOf('compile');
-  await prime(st.before, {}, { compile: st.response });
+  const st = stepOf('compile'), sim = stepOf('simulate');
+  await prime(st.before, {}, { compile: st.response }, 'rules');
   cam = { ...WIDE };
-  click(B, 0.5, { sel: '.tab', has: 'Rules' }, sc.start);
-  B.do(1.0, () => js(`(() => { const ta = document.querySelector('.rules textarea'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(ta, ${JSON.stringify(st.text)}); ta.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`));
-  ring(B, 1.2, 2.2, 'text', { sel: '.rules textarea', text: 'refund up to $30' }, '#2563eb');
-  click(B, 3.4, { sel: '.rules .btn.primary' }, sc.start);
-  B.do(4.6, () => js(`__film.release('compile')`));
-  ring(B, 5.0, lineAt(sc, 'r2') - 5.2, 'changed', '.limit.changed', '#2563eb');
-  click(B, lineAt(sc, 'r2') - 0.1, { sel: '.tab', has: 'Ledger' }, sc.start);
+  click(B, 0.6, { sel: '.preset', has: 'Cautious' }, sc.start);
+  click(B, 1.8, film('compile'), sc.start);
+  B.do(2.9, () => js(`__film.release('compile')`));
+  ring(B, 3.4, lineAt(sc, 'r2') - 3.4, 'changed', '.limit.changed', '#2563eb');
+  B.do(lineAt(sc, 'r2') - 0.9, () => js(`window.__film.responses.simulate = ${JSON.stringify(sim.response)}; true`));
+  click(B, lineAt(sc, 'r2') - 0.3, film('simulate'), sc.start);
+  B.do(lineAt(sc, 'r2') + 0.4, () => js(`__film.release('simulate')`));
+  scrollTo(B, lineAt(sc, 'r2') + 0.8, 1.2, scrollToShow('.simulation-table'));
+};
+S.overview = async (B, sc) => {
+  const st = stepOf('simulate');
+  await prime(st.after, {}, {}, 'overview');
+  cam = { ...WIDE };
+  ring(B, 0.6, 2.2, 'moved', film('metric-moved'), '#059669');
+  ring(B, 2.4, 2.0, 'waiting', film('metric-waiting'), '#b45309');
+  ring(B, 4.0, sc.end - sc.start - 4.2, 'stopped', film('metric-stopped'), '#dc2626');
 };
 
 // ---------------------------------------------------------------- run
@@ -356,6 +421,7 @@ for (const sc of timeline.scenes) {
   const t0 = Date.now();
   if (PATCH) frameNo = frameOffset(sc.id);
   if (sc.kind === 'art') await artScene(sc);
+  else if (sc.kind === 'phone') await phoneScene(sc);
   else await appScene(sc, B => S[sc.id](B, sc));
   console.log(`${sc.id.padEnd(8)} ${((sc.end - sc.start) * FPS).toFixed(0)} frames in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 }

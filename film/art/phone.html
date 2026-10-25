@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+  body { background: radial-gradient(1200px 700px at 70% 40%, #e9eef8 0%, #f5f7fa 60%); }
+  .side { position: absolute; left: 190px; top: 330px; width: 640px; }
+  .side h1 { font-size: 64px; letter-spacing: -0.03em; margin: 0 0 22px; line-height: 1.05; }
+  .side p { font-size: 30px; color: #475569; margin: 0; line-height: 1.45; }
+  .side .chip { display: inline-flex; gap: 10px; align-items: center; margin-top: 34px; font-size: 24px; font-weight: 600; color: #059669; background: #ecfdf5; padding: 10px 20px; border-radius: 999px; }
+  .phone { position: absolute; left: 1060px; top: 38px; width: 430px; height: 1004px; border-radius: 64px; background: #0f172a; box-shadow: 0 40px 90px rgba(15, 23, 42, .28), inset 0 0 0 3px #334155; }
+  .screen { position: absolute; left: 20px; top: 20px; width: 390px; height: 964px; border-radius: 46px; overflow: hidden; background: #f7f8fa; }
+  .screen iframe { width: 390px; height: 964px; border: 0; display: block; }
+  .notch { position: absolute; left: 50%; top: 30px; width: 120px; height: 32px; margin-left: -60px; border-radius: 20px; background: #0f172a; z-index: 2; }
+</style></head><body>
+<div class="side fade" id="a">
+  <h1>Approve from your phone</h1>
+  <p>Every request arrives already checked against PayPal's records and your rules. One tap runs exactly that action, once.</p>
+  <div class="chip">✓ Rules · PayPal facts · AI review</div>
+</div>
+<div class="phone"><div class="notch"></div><div class="screen"><iframe id="app" src="/approve"></iframe></div></div>
+<script>
+  const show = (id, t, at) => { const e = document.getElementById(id); const p = Math.max(0, Math.min(1, (t - at) / 0.6)); e.style.opacity = p; e.style.transform = `translateY(${18 * (1 - p)}px)`; };
+  window.render = t => { show('a', t, 0.2); };
+  window.ready = true;
+</script></body></html>

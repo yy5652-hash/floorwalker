@@ -5,6 +5,9 @@
 //   POST /api/attack                   (key "ATTACK") up to that many seconds after the request
 //   POST /api/ledger/:id/approve    -> held until __film.release('approve'), then the recorded response
 //   POST /api/policy/compile        -> held until __film.release('compile'), then the recorded response
+//   POST /api/policy/simulate       -> held until __film.release('simulate'), then the recorded response
+//   POST /api/agents/:id/freeze     -> ok at once (the director swaps in the recorded state after the click)
+//   GET  /api/policy/versions       -> the active version from the current state
 (() => {
   if (window.__film) return;
   // The director passes each scene's data in window.__filmInit, set by a script that runs right after this one.
@@ -18,6 +21,8 @@
     if (!url.pathname.startsWith('/api/')) return realFetch(input, init);
     load();
     if (url.pathname === '/api/state') return Promise.resolve(json(F.state));
+    if (url.pathname === '/api/policy/versions') return Promise.resolve(json(F.state?.policy ? [{ ...F.state.policy, created_at: new Date().toISOString() }] : []));
+    if (method === 'POST' && /^\/api\/agents\/[^/]+\/(freeze|unfreeze)$/.test(url.pathname)) return Promise.resolve(json({ ok: true }));
     const run = url.pathname.match(/^\/api\/tickets\/([^/]+)\/run$/);
     if (method === 'POST' && (run || url.pathname === '/api/attack')) {
       const key = run ? run[1] : 'ATTACK';
@@ -26,7 +31,7 @@
       const stream = new ReadableStream({ start(ctl) { F.open[key] = { ctl, events, sent: 0, enc: new TextEncoder() }; } });
       return Promise.resolve(new Response(stream, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } }));
     }
-    const hold = url.pathname.match(/\/approve$/) ? 'approve' : url.pathname === '/api/policy/compile' ? 'compile' : null;
+    const hold = url.pathname.match(/\/approve$/) ? 'approve' : url.pathname === '/api/policy/compile' ? 'compile' : url.pathname === '/api/policy/simulate' ? 'simulate' : null;
     if (method === 'POST' && hold) return new Promise(resolve => { F.waiting[hold] = () => resolve(json(F.responses[hold])); });
     return Promise.reject(new Error(`film: unexpected request ${method} ${url.pathname}`));
   };

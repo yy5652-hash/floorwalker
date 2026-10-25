@@ -147,6 +147,21 @@ export function checkInvoice(a: InvoiceAction, policy: Policy): Check[] {
   ];
 }
 
+export type AgentInfo = { name: string; status: "active" | "frozen"; can_refund: number; can_payout: number };
+
+/** The agent itself: frozen agents and actions outside an agent's permissions never reach PayPal. */
+export function checkAgent(agent: AgentInfo | undefined, kind: MoneyAction["kind"]): Check[] {
+  if (!agent) return [];
+  const what = kind === "refund" ? "refund customers" : kind === "payout" ? "send payouts" : "send invoices";
+  if (agent.status === "frozen") {
+    return [{ id: "agent", label: "Agent", outcome: "block", detail: `${agent.name} is frozen. Unfreeze it on the Agents page to let it move money again.` }];
+  }
+  const allowed = kind === "refund" ? agent.can_refund : kind === "payout" ? agent.can_payout : 1;
+  return [allowed
+    ? { id: "agent", label: "Agent", outcome: "pass", detail: `${agent.name} may ${what}.` }
+    : { id: "agent", label: "Agent", outcome: "block", detail: `${agent.name} isn't allowed to ${what}.` }];
+}
+
 export function decide(checks: Check[]): Decision {
   if (checks.some((c) => c.outcome === "block")) return "block";
   if (checks.some((c) => c.outcome === "hold")) return "hold";

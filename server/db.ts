@@ -58,7 +58,22 @@ CREATE TABLE IF NOT EXISTS ledger (
   decided_at TEXT,
   decided_by TEXT
 );
+CREATE TABLE IF NOT EXISTS agents (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  can_refund INTEGER NOT NULL DEFAULT 0,
+  can_payout INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active',
+  status_changed_at TEXT
+);
 `);
+
+// Columns added after the first release; older local databases get them here.
+const ledgerCols = new Set((db.prepare("PRAGMA table_info(ledger)").all() as any[]).map((c) => c.name));
+for (const [col, type] of [["agent_id", "TEXT"], ["facts", "TEXT"], ["policy_id", "INTEGER"], ["approved_amount", "REAL"]] as const) {
+  if (!ledgerCols.has(col)) db.exec(`ALTER TABLE ledger ADD COLUMN ${col} ${type}`);
+}
 
 const nowIso = () => new Date().toISOString();
 
@@ -71,6 +86,36 @@ export function activePolicy(): { id: number; text: string; policy: Policy } {
 export function savePolicy(text: string, policy: Policy) {
   const r = db.prepare("INSERT INTO policies (text, json, created_at) VALUES (?, ?, ?)").run(text, JSON.stringify(policy), nowIso());
   return { id: Number(r.lastInsertRowid), text, policy };
+}
+
+export function policyVersions(): { id: number; text: string; policy: Policy; created_at: string }[] {
+  return (db.prepare("SELECT id, text, json, created_at FROM policies ORDER BY id DESC LIMIT 20").all() as any[])
+    .map((r) => ({ id: r.id, text: r.text, policy: JSON.parse(r.json), created_at: r.created_at }));
+}
+
+export function policyVersion(id: number) {
+  return policyVersions().find((v) => v.id === id);
+}
+
+// ---------------------------------------------------------------- agents
+export type Agent = { id: string; name: string; role: string; can_refund: number; can_payout: number; status: "active" | "frozen"; status_changed_at: string | null };
+
+export function agents(): Agent[] {
+  return db.prepare("SELECT * FROM agents ORDER BY rowid").all() as any;
+}
+
+export function agent(id: string): Agent | undefined {
+  return db.prepare("SELECT * FROM agents WHERE id = ?").get(id) as any;
+}
+
+export function upsertAgent(a: Omit<Agent, "status" | "status_changed_at">) {
+  db.prepare(`INSERT INTO agents (id, name, role, can_refund, can_payout) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, role = excluded.role, can_refund = excluded.can_refund, can_payout = excluded.can_payout`)
+    .run(a.id, a.name, a.role, a.can_refund, a.can_payout);
+}
+
+export function setAgentStatus(id: string, status: Agent["status"]) {
+  return db.prepare("UPDATE agents SET status = ?, status_changed_at = ? WHERE id = ?").run(status, nowIso(), id).changes === 1;
 }
 
 export type OrderRow = {
@@ -138,6 +183,10 @@ export type LedgerStatus = "executed" | "awaiting_approval" | "executing" | "app
 export type LedgerRow = {
   id: number;
   ticket_id: string | null;
+  agent_id: string | null;
+  facts: string | null;
+  policy_id: number | null;
+  approved_amount: number | null;
   tool: string;
   kind: string;
   params: string;
@@ -158,6 +207,9 @@ export type LedgerRow = {
 
 export function recordProposal(p: {
   ticketId?: string;
+  agentId?: string;
+  facts?: unknown;
+  policyId?: number;
   tool: string;
   kind: string;
   params: unknown;
@@ -169,10 +221,11 @@ export function recordProposal(p: {
   review?: unknown;
   status: LedgerStatus;
 }): number {
-  const r = db.prepare(`INSERT INTO ledger (ticket_id, tool, kind, params, amount, counterparty, justification, decision, checks, review, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    p.ticketId ?? null, p.tool, p.kind, JSON.stringify(p.params), p.amount, p.counterparty ?? null, p.justification ?? null,
+  const r = db.prepare(`INSERT INTO ledger (ticket_id, agent_id, tool, kind, params, amount, counterparty, justification, decision, checks, review, status, created_at, facts, policy_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    p.ticketId ?? null, p.agentId ?? null, p.tool, p.kind, JSON.stringify(p.params), p.amount, p.counterparty ?? null, p.justification ?? null,
     p.decision, JSON.stringify(p.checks), p.review ? JSON.stringify(p.review) : null, p.status, nowIso(),
+    p.facts === undefined ? null : JSON.stringify(p.facts), p.policyId ?? null,
   );
   return Number(r.lastInsertRowid);
 }
@@ -204,8 +257,12 @@ export function ledgerEntry(id: number): LedgerRow | undefined {
 
 /** Money the agent actually moved (executed or approved), for rolling budgets. */
 export function spendHistory(): Spend[] {
-  const rows = db.prepare("SELECT kind, amount, COALESCE(decided_at, created_at) AS at FROM ledger WHERE status IN ('executed', 'approved')").all() as any[];
+  const rows = db.prepare("SELECT kind, COALESCE(approved_amount, amount) AS amount, COALESCE(decided_at, created_at) AS at FROM ledger WHERE status IN ('executed', 'approved')").all() as any[];
   return rows.map((r) => ({ kind: r.kind, amount: r.amount, at: r.at }));
+}
+
+export function setApprovedAmount(id: number, amount: number) {
+  db.prepare("UPDATE ledger SET approved_amount = ? WHERE id = ?").run(amount, id);
 }
 
 export function refundsToCustomer30d(email: string): number {
@@ -217,11 +274,11 @@ export function refundsToCustomer30d(email: string): number {
 
 export function paidToPayee(email: string, days: number): { total: number; amounts: { amount: number; at: string }[] } {
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const rows = db.prepare(`SELECT amount, COALESCE(decided_at, created_at) AS at FROM ledger WHERE kind = 'payout' AND status IN ('executed', 'approved')
+  const rows = db.prepare(`SELECT COALESCE(approved_amount, amount) AS amount, COALESCE(decided_at, created_at) AS at FROM ledger WHERE kind = 'payout' AND status IN ('executed', 'approved')
     AND lower(counterparty) = lower(?) AND COALESCE(decided_at, created_at) >= ?`).all(email, since) as any[];
   return { total: rows.reduce((t, r) => t + r.amount, 0), amounts: rows };
 }
 
 export function resetDemo() {
-  db.exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders;");
+  db.exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders; DELETE FROM agents;");
 }

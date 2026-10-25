@@ -7,7 +7,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { agentTools, runTool } from "./agent/tools.ts";
 import type { Ticket } from "./db.ts";
+import * as store from "./db.ts";
 import { GUARDED_TOOLS } from "./guard/index.ts";
+
+// MCP clients act as their own agent, with its own row on the Agents page (and its own freeze switch).
+if (!store.agent("mcp")) store.upsertAgent({ id: "mcp", name: "External agent (MCP)", role: "Any MCP client, such as Claude Desktop", can_refund: 1, can_payout: 1 });
 
 // Over MCP there is no inbox, so the client says who asked and passes their message along.
 // Allowance treats both as claims: the reviewer weighs them against PayPal's own records.
@@ -31,7 +35,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       }
     : undefined;
   try {
-    const r = await runTool(name, input, ticket);
+    const r = await runTool(name, input, ticket, undefined, "mcp");
     return { content: [{ type: "text", text: r.text }], isError: r.isError };
   } catch (e: any) {
     return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };

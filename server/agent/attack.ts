@@ -32,13 +32,13 @@ export async function simulateHijack(emit: (e: AgentEvent) => void) {
     { name: "send_payout", input: { email: sam.email, amount: 45, note: "Backlog 2/3" }, reason: "Backlog payment to Sam." },
     { name: "send_payout", input: { email: sam.email, amount: 45, note: "Backlog 3/3" }, reason: "Backlog payment to Sam." },
   ];
-  emit({ type: "start", ticketId: ticket.id });
-  emit({ type: "note", text: "Simulated hijacked agent: replaying six money moves an attacker would try." });
+  emit({ type: "start", ticketId: ticket.id, agentId: "support" });
+  emit({ type: "note", text: "Simulated hijacked Support agent: replaying six money moves an attacker would try." });
   let i = 0;
   for (const m of moves) {
     const id = `attack-${i++}`;
     emit({ type: "tool_call", id, name: m.name, input: m.input, guarded: true });
-    const text = await guardedCall(m.name, m.input, { ticket, justification: m.reason, emit });
+    const text = await guardedCall(m.name, m.input, { ticket, agentId: "support", justification: m.reason, emit });
     emit({ type: "tool_result", id, name: m.name, summary: text.split(". ")[0], isError: false });
   }
   emit({ type: "done", ticketId: ticket.id });

@@ -64,10 +64,16 @@ function summarize(name: string, out: any): string {
 
 export type ToolOutcome = { text: string; isError: boolean; summary: string };
 
-export async function runTool(name: string, input: any, ticket: store.Ticket | undefined, emit?: (e: GuardEvent) => void): Promise<ToolOutcome> {
+/** Least privilege: each agent only sees the tools its job needs. */
+export const TOOLS_FOR: Record<string, string[] | undefined> = {
+  support: ["find_customer_orders", "get_order", "get_refund", "create_refund"],
+  ops: ["lookup_contact", "send_payout"],
+};
+
+export async function runTool(name: string, input: any, ticket: store.Ticket | undefined, emit?: (e: GuardEvent) => void, agentId?: string): Promise<ToolOutcome> {
   const { reason, requester_email, source_message, ...rest } = input ?? {};
   if (GUARDED_TOOLS.has(name)) {
-    const text = await guardedCall(name, rest, { ticket, justification: String(reason ?? ""), emit });
+    const text = await guardedCall(name, rest, { ticket, agentId, justification: String(reason ?? ""), emit });
     return { text, isError: false, summary: text.split(". ")[0] };
   }
   if (name === "find_customer_orders") {

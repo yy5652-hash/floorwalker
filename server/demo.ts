@@ -96,6 +96,19 @@ function tickets(orders: Record<string, { invoice: string }>) {
   ];
 }
 
+/** The shop's two agents, each with only the money powers its job needs. */
+export const DEMO_AGENTS = [
+  { id: "support", name: "Support agent", role: "Answers customer emails and refunds buyers", can_refund: 1, can_payout: 0 },
+  { id: "ops", name: "Back-office agent", role: "Works through the owner's to-do list and pays contractors", can_refund: 0, can_payout: 1 },
+];
+
+export function ensureAgents() {
+  if (!store.agents().length) DEMO_AGENTS.forEach(store.upsertAgent);
+}
+
+/** Which agent handles an inbox item. */
+export const agentFor = (t: store.Ticket) => (t.channel === "email" ? "support" : "ops");
+
 export function demoPolicy(): { text: string; policy: Policy } {
   const policy = structuredClone(DEFAULT_POLICY);
   // Sam's payouts go to a real sandbox personal account when one is configured.
@@ -106,6 +119,7 @@ export function demoPolicy(): { text: string; policy: Policy } {
 /** Wipes the ledger and inbox, creates fresh paid sandbox orders and loads the demo inbox. */
 export async function seedDemo(log: (s: string) => void = () => {}) {
   store.resetDemo();
+  DEMO_AGENTS.forEach(store.upsertAgent);
   const { text, policy } = demoPolicy();
   store.savePolicy(text, policy);
   const run = randomBytes(2).toString("hex").toUpperCase();

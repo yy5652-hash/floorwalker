@@ -175,7 +175,7 @@ export async function guardedCall(tool: string, input: unknown, ctx: GuardContex
     try {
       review = await deps.reviewAction({
         action: prepared.action, tool, justification: ctx.justification, facts: prepared.facts, checks: prepared.checks, policy, policyText,
-        source: ctx.ticket ? { from: `${ctx.ticket.from_name} <${ctx.ticket.from_email}>`, subject: ctx.ticket.subject, body: ctx.ticket.body } : null,
+        source: ctx.ticket ? { from: `${ctx.ticket.from_name} <${ctx.ticket.from_email}>`, subject: ctx.ticket.subject, body: ctx.ticket.body, channel: ctx.ticket.channel } : null,
       });
     } catch (e: any) {
       reviewError = e.message;

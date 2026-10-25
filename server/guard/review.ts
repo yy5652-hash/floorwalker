@@ -41,7 +41,7 @@ export async function reviewAction(input: {
   justification: string;
   facts: unknown;
   checks: Check[];
-  source: { from: string; subject: string; body: string } | null;
+  source: { from: string; subject: string; body: string; channel: "email" | "task" } | null;
   policy: Policy;
   policyText: string;
 }): Promise<Review> {
@@ -53,7 +53,7 @@ export async function reviewAction(input: {
     `<facts>\n${JSON.stringify(input.facts, null, 2)}\n</facts>`,
     `<rule_checks>\n${input.checks.map((c) => `- [${c.outcome}] ${c.label}: ${c.detail}`).join("\n")}\n</rule_checks>`,
     input.source
-      ? `<source_message from="${input.source.from}" subject="${input.source.subject.replace(/"/g, "'")}">\n${input.source.body}\n</source_message>`
+      ? `<source_message channel="${input.source.channel === "task" ? "owner's to-do note, written by the owner inside Allowance" : "inbound email"}" from="${input.source.from}" subject="${input.source.subject.replace(/"/g, "'")}">\n${input.source.body}\n</source_message>`
       : "<source_message>(none: the agent acted without an inbound message)</source_message>",
   ].join("\n\n");
   return structured({ model: config.ai.reviewModel, system: SYSTEM, prompt, schema: ReviewSchema, effort: "medium" });

@@ -1,0 +1,20 @@
+[Unit]
+Description=Allowance (PayPal AI Hackathon demo)
+After=network-online.target
+
+[Service]
+User=allowance
+WorkingDirectory=/opt/allowance/app
+Environment=NODE_ENV=production
+Environment=PORT=18810
+Environment=PATH=/opt/allowance/node/bin:/usr/bin:/bin
+ExecStart=/opt/allowance/app/node_modules/.bin/tsx server/index.ts
+Restart=always
+RestartSec=3
+MemoryHigh=450M
+MemoryMax=600M
+CPUQuota=80%
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

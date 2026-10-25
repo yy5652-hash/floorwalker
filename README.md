@@ -57,7 +57,7 @@ The owner writes the rules in plain words on the **Rules** tab ("Up to $40 on it
 - **Facts come from PayPal, not from the agent.** Before deciding, Allowance reads the capture and order from the PayPal API (amount, buyer email, refunds already made) and the shipment tracking. The agent's claims are only claims.
 - **Rules first, then the model.** The rule engine is plain code with unit tests; the model cannot loosen it. The reviewer adds what rules cannot see: whether the story, the facts and the action agree, and whether the message tries to steer the agent. A hard limit blocks even with owner approval.
 - **Fail closed.** If the AI review is unavailable, nothing goes through on its own; it waits for the owner.
-- **Approve exactly what you saw.** Parameters are frozen when the action is proposed. Approval runs that action once: the ledger moves it from *waiting* to *executing* atomically, and the ledger id is sent as the `PayPal-Request-Id`, so a retry cannot refund twice.
+- **Approve exactly what you saw.** Parameters are frozen when the action is proposed. Approval runs that action once: the ledger moves it from *waiting* to *executing* atomically, and a key unique to that ledger row is sent as the `PayPal-Request-Id`, so a retry cannot refund twice.
 - **Any agent, not just ours.** `npm run mcp` serves the same guarded tools over MCP, so Claude Desktop, Claude Code or another agent framework can use PayPal with the owner's rules. Held actions appear in the same Approvals tab.
 
 ### PayPal

@@ -49,7 +49,7 @@ test("an allowed refund is executed once through the toolkit with the ledger id 
   const [row] = store.ledger();
   assert.equal(row.status, "executed");
   assert.equal(row.paypal_ref, "REF1");
-  assert.deepEqual(paypalCalls, [`create_refund:CAP1:24.00:allowance-${row.id}`]);
+  assert.deepEqual(paypalCalls, [`create_refund:CAP1:24.00:allowance-${row.id}-${Date.parse(row.created_at).toString(36)}`]);
 });
 
 test("a refund above the auto limit waits for approval and runs exactly once when approved", async () => {
@@ -126,7 +126,7 @@ test("the owner can approve a smaller amount than the agent asked for, and only 
   await assert.rejects(guard.approve(row.id, "owner", 120), /between/);
   await guard.approve(row.id, "owner", 43);
   assert.equal(store.ledgerEntry(row.id)!.approved_amount, 43);
-  assert.deepEqual(paypalCalls, [`create_refund:CAP1:43.00:allowance-${row.id}`]);
+  assert.deepEqual(paypalCalls, [`create_refund:CAP1:43.00:allowance-${row.id}-${Date.parse(row.created_at).toString(36)}`]);
 });
 
 test("simulating the active rules changes nothing; a lower auto-approve limit sends past refunds to the owner", async () => {

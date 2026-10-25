@@ -135,7 +135,13 @@ function agentMessage(decision: Decision, entry: number, amount: number, checks:
   return `Allowance blocked this action (request #${entry}). ${reasons} Do not retry it or try another way to move this money. Do not tell the sender which check stopped it; reply politely that a team member will follow up.`;
 }
 
-/** Runs an approved ledger entry against PayPal. The ledger id doubles as the idempotency key. */
+/**
+ * PayPal-Request-Id for a ledger row: stable for the row (a retry can never pay twice) and unique across databases
+ * (a fresh install's row #1 must not collide with another install's row #1 on the same PayPal account).
+ */
+const requestKey = (row: store.LedgerRow) => `allowance-${row.id}-${Date.parse(row.created_at).toString(36)}`;
+
+/** Runs an approved ledger entry against PayPal, with the row's request key for idempotency. */
 async function execute(id: number): Promise<{ ok: boolean; ref?: string; note: string; result?: unknown; error?: string }> {
   const row = store.ledgerEntry(id)!;
   const params = JSON.parse(row.params);
@@ -144,7 +150,7 @@ async function execute(id: number): Promise<{ ok: boolean; ref?: string; note: s
   if (row.tool === "create_refund") {
     const input: any = { capture_id: params.captureId, note_to_payer: params.note ?? "Refund from Juniper & Oak" };
     if (params.amount !== undefined) input.amount = usd(params.amount);
-    const res = await deps.callToolkit("create_refund", input, `allowance-${id}`);
+    const res = await deps.callToolkit("create_refund", input, requestKey(row));
     if (!res || res.error || !res.id) {
       const msg = res?.error?.message ?? JSON.stringify(res).slice(0, 300);
       return { ok: false, note: `PayPal refused the refund: ${msg}`, error: msg };
@@ -153,7 +159,7 @@ async function execute(id: number): Promise<{ ok: boolean; ref?: string; note: s
   }
   if (row.tool === "send_payout") {
     try {
-      const res = await deps.sendPayout({ email: params.email, amount: usd(params.amount), note: params.note || "Payment from Juniper & Oak", batchId: `allowance-${id}-${Date.now().toString(36)}` });
+      const res = await deps.sendPayout({ email: params.email, amount: usd(params.amount), note: params.note || "Payment from Juniper & Oak", batchId: requestKey(row) });
       const batch = res.batch_header?.payout_batch_id;
       return { ok: true, ref: batch, result: res, note: `PayPal payout batch ${batch} is ${res.batch_header?.batch_status} for $${params.amount.toFixed(2)} to ${params.email}.` };
     } catch (e: any) {

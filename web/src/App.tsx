@@ -258,11 +258,13 @@ function Workspace({ mobile }: { mobile: boolean }) {
   const resetLock = useRef(false);
   const [attackRequest, setAttackRequest] = useState(0);
   const [agentRunning, setAgentRunning] = useState(false);
-  // A new workspace without PayPal opens on the getting-started checklist rather than an empty overview.
+  // A demo opens on its inbox, where the story starts; a new workspace without PayPal opens on the
+  // getting-started checklist. Either is better than an empty overview.
   const workspaceId = state?.workspace?.id;
   useEffect(() => {
-    if (!state || mobile || location.hash.slice(1) || state.workspace?.demo || state.workspace?.paypal.connected) return;
-    location.hash = "setup";
+    if (!state || mobile || isFilm() || location.hash.slice(1)) return;
+    if (state.workspace?.demo && !state.ledger.length) location.hash = "inbox";
+    else if (!state.workspace?.demo && !state.workspace?.paypal.connected) location.hash = "setup";
     // Only when a workspace is first opened, not on every refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);

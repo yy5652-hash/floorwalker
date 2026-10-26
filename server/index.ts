@@ -16,7 +16,7 @@ import { handle, HttpError, need, signedIn } from "./http.ts";
 import { manage, stepUpOver } from "./manage.ts";
 import { remindWaiting } from "./notify.ts";
 import { v1 } from "./v1.ts";
-import { core, openWorkspace, openWorkspaces, workspaceRow } from "./workspaces.ts";
+import { core, openWorkspace, openWorkspaces, pruneDemoVisitors, workspaceRow } from "./workspaces.ts";
 import { compilePolicy } from "./guard/compile.ts";
 import { approve, declineRequest, expireOverdue } from "./guard/index.ts";
 import { getPayoutBatch } from "./paypal/api.ts";
@@ -272,6 +272,18 @@ setInterval(() => {
     });
   }
 }, 60_000).unref();
+
+// Demo visitors who never signed up are cleaned up after a week.
+const prune = () => {
+  try {
+    const n = pruneDemoVisitors(7);
+    if (n) console.log(`removed ${n} old demo visitor${n === 1 ? "" : "s"}`);
+  } catch (e: any) {
+    console.error(`prune: ${e.message}`);
+  }
+};
+prune();
+setInterval(prune, 6 * 3_600_000).unref();
 
 // Payout batches settle a few seconds after they are sent; keep the ledger's copy current.
 setInterval(async () => {

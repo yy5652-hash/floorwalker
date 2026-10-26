@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { config } from "./config.ts";
@@ -93,4 +93,36 @@ export function setSeedStatus(id: string, status: string) {
 
 export function setPlan(id: string, plan: WorkspaceRow["plan"], subscriptionId: string | null, status: string | null) {
   core.prepare("UPDATE workspace SET plan = ?, subscription_id = ?, subscription_status = ? WHERE id = ?").run(plan, subscriptionId, status, id);
+}
+
+/**
+ * Demo visitors who never signed up: after `days` their user, sessions and demo workspace (with its database
+ * file) are removed. Accounts that signed up keep everything, including the demo workspace they brought along.
+ */
+export function pruneDemoVisitors(days = 7): number {
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  const users = core.prepare(`SELECT id FROM user WHERE isAnonymous = 1 AND createdAt < ?`).all(cutoff) as { id: string }[];
+  for (const { id: userId } of users) {
+    const orgs = core.prepare("SELECT organizationId AS id FROM member WHERE userId = ?").all(userId) as { id: string }[];
+    for (const { id } of orgs) {
+      const others = core.prepare("SELECT 1 FROM member WHERE organizationId = ? AND userId != ? LIMIT 1").get(id, userId);
+      if (others) continue;
+      handles.get(id)?.close();
+      handles.delete(id);
+      for (const t of ["invitation", "member"]) core.prepare(`DELETE FROM ${t} WHERE organizationId = ?`).run(id);
+      core.prepare("DELETE FROM organization WHERE id = ?").run(id);
+      core.prepare("DELETE FROM workspace WHERE id = ?").run(id);
+      for (const t of ["api_key", "webhook_endpoint", "webhook_delivery", "notify_pref"]) {
+        try {
+          core.prepare(`DELETE FROM ${t} WHERE ws_id = ?`).run(id);
+        } catch {
+          // That feature's table isn't created in this process.
+        }
+      }
+      for (const suffix of ["", "-wal", "-shm"]) rmSync(join(config.dataDir, `${id}.db${suffix}`), { force: true });
+    }
+    for (const t of ["session", "account", "passkey", "member"]) core.prepare(`DELETE FROM ${t} WHERE userId = ?`).run(userId);
+    core.prepare("DELETE FROM user WHERE id = ?").run(userId);
+  }
+  return users.length;
 }

@@ -1,5 +1,5 @@
 [Unit]
-Description=Allowance (PayPal AI Hackathon demo)
+Description=Allowance: spend control for AI agents on PayPal (sandbox)
 After=network-online.target
 
 [Service]
@@ -7,6 +7,8 @@ User=allowance
 WorkingDirectory=/opt/allowance/app
 Environment=NODE_ENV=production
 Environment=PORT=18810
+# Passkeys and auth cookies are bound to this origin.
+Environment=ALLOWANCE_BASE_URL=https://allowance.43-160-214-187.sslip.io
 Environment=PATH=/opt/allowance/node/bin:/usr/bin:/bin
 ExecStart=/opt/allowance/app/node_modules/.bin/tsx server/index.ts
 Restart=always

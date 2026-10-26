@@ -30,6 +30,6 @@ if [ ! -e /etc/nginx/sites-enabled/allowance ]; then
   sudo certbot --nginx -d allowance.43-160-214-187.sslip.io --non-interactive --agree-tos --register-unsafely-without-email --redirect
 fi
 sudo systemctl daemon-reload && sudo systemctl enable --now allowance && sudo systemctl restart allowance
-sleep 4 && curl -fsS -o /dev/null -w "local %{http_code}\n" http://127.0.0.1:18810/api/state
+sleep 6 && curl -fsS -o /dev/null -w "local %{http_code}\n" http://127.0.0.1:18810/v1/openapi.json
 REMOTE
 echo "https://allowance.43-160-214-187.sslip.io"

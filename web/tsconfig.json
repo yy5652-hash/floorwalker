@@ -8,7 +8,10 @@
     "jsx": "react-jsx",
     "lib": ["es2023", "dom", "dom.iterable"],
     "types": [],
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src"]
 }

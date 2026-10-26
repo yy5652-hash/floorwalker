@@ -1,86 +1,693 @@
-import { ArrowRight, BookOpen, Bot, CheckCircle2, CircleAlert, ClipboardCheck, Inbox as InboxIcon, LayoutDashboard, Loader2, RefreshCw, Settings2, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { errorMessage, getState, post, setDirectory, type State } from "./api";
+import {
+  ArrowRight,
+  BookOpen,
+  Bot,
+  CheckCircle2,
+  ChevronsUpDown,
+  CircleAlert,
+  ClipboardCheck,
+  Code2,
+  FileClock,
+  Inbox as InboxIcon,
+  LayoutDashboard,
+  LogOut,
+  RefreshCw,
+  Search,
+  Settings,
+  Settings2,
+  ShieldAlert,
+  ShieldCheck,
+  SlidersHorizontal,
+  Snowflake,
+} from "lucide-react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { errorMessage, getState, post, setDirectory } from "./api";
 import { ApprovalCard, Approvals, PhoneApproval } from "./components/Approvals";
 import { Inbox } from "./components/Inbox";
 import { Rules } from "./components/Rules";
 import { Brand, EmptyState } from "./components/UI";
+import { ThemeToggle } from "./components/Theme";
 import { Agents } from "./pages/Agents";
 import { Landing } from "./pages/Landing";
 import { Overview } from "./pages/Overview";
 import { Setup } from "./pages/Setup";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 
-const Ledger = lazy(() => import("./components/Ledger").then(module => ({ default: module.Ledger })));
-
+const Ledger = lazy(() =>
+  import("./components/Ledger").then((module) => ({ default: module.Ledger })),
+);
 const pages = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard, subtitle: "A clear view of what your agents are doing with your money." },
-  { id: "inbox", label: "Inbox", icon: InboxIcon, subtitle: "Give your agents the next request. Your rules take care of the boundaries." },
-  { id: "approvals", label: "Approvals", icon: ClipboardCheck, subtitle: "Every request is checked before it reaches you. Approving runs exactly this action, once." },
-  { id: "agents", label: "Agents", icon: Bot, subtitle: "A small team, with clear boundaries." },
-  { id: "rules", label: "Rules", icon: SlidersHorizontal, subtitle: "Set the boundaries in your own words. Every money move follows them." },
-  { id: "ledger", label: "Ledger", icon: BookOpen, subtitle: "Every request, every check, every outcome. All in one place." },
-  { id: "setup", label: "Setup", icon: Settings2, subtitle: "From keys to your first governed payment in about two minutes." },
+  {
+    id: "overview",
+    label: "Overview",
+    icon: LayoutDashboard,
+    subtitle: "A clear view of what your agents are doing with your money.",
+  },
+  {
+    id: "inbox",
+    label: "Inbox",
+    icon: InboxIcon,
+    subtitle:
+      "Give your agents the next request. Your rules take care of the boundaries.",
+  },
+  {
+    id: "approvals",
+    label: "Approvals",
+    icon: ClipboardCheck,
+    subtitle:
+      "Every request is checked before it reaches you. Approving runs exactly this action, once.",
+  },
+  {
+    id: "agents",
+    label: "Agents",
+    icon: Bot,
+    subtitle: "A small team, with clear boundaries.",
+  },
+  {
+    id: "rules",
+    label: "Rules",
+    icon: SlidersHorizontal,
+    subtitle:
+      "Set the boundaries in your own words. Every money move follows them.",
+  },
+  {
+    id: "ledger",
+    label: "Ledger",
+    icon: BookOpen,
+    subtitle: "Every request, every check, every outcome. All in one place.",
+  },
+  {
+    id: "setup",
+    label: "Setup",
+    icon: Settings2,
+    subtitle: "From keys to your first governed payment in about two minutes.",
+  },
+  {
+    id: "developers",
+    label: "Developers",
+    icon: Code2,
+    subtitle: "A home for your integrations.",
+  },
+  {
+    id: "audit-log",
+    label: "Audit log",
+    icon: FileClock,
+    subtitle: "Workspace events and changes.",
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: Settings,
+    subtitle: "Make this workspace yours.",
+  },
 ];
+
+function Navigation({ active, waiting }: { active: string; waiting: number }) {
+  const { setOpenMobile } = useSidebar();
+  return (
+    <SidebarMenu>
+      {pages.map(({ id, label, icon: Icon }, index) => (
+        <SidebarMenuItem
+          key={id}
+          className={index === 7 ? "mt-5 border-t pt-5" : ""}
+        >
+          <SidebarMenuButton
+            asChild
+            isActive={active === id}
+            tooltip={label}
+            className="h-10"
+          >
+            <a
+              href={`/app#${id}`}
+              data-film={`nav-${id}`}
+              aria-current={active === id ? "page" : undefined}
+              onClick={() => setOpenMobile(false)}
+            >
+              <Icon />
+              <span>{label}</span>
+            </a>
+          </SidebarMenuButton>
+          {id === "approvals" && waiting > 0 && (
+            <SidebarMenuBadge className="tone-hold top-2.5">
+              {waiting}
+            </SidebarMenuBadge>
+          )}
+        </SidebarMenuItem>
+      ))}
+    </SidebarMenu>
+  );
+}
+export function PageSkeleton() {
+  return (
+    <div className="space-y-6" role="status" aria-label="Loading workspace">
+      <span className="sr-only">Getting your shop ready…</span>
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-4 w-2/3" />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <Skeleton key={i} className="h-36 rounded-xl" />
+        ))}
+      </div>
+      <Skeleton className="h-28 rounded-xl" />
+      <Skeleton className="h-64 rounded-xl" />
+    </div>
+  );
+}
 function Workspace({ mobile }: { mobile: boolean }) {
-  const [state, setState] = useState<State | null>(null);
-  const [error, setError] = useState("");
+  const client = useQueryClient();
+  const {
+    data: state,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["state"],
+    queryFn: async ({ signal }) => {
+      const data = await getState(signal);
+      setDirectory(data);
+      return data;
+    },
+    refetchInterval: mobile ? 4000 : 8000,
+    refetchIntervalInBackground: false,
+  });
+  const refresh = useCallback(async () => {
+    await client.invalidateQueries({ queryKey: ["state"] });
+  }, [client]);
+  const notify = useCallback((message: string) => {
+    toast(message);
+  }, []);
   const [route, setRoute] = useState(location.hash.slice(1) || "overview");
-  const [toast, setToast] = useState("");
+  const [commandOpen, setCommandOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [resetKey, setResetKey] = useState(0);
-  const request = useRef(0);
-  const controller = useRef<AbortController | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const resetLock = useRef(false);
-  const refresh = useCallback(async () => {
-    const id = ++request.current;
-    controller.current?.abort();
-    const next = new AbortController(); controller.current = next;
-    try { const data = await getState(next.signal); if (request.current === id) { setDirectory(data); setState(data); setError(""); } }
-    catch (e) { if (!next.signal.aborted && request.current === id) setError(errorMessage(e)); }
-  }, []);
+  const [attackRequest, setAttackRequest] = useState(0);
+  const [agentRunning, setAgentRunning] = useState(false);
   useEffect(() => {
-    void refresh();
-    const interval = setInterval(() => { if (!document.hidden) void refresh(); }, mobile ? 4000 : 8000);
-    const visible = () => { if (!document.hidden) void refresh(); };
-    document.addEventListener("visibilitychange", visible);
-    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", visible); controller.current?.abort(); clearTimeout(toastTimer.current); };
-  }, [mobile, refresh]);
-  useEffect(() => {
-    const changed = () => { setRoute(location.hash.slice(1) || "overview"); };
+    const changed = () => setRoute(location.hash.slice(1) || "overview");
+    const keydown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen((open) => !open);
+      }
+    };
     window.addEventListener("hashchange", changed);
-    return () => window.removeEventListener("hashchange", changed);
+    window.addEventListener("keydown", keydown);
+    return () => {
+      window.removeEventListener("hashchange", changed);
+      window.removeEventListener("keydown", keydown);
+    };
   }, []);
-  const notify = useCallback((message: string) => { setToast(message); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(""), 6500); }, []);
   async function reset() {
-    if (resetLock.current) return;
-    resetLock.current = true; setResetting(true);
-    try { await post("/api/demo/reset"); setResetKey(k => k + 1); await refresh(); notify("Fresh sandbox orders created. Your demo inbox is ready."); }
-    catch (e) { notify(errorMessage(e)); await refresh(); }
-    finally { resetLock.current = false; setResetting(false); }
+    if (resetLock.current || agentRunning) return;
+    resetLock.current = true;
+    setResetting(true);
+    try {
+      await post("/api/demo/reset");
+      setResetKey((k) => k + 1);
+      setAgentRunning(false);
+      await refresh();
+      notify("Fresh sandbox orders created. Your demo inbox is ready.");
+    } catch (e) {
+      notify(errorMessage(e));
+      await refresh();
+    } finally {
+      resetLock.current = false;
+      setResetting(false);
+    }
   }
-  if (!state) return <div className="loading-screen"><Brand />{error ? <><CircleAlert size={26} className="text-block" /><h2>Couldn't connect to your shop</h2><p role="alert">{error}</p><button className="btn primary" onClick={() => void refresh()}>Try again</button></> : <><Loader2 size={25} className="spin" /><p>Getting your shop ready…</p></>}</div>;
+  if (!state)
+    return (
+      <main className="mx-auto min-h-svh max-w-5xl space-y-12 px-6 py-12">
+        <Brand />
+        {error ? (
+          <Alert variant="destructive">
+            <CircleAlert />
+            <AlertTitle>Couldn't connect to your shop</AlertTitle>
+            <AlertDescription>
+              <p>{errorMessage(error)}</p>
+              <Button variant="outline" onClick={() => void refetch()}>
+                Try again
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <PageSkeleton />
+        )}
+      </main>
+    );
   const props = { state, refresh, notify };
-  const waiting = state.ledger.filter(e => e.status === "awaiting_approval");
-  const page = pages.find(p => p.id === route.split("/")[0]) ?? pages[0];
-  const feedback = <>{error && <div className="connection-error" role="alert"><CircleAlert size={16} />Unable to refresh. Showing the last loaded state.<button className="text-btn" onClick={() => void refresh()}>Retry</button></div>}{toast && <div className="toast" role="status"><span>{toast}</span><button aria-label="Dismiss notification" onClick={() => setToast("")}><X size={16} /></button></div>}</>;
-  if (mobile) return <div className="mobile-approval"><header className="mobile-header"><Brand /><span className="pill hold">{waiting.length} waiting</span></header><main className="mobile-main"><div className="mobile-intro"><span className="eyebrow">JUNIPER &amp; OAK CERAMICS</span><h1>Your call.</h1><p>Everything checked. Just a decision from you.</p></div>{feedback}{waiting.length ? waiting.map(entry => <ApprovalCard key={entry.id} entry={entry} {...props} />) : <div className="card"><EmptyState title="All caught up ✓"><p>We'll bring the next request here when it needs you.</p></EmptyState></div>}<p className="mobile-footnote"><ShieldCheck size={14} />Your approval runs this action exactly once.</p><a className="text-link" href="/app">Open dashboard <ArrowRight size={14} /></a></main></div>;
-  return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to content</a><aside className="sidebar"><Brand /><div className="workspace-label">YOUR WORKSPACE</div><nav aria-label="Main navigation">{pages.map(({ id, label, icon: Icon }) => <a className={`nav-item ${page.id === id ? "active" : ""}`} href={`/app#${id}`} key={id} data-film={`nav-${id}`} aria-current={page.id === id ? "page" : undefined}><Icon size={18} /><span>{label}</span>{id === "approvals" && state.metrics.waitingCount > 0 && <span className="nav-count">{state.metrics.waitingCount}</span>}</a>)}</nav><div className="sidebar-bottom"><div className="shop"><span className="shop-avatar">J&amp;O</span><div><strong>Juniper &amp; Oak</strong><span>Ceramics</span></div></div><div className="connection"><span className={`dot ${state.configured.paypal ? "on" : ""}`} />PayPal sandbox<span className="sr-only">{state.configured.paypal ? " connected" : " disconnected"}</span></div><div className="connection" title={state.configured.agentModel}><span className={`dot ${state.configured.ai ? "on" : ""}`} /><span>{state.configured.agentModel || "AI not configured"}</span><span className="sr-only">{state.configured.ai ? " ready" : " not ready"}</span></div><button className="btn reset-btn" disabled={resetting || !state.configured.paypal} onClick={() => void reset()}><RefreshCw size={14} className={resetting ? "spin" : ""} />{resetting ? "Creating sandbox orders…" : "Reset demo"}</button><span className="sandbox-note">Demo workspace · sandbox money</span></div></aside>
-    <div className="workspace-main"><div className="workspace-top"><span>Juniper &amp; Oak Ceramics <span className="top-divider">/</span> <strong>{page.label}</strong></span><span className="sandbox-badge"><span className="dot on" />Sandbox workspace</span></div><main id="main-content" className="main-content"><header className={`page-header ${page.id === "approvals" ? "approvals-header" : ""}`}><div><span className="eyebrow">{page.id === "overview" ? "YOUR MONEY, IN GOOD HANDS" : "JUNIPER & OAK CERAMICS"}</span><h1>{page.label}</h1><p>{page.subtitle}</p></div>{page.id === "approvals" ? <PhoneApproval /> : page.id === "overview" ? <a className="btn" href="/app#inbox">Open inbox <ArrowRight size={15} /></a> : <span className="page-header-icon"><CheckCircle2 size={16} />Governed by your rules</span>}</header>{feedback}
-      {page.id === "overview" && <Overview {...props} reset={() => void reset()} resetting={resetting} />}
-      <div hidden={page.id !== "inbox"}><Inbox key={resetKey} {...props} /></div>
-      {page.id === "approvals" && <Approvals {...props} />}
-      {page.id === "agents" && <Agents {...props} />}
-      {page.id === "rules" && <Rules {...props} />}
-      {page.id === "ledger" && <Suspense fallback={<div className="card empty">Loading your ledger…</div>}><Ledger state={state} selectedId={route.includes("/") ? Number(route.split("/")[1]) : undefined} /></Suspense>}
-      {page.id === "setup" && <Setup {...props} reset={() => void reset()} resetting={resetting} />}
-    </main><footer className="workspace-footer"><ShieldCheck size={13} />Give your AI agent an allowance, not your wallet.</footer></div>
-  </div>;
+  const waiting = state.ledger.filter((e) => e.status === "awaiting_approval");
+  const page = pages.find((p) => p.id === route.split("/")[0]) ?? pages[0];
+  const feedback = error && (
+    <Alert className="mb-6 tone-hold">
+      <CircleAlert />
+      <AlertTitle>Unable to refresh</AlertTitle>
+      <AlertDescription>
+        <span>Showing the last loaded state.</span>
+        <Button variant="outline" size="sm" onClick={() => void refetch()}>
+          Retry
+        </Button>
+      </AlertDescription>
+    </Alert>
+  );
+  const palette = (
+    <CommandDialog
+      open={commandOpen}
+      onOpenChange={setCommandOpen}
+      title="Workspace commands"
+      description="Navigate or run a demo action."
+    >
+      <CommandInput placeholder="Search pages and actions…" />
+      <CommandList>
+        <CommandEmpty>No matching pages or actions.</CommandEmpty>
+        <CommandGroup heading="Go to">
+          {pages.map(({ id, label, icon: Icon }) => (
+            <CommandItem
+              key={id}
+              onSelect={() => {
+                location.hash = id;
+                setCommandOpen(false);
+              }}
+            >
+              <Icon />
+              {label}
+            </CommandItem>
+          ))}
+        </CommandGroup>
+        <CommandSeparator />
+        <CommandGroup heading="Demo actions">
+          <CommandItem
+            disabled={resetting || agentRunning || !state.configured.paypal}
+            onSelect={() => {
+              setCommandOpen(false);
+              void reset();
+            }}
+          >
+            <RefreshCw />
+            Reset demo
+          </CommandItem>
+          <CommandItem
+            disabled={
+              agentRunning ||
+              resetting ||
+              !state.configured.paypal ||
+              !state.configured.ai
+            }
+            onSelect={() => {
+              setCommandOpen(false);
+              location.hash = "inbox";
+              setAttackRequest((n) => n + 1);
+            }}
+          >
+            <ShieldAlert />
+            Simulate a hijacked agent
+          </CommandItem>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div tabIndex={0} aria-label="Freeze all agents — coming soon">
+                <CommandItem disabled>
+                  <Snowflake />
+                  Freeze all agents
+                  <Badge variant="outline" className="ml-auto">
+                    Coming soon
+                  </Badge>
+                </CommandItem>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>coming soon</TooltipContent>
+          </Tooltip>
+        </CommandGroup>
+      </CommandList>
+    </CommandDialog>
+  );
+  if (mobile)
+    return (
+      <div className="min-h-svh">
+        <header className="flex items-center justify-between border-b bg-card px-4 py-4">
+          <Brand />
+          <div className="flex items-center gap-2">
+            <Badge className="tone-hold">{waiting.length} waiting</Badge>
+            <ThemeToggle />
+          </div>
+        </header>
+        <main className="mx-auto max-w-lg space-y-6 px-4 py-8">
+          <div className="space-y-3">
+            <p className="text-xs font-medium tracking-widest text-muted-foreground">
+              JUNIPER &amp; OAK CERAMICS
+            </p>
+            <h1>Your call.</h1>
+            <p className="text-muted-foreground">
+              Everything checked. Just a decision from you.
+            </p>
+          </div>
+          {feedback}
+          {waiting.length ? (
+            waiting.map((entry) => (
+              <ApprovalCard key={entry.id} entry={entry} {...props} />
+            ))
+          ) : (
+            <Card>
+              <EmptyState title="All caught up">
+                <p>We'll bring the next request here when it needs you.</p>
+              </EmptyState>
+            </Card>
+          )}
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <ShieldCheck className="size-4" />
+            Your approval runs this action exactly once.
+          </p>
+          <Button asChild variant="outline">
+            <a href="/app">
+              Open dashboard
+              <ArrowRight />
+            </a>
+          </Button>
+        </main>
+      </div>
+    );
+  return (
+    <SidebarProvider>
+      <a
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-card focus:p-3"
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById("main-content")?.focus();
+        }}
+      >
+        Skip to content
+      </a>
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="px-4 py-6 group-data-[collapsible=icon]:px-2">
+          <a
+            href="/"
+            className="flex items-center gap-2 text-xl font-semibold tracking-tight"
+            aria-label="Allowance home"
+          >
+            <img src="/favicon.svg" width="28" height="28" alt="" />
+            <span className="group-data-[collapsible=icon]:hidden">
+              Allowance
+            </span>
+          </a>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <nav aria-label="Main navigation">
+              <Navigation
+                active={page.id}
+                waiting={state.metrics.waitingCount}
+              />
+            </nav>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="p-3">
+          <div className="space-y-3 rounded-lg border bg-card p-3 text-xs group-data-[collapsible=icon]:hidden">
+            <p className="flex items-center gap-2">
+              <span
+                className={`size-1.5 rounded-full ${state.configured.paypal ? "bg-emerald-500" : "bg-muted-foreground"}`}
+              />
+              PayPal sandbox ·{" "}
+              {state.configured.paypal ? "connected" : "disconnected"}
+            </p>
+            <p
+              className="truncate text-muted-foreground"
+              title={state.configured.agentModel}
+            >
+              {state.configured.ai
+                ? state.configured.agentModel
+                : "AI not configured"}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={resetting || agentRunning || !state.configured.paypal}
+              onClick={() => void reset()}
+            >
+              <RefreshCw className={resetting ? "animate-spin" : ""} />
+              {resetting ? "Creating orders…" : "Reset demo"}
+            </Button>
+            <p className="text-center text-[10px] text-muted-foreground">
+              Demo workspace · sandbox money
+            </p>
+          </div>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+      <SidebarInset className="min-w-0 bg-background">
+        <header className="sticky top-0 z-20 flex h-16 min-w-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur md:gap-4 md:px-8">
+          <SidebarTrigger />
+          <Separator orientation="vertical" className="!h-5" />
+          <Breadcrumb className="hidden md:block">
+            <BreadcrumbList>
+              <BreadcrumbItem>Workspace</BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{page.label}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="ml-auto min-w-0 max-w-[200px] flex-1 shrink gap-1 px-2 text-xs sm:max-w-none"
+              >
+                <span className="truncate">
+                  Juniper &amp; Oak Ceramics · Demo
+                </span>
+                <ChevronsUpDown className="size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Workspace</DropdownMenuLabel>
+              <DropdownMenuItem disabled>
+                <CheckCircle2 />
+                Juniper &amp; Oak Ceramics · Demo
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled>
+                More workspaces coming soon
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden gap-3 lg:flex"
+            onClick={() => setCommandOpen(true)}
+          >
+            <Search className="size-3" />
+            Search
+            <kbd className="text-[10px] text-muted-foreground">⌘K / Ctrl K</kbd>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            aria-label="Open command palette"
+            onClick={() => setCommandOpen(true)}
+          >
+            <Search />
+          </Button>
+          <ThemeToggle />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Demo owner menu">
+                <Avatar className="size-8">
+                  <AvatarFallback className="text-xs">DO</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Demo owner</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <a href="/app#settings">
+                  <Settings />
+                  Settings
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled>
+                <LogOut />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-[1440px] flex-1 space-y-7 p-4 outline-none sm:p-6 lg:p-8"
+        >
+          <header className="flex flex-wrap items-start justify-between gap-5">
+            <div className="max-w-2xl space-y-2">
+              <p className="text-[10px] font-medium tracking-[.18em] text-muted-foreground">
+                {page.id === "overview"
+                  ? "YOUR MONEY, IN GOOD HANDS"
+                  : "JUNIPER & OAK CERAMICS"}
+              </p>
+              <h1>{page.label}</h1>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {page.subtitle}
+              </p>
+            </div>
+            {page.id === "approvals" ? (
+              <PhoneApproval />
+            ) : page.id === "overview" ? (
+              <Button asChild variant="outline">
+                <a href="/app#inbox">
+                  Open inbox
+                  <ArrowRight />
+                </a>
+              </Button>
+            ) : (
+              <Badge variant="outline" className="gap-1.5 py-1.5">
+                <ShieldCheck className="size-3 text-allow" />
+                Governed by your rules
+              </Badge>
+            )}
+          </header>
+          {feedback}
+          {page.id === "overview" && (
+            <Overview
+              {...props}
+              reset={() => void reset()}
+              resetting={resetting}
+            />
+          )}
+          <div hidden={page.id !== "inbox"}>
+            <Inbox
+              key={resetKey}
+              {...props}
+              attackRequest={attackRequest}
+              onRunningChange={setAgentRunning}
+              disabled={resetting}
+            />
+          </div>
+          {page.id === "approvals" && <Approvals {...props} />}
+          {page.id === "agents" && <Agents {...props} />}
+          {page.id === "rules" && <Rules {...props} />}
+          {page.id === "ledger" && (
+            <Suspense fallback={<PageSkeleton />}>
+              <Ledger
+                state={state}
+                selectedId={
+                  route.includes("/") ? Number(route.split("/")[1]) : undefined
+                }
+              />
+            </Suspense>
+          )}
+          {page.id === "setup" && (
+            <Setup
+              {...props}
+              reset={() => void reset()}
+              resetting={resetting}
+            />
+          )}
+          {["developers", "audit-log", "settings"].includes(page.id) && (
+            <Card>
+              <EmptyState title={`${page.label} is coming soon`}>
+                <p>
+                  This area is a placeholder. You can manage your agents, rules
+                  and payments from the workspace today.
+                </p>
+                <Button asChild variant="outline" className="mt-4">
+                  <a href="/app#overview">
+                    Back to overview
+                    <ArrowRight />
+                  </a>
+                </Button>
+              </EmptyState>
+            </Card>
+          )}
+        </main>
+        <footer className="flex items-center justify-center gap-2 px-4 py-6 text-[11px] text-muted-foreground">
+          <ShieldCheck className="size-3" />
+          Give your AI agent an allowance, not your wallet.
+        </footer>
+      </SidebarInset>
+      {palette}
+    </SidebarProvider>
+  );
 }
 export function App() {
   const path = location.pathname.replace(/\/+$/, "") || "/";
   if (path === "/") return <Landing />;
   if (path === "/approve") return <Workspace mobile />;
   if (path === "/app") return <Workspace mobile={false} />;
-  return <div className="loading-screen"><Brand /><h1>Page not found</h1><a className="btn primary" href="/app">Open your dashboard <ArrowRight size={15} /></a></div>;
+  return (
+    <main className="flex min-h-svh flex-col items-center justify-center gap-6 p-6">
+      <Brand />
+      <h1>Page not found</h1>
+      <Button asChild>
+        <a href="/app">
+          Open your dashboard
+          <ArrowRight />
+        </a>
+      </Button>
+    </main>
+  );
 }

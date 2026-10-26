@@ -2,8 +2,9 @@
 
 **Give your AI agent an allowance, not your wallet.** Allowance sits between an AI agent and a business's PayPal account. Every time the agent tries to move money (a refund, a payout), Allowance checks it against the owner's rules, has an AI reviewer compare the request with what PayPal's own records say, and then does one of three things: lets it through, asks the owner with one tap, or blocks it before it reaches PayPal.
 
-Built for the PayPal AI Hackathon with the **PayPal Agent Toolkit**, the **PayPal REST APIs** (Orders, Payments, Payouts, Shipment Tracking) in the sandbox, **Gemini** (`gemini-3.8-flash`, or Claude when an Anthropic key is set) and **AG Grid**.
+Built for the PayPal AI Hackathon with the **PayPal Agent Toolkit**, the **PayPal REST APIs** (Orders, Payments, Payouts, Shipment Tracking, Subscriptions) in the sandbox, **Gemini** (`gemini-3.8-flash`, or Claude when an Anthropic key is set), **shadcn/ui** and **AG Grid**.
 
+- **Try it:** https://allowance.43-160-214-187.sslip.io (press *Try the live demo*: you get your own demo shop with real sandbox orders, no sign-up)
 - **Demo video:** TODO
 - **Benchmark:** [AllowanceBench results](bench/RESULTS.md)
 
@@ -19,7 +20,7 @@ Allowance is for the owner who wants the agent to handle the everyday refunds an
 
 ## What it does
 
-The demo shop is **Juniper & Oak**, a small ceramics store. Its support agent (an LLM with PayPal Agent Toolkit tools) works through a morning inbox. Pressing **Reset demo** creates real paid orders in the PayPal sandbox, attaches shipment tracking to them, and loads six inbox items:
+The demo shop is **Juniper & Oak**, a small ceramics store. Its support agent (an LLM with PayPal Agent Toolkit tools) works through a morning inbox. Every demo visitor gets their own copy, set up with real paid orders in the PayPal sandbox, attaches shipment tracking to them, and loads six inbox items:
 
 | Inbox item | What the agent does | What Allowance does |
 |---|---|---|
@@ -31,6 +32,17 @@ The demo shop is **Juniper & Oak**, a small ceramics store. Its support agent (a
 | Owner's note: pay Priya's $180 photo invoice | Looks Priya up, sends the payout | **Asks the owner.** Above the $50 auto limit for payouts. |
 
 **Simulate a hijacked agent** replays six money moves an attacker would make after taking over the agent's prompt (full refunds, a payment to an unknown "claims desk", three repeated payouts). Allowance does not know the agent is hostile; it only sees tool calls.
+
+### A product, not just a demo
+
+- **Accounts and teams.** Sign up with email and password or a passkey. Each business is a workspace with its own database file; teammates join by invite as owner, admin, approver (answers requests) or viewer.
+- **Your own PayPal.** A workspace connects its own PayPal sandbox app; Allowance checks the credentials with PayPal and stores the secret encrypted (AES-256-GCM).
+- **Any agent.** Give an agent a key (shown once, stored as a hash, revocable) and it calls Allowance instead of PayPal: `POST /v1/refunds`, `POST /v1/payouts`, `GET /v1/actions/:id`, with `Idempotency-Key`, or the same tools over MCP at `/v1/mcp`. OpenAPI at [`/v1/openapi.json`](https://allowance.43-160-214-187.sslip.io/v1/openapi.json).
+- **Limits per agent.** On top of the workspace rules, each agent can have a cap per action, its own rolling budget, a payee list and an end date; one switch freezes every agent.
+- **Approvals wherever you are.** Push notifications with Approve and Decline on the notification (installable web app), Slack, a reminder when a request waits, and automatic decline when it expires. Decline with a reason the agent can read; approving a payout can let the agent pay that person on its own for a few days. Large approvals need a fresh passkey sign-in.
+- **Audit log.** Every money move and every change, with who did it and on whose behalf, hash-chained and append-only (the database refuses edits), with an integrity check and CSV export.
+- **Webhooks.** Signed with the [Standard Webhooks](https://www.standardwebhooks.com/) scheme, with a delivery log, retries and redelivery.
+- **Billing.** Free, Pro ($29/month) and Business ($99/month) through PayPal Subscriptions in the sandbox, with plan limits on agents, monthly checked actions, members and webhooks.
 
 The owner writes the rules in plain words on the **Rules** tab ("Up to $40 on its own, ask me above that, never more than $250…"). The model turns them into structured limits, highlights what changed, and nothing changes until the owner presses Activate. The **Ledger** (AG Grid) lists every money move the agent proposed, the check that decided it, the reviewer's note and the PayPal reference, and exports to CSV.
 
@@ -122,22 +134,35 @@ Requirements: Node.js 22.13 or newer, a free [PayPal Developer](https://develope
    ```bash
    npm run dev
    ```
-   Open http://localhost:3000 and press **Reset demo**. It creates three paid sandbox orders with tracking and loads the inbox. Pick an item and press **Let the agent handle it**.
+   Open http://localhost:3000 and press **Try the live demo**. You get a demo workspace with three paid sandbox orders (with tracking) and the inbox; pick an item and press **Let the agent handle it**. Or create an account and connect your own sandbox app under **Settings → PayPal**.
 
 Allowance only talks to `api-m.sandbox.paypal.com`; there is no setting for the live API.
 
-### Use it from an MCP client
+Sign-in, workspaces and the demo pool need nothing else: a secret and VAPID keys for push are created in `data/` on first start (or set `BETTER_AUTH_SECRET`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`). Set `ALLOWANCE_BASE_URL` to the public URL when you host it; passkeys and cookies are bound to it. See [.env.example](.env.example).
+
+### Use it from your own agent
+
+Create a key under **Developers**, then:
 
 ```bash
-claude mcp add allowance -- npx tsx server/mcp.ts
+curl https://allowance.43-160-214-187.sslip.io/v1/refunds \
+  -H "Authorization: Bearer $ALLOWANCE_KEY" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: ticket-4471" \
+  -d '{"capture_id":"…","amount":24,"reason":"One mug arrived chipped","requester_email":"maya.chen@example.com"}'
 ```
 
-Run it from the repository folder so it shares `data/allowance.db` with the web app. Money-moving tools take two extra fields, `requester_email` and `source_message`, which the reviewer weighs against PayPal's records.
+The answer is the action with its status (`executed`, `awaiting_approval`, `blocked`), every check and the AI review. A held action is followed with `GET /v1/actions/act_…` or a webhook. Over MCP:
+
+```bash
+claude mcp add --transport http allowance https://allowance.43-160-214-187.sslip.io/v1/mcp --header "Authorization: Bearer $ALLOWANCE_KEY"
+```
+
+A local stdio MCP server works on the local workspace without a key: `claude mcp add allowance -- npx tsx server/mcp.ts`. Money-moving tools take two extra fields, `requester_email` and `source_message`, which the reviewer weighs against PayPal's records.
 
 ### Tests and checks
 
 ```bash
-npm test            # rule engine and guard (PayPal and the model stubbed)
+npm test            # rule engine, guard, agent limits, audit chain, keys (PayPal and the model stubbed)
 npm run typecheck
 npm run bench       # AllowanceBench with the real AI reviewer
 ```
@@ -150,9 +175,12 @@ npm run bench       # AllowanceBench with the real AI reviewer
 | `server/guard/review.ts` | Reviewer prompt and structured output schema |
 | `server/guard/index.ts` | Fetch facts → rules → review → allow / hold / block; approvals |
 | `server/agent/` | Support agent loop, shared tools, hijacked-agent simulation |
-| `server/mcp.ts` | MCP server with the guarded tools |
+| `server/mcp-server.ts`, `server/mcp.ts` | MCP server with the guarded tools (hosted at `/v1/mcp`, or local over stdio) |
+| `server/v1.ts`, `server/openapi.ts` | Agent API with keys and idempotency |
+| `server/auth.ts`, `server/workspaces.ts`, `server/context.ts` | Accounts, roles, passkeys (better-auth), one database per workspace |
+| `server/audit.ts`, `server/webhooks.ts`, `server/notify.ts`, `server/billing.ts` | Audit log, webhooks, push and Slack, PayPal Subscriptions |
 | `server/paypal/` | PayPal REST client (OAuth, idempotency keys) and API calls |
-| `web/` | React app: Inbox, Approvals, Ledger (AG Grid), Rules |
+| `web/` | React app (shadcn/ui): Inbox, Approvals, Agents, Rules, Ledger (AG Grid), Developers, Audit log, Settings |
 | `bench/` | AllowanceBench cases and runner |
 
 ## License

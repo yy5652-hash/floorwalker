@@ -68,9 +68,8 @@ async function createWorkspaceFor(user: { id: string; name: string; email: strin
     },
   });
   if (!org) throw new Error("Could not create a workspace");
-  registerWorkspace(org.id, { demo });
+  // afterCreateOrganization has registered it (and given a real workspace its agents).
   if (demo) seedInBackground(org.id, seedDemo);
-  else await inWorkspace(openWorkspace(org.id), { kind: "system", id: "setup", name: "Allowance" }, ensureAgents);
 }
 
 /** The workspace a fresh session opens in: the one the user joined most recently. */
@@ -110,6 +109,14 @@ const options = {
       },
       // There is no outbound email yet: the Team page shows each invite as a link to copy.
       sendInvitationEmail: async () => {},
+      // Workspaces created from the app (the switcher's "New workspace") get their row and agents here.
+      organizationHooks: {
+        afterCreateOrganization: async ({ organization }: { organization: { id: string; metadata?: unknown } }) => {
+          const meta = typeof organization.metadata === "string" ? JSON.parse(organization.metadata || "{}") : (organization.metadata ?? {});
+          registerWorkspace(organization.id, { demo: Boolean((meta as { demo?: boolean }).demo) });
+          if (!(meta as { demo?: boolean }).demo) await inWorkspace(openWorkspace(organization.id), { kind: "system", id: "setup", name: "Allowance" }, ensureAgents);
+        },
+      },
     }),
     anonymous({
       emailDomainName: "demo.allowance.invalid",

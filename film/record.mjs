@@ -9,10 +9,17 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASE = process.argv[2] || 'http://localhost:3000';
-const state = async () => (await fetch(`${BASE}/api/state`)).json();
+
+// The run happens in a fresh demo workspace: sign in as a demo visitor and keep the session cookie.
+const signIn = await fetch(`${BASE}/api/auth/sign-in/anonymous`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: BASE }, body: '{}' });
+if (!signIn.ok) throw new Error(`demo sign-in: ${signIn.status} ${await signIn.text()}`);
+const COOKIE = signIn.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+const H = { Cookie: COOKIE, Origin: BASE };
+
+const state = async () => (await fetch(`${BASE}/api/state`, { headers: H })).json();
 const post = async (path, body) => {
   const t0 = Date.now();
-  const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   const data = await r.json();
   if (!r.ok) throw new Error(`${path}: ${data.error}`);
   return { ms: Date.now() - t0, data };
@@ -20,7 +27,7 @@ const post = async (path, body) => {
 
 async function stream(path) {
   const t0 = Date.now();
-  const r = await fetch(`${BASE}${path}`, { method: 'POST' });
+  const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: H });
   if (!r.ok) throw new Error(`${path}: ${r.status} ${await r.text()}`);
   const events = [];
   const dec = new TextDecoder();
@@ -47,7 +54,14 @@ const step = async (id, fn) => {
   console.log(id, guards.join(', ') || (out.response ? 'ok' : ''), out.events ? `${out.events.at(-1)?.t.toFixed(1)} s` : '');
 };
 
-console.log('reset:', (await post('/api/demo/reset')).data.log.join(' | '));
+// The demo workspace seeds itself (paid sandbox orders, the inbox) right after sign-in.
+for (let i = 0; ; i++) {
+  const s = await state();
+  if (s.workspace?.seedStatus === 'ready') break;
+  if (String(s.workspace?.seedStatus).startsWith('failed') || i > 60) throw new Error(`demo seed: ${s.workspace?.seedStatus}`);
+  await new Promise((r) => setTimeout(r, 1000));
+}
+console.log('demo workspace ready:', (await state()).workspace.name);
 // The same order as the film: Daniel's held refund is approved right after it is held.
 for (const t of ['T1', 'T2', 'approve', 'T3', 'T4', 'T5', 'T6']) {
   if (t !== 'approve') { await step(t, async () => ({ events: await stream(`/api/tickets/${t}/run`) })); continue; }

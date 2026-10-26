@@ -42,6 +42,23 @@ export async function accessToken(creds: PayPalCreds = paypalCreds()): Promise<s
   return body.access_token;
 }
 
+/** Checks a PayPal sandbox app's credentials and reports what it may do. */
+export async function verifyPayPalApp(creds: PayPalCreds): Promise<{ appId: string; payouts: boolean; refunds: boolean }> {
+  const res = await fetch(`${config.paypal.baseUrl}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials",
+  });
+  const body = (await res.json().catch(() => ({}))) as { access_token?: string; app_id?: string; scope?: string; expires_in?: number };
+  if (!res.ok || !body.access_token) throw new Error("PayPal didn't accept these sandbox credentials. Copy the Client ID and Secret of a sandbox app from developer.paypal.com.");
+  tokens.set(creds.clientId, { value: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 300) * 1000 });
+  const scope = body.scope ?? "";
+  return { appId: body.app_id ?? "", payouts: scope.includes("/payments/payouts"), refunds: scope.includes("/payments/refund") || scope.includes("/payments/.*") };
+}
+
 type Options = {
   // PayPal-Request-Id makes POSTs idempotent: a retried request returns the original result.
   requestId?: string;

@@ -13,7 +13,7 @@ export type Workspace = {
 };
 
 /** Who is acting: a signed-in person, an agent key, or Allowance itself (expiry, polling). */
-export type Actor = { kind: "user" | "agent" | "system"; id: string; name: string; role?: string; onBehalfOf?: string };
+export type Actor = { kind: "user" | "agent" | "system"; id: string; name: string; role?: string; onBehalfOf?: string; ip?: string };
 
 type Ctx = { ws: Workspace; actor: Actor };
 

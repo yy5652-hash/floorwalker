@@ -65,18 +65,70 @@ CREATE TABLE IF NOT EXISTS agents (
   status TEXT NOT NULL DEFAULT 'active',
   status_changed_at TEXT
 );
+CREATE TABLE IF NOT EXISTS audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,
+  actor_kind TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_name TEXT NOT NULL,
+  on_behalf_of TEXT,
+  action TEXT NOT NULL,
+  target TEXT,
+  detail TEXT,
+  ip TEXT,
+  prev_hash TEXT NOT NULL,
+  hash TEXT NOT NULL
+);
+-- The audit log is append-only: SQLite itself refuses edits and deletions.
+CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END;
+CREATE TABLE IF NOT EXISTS grants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  counterparty TEXT NOT NULL,
+  max_amount REAL NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  ledger_id INTEGER,
+  revoked_at TEXT
+);
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
+
+// Columns added after the first release; older databases get them here.
+const COLUMNS: [table: string, column: string, type: string][] = [
+  ["ledger", "agent_id", "TEXT"],
+  ["ledger", "facts", "TEXT"],
+  ["ledger", "policy_id", "INTEGER"],
+  ["ledger", "approved_amount", "REAL"],
+  ["ledger", "decline_reason", "TEXT"],
+  ["ledger", "expires_at", "TEXT"],
+  ["ledger", "reminded_at", "TEXT"],
+  ["ledger", "idempotency_key", "TEXT"],
+  ["ledger", "source", "TEXT"],
+  ["agents", "max_per_action", "REAL"],
+  ["agents", "budget", "REAL"],
+  ["agents", "budget_period", "TEXT"],
+  ["agents", "payees", "TEXT"],
+  ["agents", "expires_at", "TEXT"],
+  ["agents", "created_at", "TEXT"],
+];
 
 /** Opens (and creates or upgrades) one workspace's database. */
 export function openDb(path: string): DatabaseSync {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const d = new DatabaseSync(path);
   d.exec(SCHEMA);
-  // Columns added after the first release; older databases get them here.
-  const ledgerCols = new Set((d.prepare("PRAGMA table_info(ledger)").all() as any[]).map((c) => c.name));
-  for (const [col, type] of [["agent_id", "TEXT"], ["facts", "TEXT"], ["policy_id", "INTEGER"], ["approved_amount", "REAL"]] as const) {
-    if (!ledgerCols.has(col)) d.exec(`ALTER TABLE ledger ADD COLUMN ${col} ${type}`);
+  const have = new Map<string, Set<string>>();
+  for (const [table, col, type] of COLUMNS) {
+    if (!have.has(table)) have.set(table, new Set((d.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c) => c.name)));
+    if (!have.get(table)!.has(col)) d.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
   }
+  d.exec("CREATE UNIQUE INDEX IF NOT EXISTS ledger_idempotency ON ledger (agent_id, idempotency_key) WHERE idempotency_key IS NOT NULL");
   return d;
 }
 
@@ -115,7 +167,27 @@ export function policyVersion(id: number) {
 }
 
 // ---------------------------------------------------------------- agents
-export type Agent = { id: string; name: string; role: string; can_refund: number; can_payout: number; status: "active" | "frozen"; status_changed_at: string | null };
+export type Agent = {
+  id: string;
+  name: string;
+  role: string;
+  can_refund: number;
+  can_payout: number;
+  status: "active" | "frozen";
+  status_changed_at: string | null;
+  /** Hold any single action above this (USD); null = only the workspace rules apply. */
+  max_per_action: number | null;
+  /** This agent's own rolling budget, on top of the workspace budget. */
+  budget: number | null;
+  budget_period: "day" | "week" | "month" | null;
+  /** JSON list of emails this agent may pay; null = anyone the workspace rules allow. */
+  payees: string | null;
+  /** After this the agent can't move money at all. */
+  expires_at: string | null;
+  created_at: string | null;
+};
+
+export type AgentControls = Pick<Agent, "max_per_action" | "budget" | "budget_period" | "expires_at"> & { payees: string[] | null };
 
 export function agents(): Agent[] {
   return db().prepare("SELECT * FROM agents ORDER BY rowid").all() as any;
@@ -125,14 +197,61 @@ export function agent(id: string): Agent | undefined {
   return db().prepare("SELECT * FROM agents WHERE id = ?").get(id) as any;
 }
 
-export function upsertAgent(a: Omit<Agent, "status" | "status_changed_at">) {
-  db().prepare(`INSERT INTO agents (id, name, role, can_refund, can_payout) VALUES (?, ?, ?, ?, ?)
+export function upsertAgent(a: Pick<Agent, "id" | "name" | "role" | "can_refund" | "can_payout">) {
+  db().prepare(`INSERT INTO agents (id, name, role, can_refund, can_payout, created_at) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET name = excluded.name, role = excluded.role, can_refund = excluded.can_refund, can_payout = excluded.can_payout`)
-    .run(a.id, a.name, a.role, a.can_refund, a.can_payout);
+    .run(a.id, a.name, a.role, a.can_refund, a.can_payout, nowIso());
+}
+
+export function setAgentControls(id: string, c: AgentControls) {
+  return db().prepare("UPDATE agents SET max_per_action = ?, budget = ?, budget_period = ?, payees = ?, expires_at = ? WHERE id = ?").run(
+    c.max_per_action, c.budget, c.budget ? (c.budget_period ?? "week") : null, c.payees?.length ? JSON.stringify(c.payees) : null, c.expires_at, id,
+  ).changes === 1;
+}
+
+/** Agents with history stay (the ledger points at them); freeze those instead. */
+export function deleteAgent(id: string): boolean {
+  const used = db().prepare("SELECT 1 FROM ledger WHERE agent_id = ? LIMIT 1").get(id);
+  if (used) throw new Error("This agent has history in the ledger. Freeze it instead; its record stays.");
+  return db().prepare("DELETE FROM agents WHERE id = ?").run(id).changes === 1;
 }
 
 export function setAgentStatus(id: string, status: Agent["status"]) {
   return db().prepare("UPDATE agents SET status = ?, status_changed_at = ? WHERE id = ?").run(status, nowIso(), id).changes === 1;
+}
+
+/** Money this agent moved (executed or approved) since a moment, for its own budget. */
+export function agentSpent(id: string, sinceIso: string): number {
+  const row = db().prepare(`SELECT COALESCE(SUM(COALESCE(approved_amount, amount)), 0) AS total FROM ledger
+    WHERE agent_id = ? AND status IN ('executed', 'approved') AND COALESCE(decided_at, created_at) >= ?`).get(id, sinceIso) as any;
+  return row.total;
+}
+
+// ---------------------------------------------------------------- temporary allowances
+export type Grant = { id: number; kind: "payout"; counterparty: string; max_amount: number; expires_at: string; created_by: string; created_at: string; ledger_id: number | null; revoked_at: string | null };
+
+export function addGrant(g: { counterparty: string; maxAmount: number; days: number; createdBy: string; ledgerId?: number }): number {
+  const expires = new Date(Date.now() + g.days * 86_400_000).toISOString();
+  return Number(db().prepare("INSERT INTO grants (kind, counterparty, max_amount, expires_at, created_by, created_at, ledger_id) VALUES ('payout', ?, ?, ?, ?, ?, ?)")
+    .run(g.counterparty.toLowerCase(), g.maxAmount, expires, g.createdBy, nowIso(), g.ledgerId ?? null).lastInsertRowid);
+}
+
+export function activeGrants(): Grant[] {
+  return db().prepare("SELECT * FROM grants WHERE revoked_at IS NULL AND expires_at > ? ORDER BY id DESC").all(nowIso()) as any;
+}
+
+export function revokeGrant(id: number): boolean {
+  return db().prepare("UPDATE grants SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").run(nowIso(), id).changes === 1;
+}
+
+// ---------------------------------------------------------------- workspace settings
+export function setting<T>(key: string, fallback: T): T {
+  const row = db().prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+  return row ? JSON.parse(row.value) : fallback;
+}
+
+export function setSetting(key: string, value: unknown) {
+  db().prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, JSON.stringify(value));
 }
 
 export type OrderRow = {
@@ -220,6 +339,12 @@ export type LedgerRow = {
   created_at: string;
   decided_at: string | null;
   decided_by: string | null;
+  decline_reason: string | null;
+  expires_at: string | null;
+  reminded_at: string | null;
+  idempotency_key: string | null;
+  /** Where the request came from: "inbox" (the built-in agents), "api" or "mcp". */
+  source: string | null;
 };
 
 export function recordProposal(p: {
@@ -237,12 +362,15 @@ export function recordProposal(p: {
   checks: Check[];
   review?: unknown;
   status: LedgerStatus;
+  expiresAt?: string;
+  idempotencyKey?: string;
+  source?: string;
 }): number {
-  const r = db().prepare(`INSERT INTO ledger (ticket_id, agent_id, tool, kind, params, amount, counterparty, justification, decision, checks, review, status, created_at, facts, policy_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+  const r = db().prepare(`INSERT INTO ledger (ticket_id, agent_id, tool, kind, params, amount, counterparty, justification, decision, checks, review, status, created_at, facts, policy_id, expires_at, idempotency_key, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     p.ticketId ?? null, p.agentId ?? null, p.tool, p.kind, JSON.stringify(p.params), p.amount, p.counterparty ?? null, p.justification ?? null,
     p.decision, JSON.stringify(p.checks), p.review ? JSON.stringify(p.review) : null, p.status, nowIso(),
-    p.facts === undefined ? null : JSON.stringify(p.facts), p.policyId ?? null,
+    p.facts === undefined ? null : JSON.stringify(p.facts), p.policyId ?? null, p.expiresAt ?? null, p.idempotencyKey ?? null, p.source ?? null,
   );
   return Number(r.lastInsertRowid);
 }
@@ -266,6 +394,23 @@ export function setPaypalResult(id: number, result: unknown) {
 
 export function ledger(): LedgerRow[] {
   return db().prepare("SELECT * FROM ledger ORDER BY id DESC").all() as any;
+}
+
+export function ledgerByIdempotencyKey(agentId: string, key: string): LedgerRow | undefined {
+  return db().prepare("SELECT * FROM ledger WHERE agent_id = ? AND idempotency_key = ?").get(agentId, key) as any;
+}
+
+export function setDeclineReason(id: number, reason: string) {
+  db().prepare("UPDATE ledger SET decline_reason = ? WHERE id = ?").run(reason, id);
+}
+
+export function markReminded(id: number) {
+  db().prepare("UPDATE ledger SET reminded_at = ? WHERE id = ?").run(nowIso(), id);
+}
+
+/** Held requests nobody answered in time. */
+export function overdueRequests(): LedgerRow[] {
+  return db().prepare("SELECT * FROM ledger WHERE status = 'awaiting_approval' AND expires_at IS NOT NULL AND expires_at <= ?").all(nowIso()) as any;
 }
 
 export function ledgerEntry(id: number): LedgerRow | undefined {
@@ -296,6 +441,7 @@ export function paidToPayee(email: string, days: number): { total: number; amoun
   return { total: rows.reduce((t, r) => t + r.amount, 0), amounts: rows };
 }
 
+/** Clears the sample shop. The audit log stays: it is append-only, and the reset itself is recorded there. */
 export function resetDemo() {
-  db().exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders; DELETE FROM agents;");
+  db().exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders; DELETE FROM agents; DELETE FROM grants;");
 }

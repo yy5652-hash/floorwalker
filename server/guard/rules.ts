@@ -25,7 +25,7 @@ export type PayoutFacts = { paidToPayee30d: number; samePayeeSameAmount24h: bool
 /** Money the agent has already moved, from the ledger. */
 export type Spend = { kind: MoneyAction["kind"]; amount: number; at: string };
 
-const PERIOD_DAYS = { day: 1, week: 7, month: 30 } as const;
+export const PERIOD_DAYS = { day: 1, week: 7, month: 30 } as const;
 const money = (n: number) => `$${n.toFixed(2)}`;
 
 function spentInPeriod(history: Spend[], kind: Spend["kind"], days: number, now: Date): number {
@@ -147,19 +147,51 @@ export function checkInvoice(a: InvoiceAction, policy: Policy): Check[] {
   ];
 }
 
-export type AgentInfo = { name: string; status: "active" | "frozen"; can_refund: number; can_payout: number };
+export type AgentInfo = {
+  name: string;
+  status: "active" | "frozen";
+  can_refund: number;
+  can_payout: number;
+  max_per_action?: number | null;
+  budget?: number | null;
+  budget_period?: "day" | "week" | "month" | null;
+  payees?: string | null;
+  expires_at?: string | null;
+};
 
-/** The agent itself: frozen agents and actions outside an agent's permissions never reach PayPal. */
-export function checkAgent(agent: AgentInfo | undefined, kind: MoneyAction["kind"]): Check[] {
+/**
+ * The agent's own allowance, checked before the workspace rules: frozen or expired agents and actions outside
+ * its job are blocked; its per-action cap and own budget send the action to the owner.
+ * `spent` is what this agent moved in its budget period so far.
+ */
+export function checkAgent(agent: AgentInfo | undefined, action: MoneyAction, amount = 0, spent = 0, now = Date.now()): Check[] {
   if (!agent) return [];
+  const kind = action.kind;
   const what = kind === "refund" ? "refund customers" : kind === "payout" ? "send payouts" : "send invoices";
-  if (agent.status === "frozen") {
-    return [{ id: "agent", label: "Agent", outcome: "block", detail: `${agent.name} is frozen. Unfreeze it on the Agents page to let it move money again.` }];
-  }
+  const block = (detail: string): Check[] => [{ id: "agent", label: "Agent", outcome: "block", detail }];
+  if (agent.status === "frozen") return block(`${agent.name} is frozen. Unfreeze it on the Agents page to let it move money again.`);
+  if (agent.expires_at && Date.parse(agent.expires_at) <= now) return block(`${agent.name}'s access ended on ${agent.expires_at.slice(0, 10)}.`);
   const allowed = kind === "refund" ? agent.can_refund : kind === "payout" ? agent.can_payout : 1;
-  return [allowed
-    ? { id: "agent", label: "Agent", outcome: "pass", detail: `${agent.name} may ${what}.` }
-    : { id: "agent", label: "Agent", outcome: "block", detail: `${agent.name} isn't allowed to ${what}.` }];
+  if (!allowed) return block(`${agent.name} isn't allowed to ${what}.`);
+  if (kind === "payout" && agent.payees) {
+    const list: string[] = JSON.parse(agent.payees);
+    if (!list.some((e) => e.toLowerCase() === action.email.toLowerCase())) return block(`${action.email} isn't on ${agent.name}'s payee list.`);
+  }
+  const checks: Check[] = [{ id: "agent", label: "Agent", outcome: "pass", detail: `${agent.name} may ${what}.` }];
+  if (agent.max_per_action != null && amount > agent.max_per_action + 0.005) {
+    checks.push({ id: "agent_cap", label: "Agent cap", outcome: "hold", detail: `$${amount.toFixed(2)} is over ${agent.name}'s $${agent.max_per_action.toFixed(2)} limit per action.` });
+  }
+  if (agent.budget != null) {
+    const period = agent.budget_period ?? "week";
+    const over = spent + amount > agent.budget + 0.005;
+    checks.push({
+      id: "agent_budget",
+      label: "Agent budget",
+      outcome: over ? "hold" : "pass",
+      detail: `${agent.name} has moved $${spent.toFixed(2)} of its $${agent.budget.toFixed(2)} per ${period}${over ? `; this would take it to $${(spent + amount).toFixed(2)}` : ""}.`,
+    });
+  }
+  return checks;
 }
 
 export function decide(checks: Check[]): Decision {

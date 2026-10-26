@@ -51,7 +51,7 @@ export async function signedIn(req: Request, res: Response, next: NextFunction) 
     sessionId: s.session.id,
     signedInAt: new Date(s.session.createdAt).getTime(),
   };
-  inWorkspace(openWorkspace(wsId), { kind: "user", id: s.user.id, name, role: member.role }, () => next());
+  inWorkspace(openWorkspace(wsId), { kind: "user", id: s.user.id, name, role: member.role, ip: req.ip }, () => next());
 }
 
 /** Lets the request through only if the member's role grants the permission. */

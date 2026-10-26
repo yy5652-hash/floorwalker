@@ -1,10 +1,13 @@
+import { audit } from "../audit.ts";
 import { config, paypalConfigured } from "../config.ts";
+import { ctx as current } from "../context.ts";
 import * as store from "../db.ts";
+import { publish, type EventType } from "../events.ts";
 import { getCapture, getOrder, orderIdFromCapture, sendPayout, usd } from "../paypal/api.ts";
 import { callToolkit } from "../toolkit.ts";
 import { reviewAction, type Review } from "./review.ts";
 import {
-  actionAmount, checkAgent, checkPayout, checkRefund, decide,
+  actionAmount, checkAgent, checkPayout, checkRefund, decide, PERIOD_DAYS,
   type Check, type Decision, type MoneyAction, type PayoutAction, type PayoutFacts, type RefundAction, type RefundFacts,
 } from "./rules.ts";
 
@@ -33,6 +36,9 @@ export type GuardContext = {
   agentId?: string;
   justification: string;
   emit?: (e: GuardEvent) => void;
+  /** Agents calling the API send one per action; a retry with the same key returns the first outcome. */
+  idempotencyKey?: string;
+  source?: "inbox" | "api" | "mcp";
 };
 
 // ruleFacts are the rule engine's inputs, kept with the ledger row so a draft policy can be replayed later.
@@ -94,8 +100,20 @@ async function prepareRefund(a: RefundAction, ctx: GuardContext): Promise<Prepar
   return { action: { ...a, amount: actionAmount(a, rf) }, counterparty: buyerEmail ?? "unknown", facts, ruleFacts: rf, checks };
 }
 
+/** Temporary allowances ("allow this payee for 7 days") join the payee list until they expire. */
+function withGrants(policy: ReturnType<typeof store.activePolicy>["policy"]) {
+  const grants = store.activeGrants();
+  if (!grants.length) return policy;
+  const p = structuredClone(policy);
+  for (const g of grants) {
+    if (p.payouts.payees.some((x) => x.email.toLowerCase() === g.counterparty)) continue;
+    p.payouts.payees.push({ name: g.counterparty, email: g.counterparty, role: `temporarily allowed by ${g.created_by} until ${g.expires_at.slice(0, 10)}`, monthly_limit: g.max_amount });
+  }
+  return p;
+}
+
 async function preparePayout(a: PayoutAction, ctx: GuardContext): Promise<Prepared> {
-  const { policy } = store.activePolicy();
+  const policy = withGrants(store.activePolicy().policy);
   const paid = store.paidToPayee(a.email, 30);
   const recent = store.paidToPayee(a.email, 1);
   const pf: PayoutFacts = { paidToPayee30d: paid.total, samePayeeSameAmount24h: recent.amounts.some((r) => Math.abs(r.amount - a.amount) < 0.005), requestedByOwner: ctx.ticket?.channel === "task" };
@@ -148,7 +166,7 @@ async function execute(id: number): Promise<{ ok: boolean; ref?: string; note: s
   // An owner may approve a smaller amount than the agent asked for.
   if (row.approved_amount !== null) params.amount = row.approved_amount;
   if (row.tool === "create_refund") {
-    const input: any = { capture_id: params.captureId, note_to_payer: params.note ?? "Refund from Juniper & Oak" };
+    const input: any = { capture_id: params.captureId, note_to_payer: params.note ?? `Refund from ${current().ws.name}` };
     if (params.amount !== undefined) input.amount = usd(params.amount);
     const res = await deps.callToolkit("create_refund", input, requestKey(row));
     if (!res || res.error || !res.id) {
@@ -159,7 +177,7 @@ async function execute(id: number): Promise<{ ok: boolean; ref?: string; note: s
   }
   if (row.tool === "send_payout") {
     try {
-      const res = await deps.sendPayout({ email: params.email, amount: usd(params.amount), note: params.note || "Payment from Juniper & Oak", batchId: requestKey(row) });
+      const res = await deps.sendPayout({ email: params.email, amount: usd(params.amount), note: params.note || `Payment from ${current().ws.name}`, batchId: requestKey(row) });
       const batch = res.batch_header?.payout_batch_id;
       return { ok: true, ref: batch, result: res, note: `PayPal payout batch ${batch} is ${res.batch_header?.batch_status} for $${params.amount.toFixed(2)} to ${params.email}.` };
     } catch (e: any) {
@@ -169,11 +187,63 @@ async function execute(id: number): Promise<{ ok: boolean; ref?: string; note: s
   return { ok: false, note: `Unknown tool ${row.tool}`, error: "unknown tool" };
 }
 
+/** The public shape of a ledger row (API responses, webhooks). */
+export function actionView(row: store.LedgerRow) {
+  const review = row.review ? JSON.parse(row.review) : null;
+  return {
+    id: `act_${row.id}`,
+    object: "action",
+    type: row.kind,
+    status: row.status,
+    decision: row.decision,
+    amount: row.amount,
+    approved_amount: row.approved_amount,
+    currency: "USD",
+    counterparty: row.counterparty,
+    agent_id: row.agent_id,
+    reason: row.justification,
+    checks: JSON.parse(row.checks),
+    review: review && { verdict: review.verdict, summary: review.summary, cited_rule: review.cited_rule ?? "", injection_detected: review.injection_detected },
+    paypal_ref: row.paypal_ref,
+    decline_reason: row.decline_reason,
+    source: row.source,
+    created_at: row.created_at,
+    decided_at: row.decided_at,
+    decided_by: row.decided_by,
+    expires_at: row.expires_at,
+  };
+}
+
+const EVENT_FOR: Partial<Record<store.LedgerStatus, EventType>> = {
+  executed: "action.executed", awaiting_approval: "action.held", blocked: "action.blocked", approved: "action.approved", declined: "action.declined", failed: "action.failed",
+};
+
+function announce(id: number, type?: EventType) {
+  const row = store.ledgerEntry(id)!;
+  const t = type ?? EVENT_FOR[row.status];
+  if (t) publish(t, actionView(row));
+}
+
+/** How long a held request waits for an answer before it is declined on its own. */
+export const approvalTtlHours = () => store.setting<number>("approval_ttl_hours", 72);
+
+export type GuardOutcome = { text: string; row: store.LedgerRow };
+
 /** Intercepts one money-moving tool call: rules, AI review, then execute, hold or block. */
 export async function guardedCall(tool: string, input: unknown, ctx: GuardContext): Promise<string> {
+  return (await guard(tool, input, ctx)).text;
+}
+
+export async function guard(tool: string, input: unknown, ctx: GuardContext): Promise<GuardOutcome> {
+  if (ctx.idempotencyKey && ctx.agentId) {
+    const seen = store.ledgerByIdempotencyKey(ctx.agentId, ctx.idempotencyKey);
+    if (seen) return { text: `Already handled as request #${seen.id} (${seen.status}).`, row: seen };
+  }
   const prepared = tool === "create_refund" ? await prepareRefund(toRefundAction(input), ctx) : await preparePayout(toPayoutAction(input), ctx);
   const agent = ctx.agentId ? store.agent(ctx.agentId) : undefined;
-  prepared.checks = [...checkAgent(agent, prepared.action.kind), ...prepared.checks];
+  const amount = actionAmount(prepared.action);
+  const spent = agent?.budget != null ? store.agentSpent(agent.id, new Date(Date.now() - PERIOD_DAYS[agent.budget_period ?? "week"] * 86_400_000).toISOString()) : 0;
+  prepared.checks = [...checkAgent(agent, prepared.action, amount, spent), ...prepared.checks];
   const { id: policyId, policy, text: policyText } = store.activePolicy();
   let review: Review | null = null;
   let reviewError: string | undefined;
@@ -189,45 +259,82 @@ export async function guardedCall(tool: string, input: unknown, ctx: GuardContex
   }
   const checks = [...prepared.checks, ...reviewChecks(review, reviewError)];
   const decision = decide(checks);
-  const amount = actionAmount(prepared.action);
   const id = store.recordProposal({
     ticketId: ctx.ticket?.id, agentId: ctx.agentId, tool, kind: prepared.action.kind, params: prepared.action, amount, counterparty: prepared.counterparty,
     justification: ctx.justification, decision, checks, review: review ?? undefined, policyId,
     facts: prepared.ruleFacts ? { rules: prepared.ruleFacts, review: prepared.facts } : undefined,
     status: decision === "allow" ? "executing" : decision === "hold" ? "awaiting_approval" : "blocked",
+    expiresAt: decision === "hold" ? new Date(Date.now() + approvalTtlHours() * 3_600_000).toISOString() : undefined,
+    idempotencyKey: ctx.idempotencyKey, source: ctx.source ?? "inbox",
   });
+  const as = agent ? { kind: "agent" as const, id: agent.id, name: agent.name } : undefined;
+  audit(`action.${decision === "allow" ? "allowed" : decision === "hold" ? "held" : "blocked"}`, `act_${id}`, { tool, amount, counterparty: prepared.counterparty }, as);
   const event: GuardEvent = { type: "guard", ledgerId: id, tool, amount, counterparty: prepared.counterparty, decision, status: "blocked", checks, review };
 
   if (decision !== "allow") {
     event.status = decision === "hold" ? "awaiting_approval" : "blocked";
     ctx.emit?.(event);
-    return agentMessage(decision, id, amount, checks);
+    announce(id);
+    return { text: agentMessage(decision, id, amount, checks), row: store.ledgerEntry(id)! };
   }
   const run = await execute(id);
   store.updateLedger(id, { status: run.ok ? "executed" : "failed", paypalRef: run.ref, paypalResult: run.result, error: run.error });
+  audit(run.ok ? "action.executed" : "action.failed", `act_${id}`, { paypal_ref: run.ref, error: run.error }, as);
   ctx.emit?.({ ...event, status: run.ok ? "executed" : "failed", paypalRef: run.ref, error: run.error });
-  return run.ok ? agentMessage("allow", id, amount, checks, run.note) : `The action passed Allowance but PayPal rejected it: ${run.note}`;
+  announce(id);
+  return { text: run.ok ? agentMessage("allow", id, amount, checks, run.note) : `The action passed Allowance but PayPal rejected it: ${run.note}`, row: store.ledgerEntry(id)! };
 }
+
+export type ApproveOptions = {
+  amount?: number;
+  /** Also let the agent pay this payee on its own for this many days (payouts only), up to the approved amount each time. */
+  allowPayeeDays?: number;
+  note?: string;
+};
 
 /**
  * Owner approves a held action. The exact parameters frozen at proposal time are executed, optionally with a
  * smaller amount (a partial refund instead of the full one the agent asked for).
  */
-export async function approve(id: number, by: string, amount?: number) {
+export async function approve(id: number, by: string, opts: ApproveOptions | number = {}) {
+  const { amount, allowPayeeDays, note } = typeof opts === "number" ? { amount: opts } as ApproveOptions : opts;
   if (!paypalConfigured()) throw new Error("PayPal is not configured");
   const row = store.ledgerEntry(id);
   if (!row) throw new Error(`No request #${id}`);
   if (row.decision === "block") throw new Error("Blocked actions cannot be approved here; do it yourself in PayPal if you really mean it.");
   if (amount !== undefined && !(amount > 0 && amount <= row.amount + 0.005)) throw new Error(`Approve between $0.01 and $${row.amount.toFixed(2)}.`);
+  if (allowPayeeDays !== undefined && (row.kind !== "payout" || !(allowPayeeDays >= 1 && allowPayeeDays <= 90))) throw new Error("A temporary allowance is for payouts, from 1 to 90 days.");
   if (!store.transition(id, "awaiting_approval", "executing")) throw new Error(`Request #${id} is ${row.status}, not awaiting approval`);
   if (amount !== undefined && Math.abs(amount - row.amount) > 0.005) store.setApprovedAmount(id, Math.round(amount * 100) / 100);
   const run = await execute(id);
   store.updateLedger(id, { status: run.ok ? "approved" : "failed", paypalRef: run.ref, paypalResult: run.result, error: run.error, decidedBy: by });
+  audit(run.ok ? "action.approved" : "action.failed", `act_${id}`, { amount: amount ?? row.amount, paypal_ref: run.ref, error: run.error, note });
+  if (run.ok && allowPayeeDays && row.counterparty) {
+    const grant = store.addGrant({ counterparty: row.counterparty, maxAmount: amount ?? row.amount, days: allowPayeeDays, createdBy: by, ledgerId: id });
+    audit("grant.created", `grant_${grant}`, { counterparty: row.counterparty, max_amount: amount ?? row.amount, days: allowPayeeDays });
+  }
+  announce(id);
   return { ...store.ledgerEntry(id)!, note: run.note };
 }
 
-export function declineRequest(id: number, by: string) {
+export function declineRequest(id: number, by: string, reason?: string) {
   if (!store.transition(id, "awaiting_approval", "declined")) throw new Error(`Request #${id} is not awaiting approval`);
   store.updateLedger(id, { status: "declined", decidedBy: by });
+  if (reason?.trim()) store.setDeclineReason(id, reason.trim().slice(0, 500));
+  audit("action.declined", `act_${id}`, reason?.trim() ? { reason: reason.trim().slice(0, 500) } : undefined);
+  announce(id);
   return store.ledgerEntry(id)!;
+}
+
+/** Declines held requests nobody answered in time (fail closed: silence is a no). */
+export function expireOverdue(): number {
+  const rows = store.overdueRequests();
+  for (const r of rows) {
+    if (!store.transition(r.id, "awaiting_approval", "declined")) continue;
+    store.updateLedger(r.id, { status: "declined", decidedBy: "Allowance (expired)" });
+    store.setDeclineReason(r.id, `No one answered within ${approvalTtlHours()} hours, so it was declined automatically.`);
+    audit("action.expired", `act_${r.id}`);
+    announce(r.id, "action.expired");
+  }
+  return rows.length;
 }

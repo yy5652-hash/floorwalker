@@ -64,16 +64,26 @@ function summarize(name: string, out: any): string {
 
 export type ToolOutcome = { text: string; isError: boolean; summary: string };
 
+const REFUND_TOOLS = ["find_customer_orders", "get_order", "get_refund", "create_refund"];
+const PAYOUT_TOOLS = ["lookup_contact", "send_payout"];
+
 /** Least privilege: each agent only sees the tools its job needs. */
 export const TOOLS_FOR: Record<string, string[] | undefined> = {
-  support: ["find_customer_orders", "get_order", "get_refund", "create_refund"],
-  ops: ["lookup_contact", "send_payout"],
+  support: REFUND_TOOLS,
+  ops: PAYOUT_TOOLS,
 };
 
-export async function runTool(name: string, input: any, ticket: store.Ticket | undefined, emit?: (e: GuardEvent) => void, agentId?: string): Promise<ToolOutcome> {
+/** The tools an agent's permissions cover (agents added by the owner, MCP clients). */
+export function toolsForAgent(a: Pick<store.Agent, "can_refund" | "can_payout">): string[] {
+  return [...(a.can_refund ? REFUND_TOOLS : []), ...(a.can_payout ? PAYOUT_TOOLS : [])];
+}
+
+export async function runTool(
+  name: string, input: any, ticket: store.Ticket | undefined, emit?: (e: GuardEvent) => void, agentId?: string, source?: "inbox" | "api" | "mcp",
+): Promise<ToolOutcome> {
   const { reason, requester_email, source_message, ...rest } = input ?? {};
   if (GUARDED_TOOLS.has(name)) {
-    const text = await guardedCall(name, rest, { ticket, agentId, justification: String(reason ?? ""), emit });
+    const text = await guardedCall(name, rest, { ticket, agentId, justification: String(reason ?? ""), emit, source });
     return { text, isError: false, summary: text.split(". ")[0] };
   }
   if (name === "find_customer_orders") {

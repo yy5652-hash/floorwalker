@@ -9,10 +9,14 @@ import { config, paypalConfigured } from "./config.ts";
 import { ctx, inWorkspace, setDefaultWorkspace } from "./context.ts";
 import * as store from "./db.ts";
 import { seedDemo } from "./demo.ts";
+import { audit } from "./audit.ts";
+import { publish } from "./events.ts";
 import { handle, HttpError, need, signedIn } from "./http.ts";
-import { openWorkspaces, workspaceRow } from "./workspaces.ts";
+import { manage, stepUpOver } from "./manage.ts";
+import { v1 } from "./v1.ts";
+import { core, openWorkspace, openWorkspaces, workspaceRow } from "./workspaces.ts";
 import { compilePolicy } from "./guard/compile.ts";
-import { approve, declineRequest } from "./guard/index.ts";
+import { approve, declineRequest, expireOverdue } from "./guard/index.ts";
 import { getPayoutBatch } from "./paypal/api.ts";
 import { validatePolicy } from "./guard/policy.ts";
 import { simulate } from "./guard/simulate.ts";
@@ -95,10 +99,15 @@ function agentsWithStats(rows: store.LedgerRow[], policy: ReturnType<typeof stor
   });
 }
 
+// Agents call /v1 with an agent key.
+app.use("/v1", v1);
+
 // Everything under /api below needs a signed-in member and runs inside their active workspace.
 app.use("/api", signedIn);
+app.use("/api", manage);
 
 app.get("/api/state", (req, res) => {
+  expireOverdue();
   const p = store.activePolicy();
   const rows = store.ledger();
   const { ws } = ctx();
@@ -154,12 +163,25 @@ app.post("/api/attack", need({ agents: ["manage"] }), (_req, res) => {
   void stream(res, (emit) => simulateHijack(emit));
 });
 
+// Large approvals need a recent passkey sign-in from anyone who has a passkey (step-up, like a bank's).
+const STEP_UP_WINDOW_MS = 10 * 60_000;
+const hasPasskey = (userId: string) => Boolean(core.prepare("SELECT 1 FROM passkey WHERE userId = ? LIMIT 1").get(userId));
+
 app.post("/api/ledger/:id/approve", need({ ledger: ["approve"] }), handle(async (req) => {
+  const id = Number(req.params.id);
+  const row = store.ledgerEntry(id);
+  if (!row) throw new HttpError(404, `No request #${id}`);
   const amount = req.body?.amount === undefined ? undefined : Number(req.body.amount);
-  return parseRow(await approve(Number(req.params.id), req.me!.name, amount));
+  const me = req.me!;
+  if ((amount ?? row.amount) > stepUpOver() && hasPasskey(me.userId) && Date.now() - me.signedInAt > STEP_UP_WINDOW_MS) {
+    throw new HttpError(401, `Approving more than $${stepUpOver()} needs a fresh passkey check.`, "step_up");
+  }
+  const allowPayeeDays = req.body?.allow_payee_days === undefined ? undefined : Number(req.body.allow_payee_days);
+  return parseRow(await approve(id, me.name, { amount, allowPayeeDays, note: req.body?.note ? String(req.body.note).slice(0, 500) : undefined }));
 }));
 
-app.post("/api/ledger/:id/decline", need({ ledger: ["approve"] }), handle((req) => parseRow(declineRequest(Number(req.params.id), req.me!.name))));
+app.post("/api/ledger/:id/decline", need({ ledger: ["approve"] }), handle((req) =>
+  parseRow(declineRequest(Number(req.params.id), req.me!.name, req.body?.reason ? String(req.body.reason) : undefined))));
 
 app.post("/api/policy/compile", need({ rules: ["update"] }), handle(async (req) => {
   const text = String(req.body?.text ?? "").slice(0, 4000);
@@ -173,22 +195,18 @@ app.get("/api/policy/versions", handle(() => store.policyVersions()));
 app.post("/api/policy/restore/:id", need({ rules: ["update"] }), handle((req) => {
   const v = store.policyVersion(Number(req.params.id));
   if (!v) throw new HttpError(404, "No such version");
-  return store.savePolicy(v.text, v.policy);
-}));
-
-app.post("/api/agents/:id/freeze", need({ agents: ["manage"] }), handle((req) => {
-  if (!store.setAgentStatus(String(req.params.id), "frozen")) throw new HttpError(404, "No such agent");
-  return store.agent(String(req.params.id));
-}));
-
-app.post("/api/agents/:id/unfreeze", need({ agents: ["manage"] }), handle((req) => {
-  if (!store.setAgentStatus(String(req.params.id), "active")) throw new HttpError(404, "No such agent");
-  return store.agent(String(req.params.id));
+  const saved = store.savePolicy(v.text, v.policy);
+  audit("rules.restored", `rules_v${saved.id}`, { from_version: v.id });
+  publish("rules.updated", { id: saved.id, object: "rules", text: saved.text, policy: saved.policy });
+  return saved;
 }));
 
 app.post("/api/policy", need({ rules: ["update"] }), handle((req) => {
   const policy = validatePolicy(req.body?.policy);
-  return store.savePolicy(String(req.body?.text ?? ""), policy);
+  const saved = store.savePolicy(String(req.body?.text ?? ""), policy);
+  audit("rules.updated", `rules_v${saved.id}`, { text: saved.text });
+  publish("rules.updated", { id: saved.id, object: "rules", text: saved.text, policy: saved.policy });
+  return saved;
 }));
 
 /** Reloads the sample shop: fresh paid sandbox orders and the demo inbox. */
@@ -200,6 +218,7 @@ app.post("/api/demo/reset", need({ rules: ["update"] }), async (_req, res) => {
   const log: string[] = [];
   try {
     await seedDemo((s) => log.push(s));
+    audit("demo.reset");
     res.json({ ok: true, log });
   } catch (e: any) {
     res.status(500).json({ error: e.message, log });
@@ -219,6 +238,20 @@ if (config.production) {
   const vite = await createServer({ server: { middlewareMode: true }, appType: "spa" });
   app.use(vite.middlewares);
 }
+
+// Workspaces in use lately are opened at start, so expiry, reminders and webhooks keep running for them.
+for (const { id } of core.prepare("SELECT id FROM workspace WHERE demo = 0 OR created_at > ?").all(new Date(Date.now() - 3 * 86_400_000).toISOString()) as { id: string }[]) {
+  try {
+    openWorkspace(id);
+  } catch (e: any) {
+    console.error(`workspace ${id}: ${e.message}`);
+  }
+}
+
+// Held requests nobody answered in time are declined (fail closed).
+setInterval(() => {
+  for (const ws of openWorkspaces()) inWorkspace(ws, { kind: "system", id: "expiry", name: "Allowance" }, () => expireOverdue());
+}, 60_000).unref();
 
 // Payout batches settle a few seconds after they are sent; keep the ledger's copy current.
 setInterval(async () => {

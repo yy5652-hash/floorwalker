@@ -107,7 +107,10 @@ function withGrants(policy: ReturnType<typeof store.activePolicy>["policy"]) {
   const p = structuredClone(policy);
   for (const g of grants) {
     if (p.payouts.payees.some((x) => x.email.toLowerCase() === g.counterparty)) continue;
-    p.payouts.payees.push({ name: g.counterparty, email: g.counterparty, role: `temporarily allowed by ${g.created_by} until ${g.expires_at.slice(0, 10)}`, monthly_limit: g.max_amount });
+    p.payouts.payees.push({
+      name: g.counterparty, email: g.counterparty, role: `temporarily allowed by ${g.created_by} until ${g.expires_at.slice(0, 10)}, up to $${g.max_amount.toFixed(2)} more`,
+      monthly_limit: g.base_paid + g.max_amount,
+    });
   }
   return p;
 }

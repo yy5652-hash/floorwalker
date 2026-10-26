@@ -104,6 +104,14 @@ function agentsWithStats(rows: store.LedgerRow[], policy: ReturnType<typeof stor
 // Agents call /v1 with an agent key.
 app.use("/v1", v1);
 
+// Changes must come from the app's own pages (or no browser at all): a cross-site Origin is refused.
+const appOrigin = new URL(config.baseUrl).origin;
+app.use("/api", (req, res, next) => {
+  const origin = req.header("origin");
+  if (req.method !== "GET" && req.method !== "HEAD" && origin && origin !== appOrigin) return void res.status(403).json({ error: "Cross-site request refused." });
+  next();
+});
+
 // Everything under /api below needs a signed-in member and runs inside their active workspace.
 app.use("/api", signedIn);
 app.use("/api", manage);

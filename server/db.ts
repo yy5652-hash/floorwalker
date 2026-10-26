@@ -116,6 +116,7 @@ const COLUMNS: [table: string, column: string, type: string][] = [
   ["agents", "payees", "TEXT"],
   ["agents", "expires_at", "TEXT"],
   ["agents", "created_at", "TEXT"],
+  ["grants", "base_paid", "REAL NOT NULL DEFAULT 0"],
 ];
 
 /** Opens (and creates or upgrades) one workspace's database. */
@@ -228,12 +229,20 @@ export function agentSpent(id: string, sinceIso: string): number {
 }
 
 // ---------------------------------------------------------------- temporary allowances
-export type Grant = { id: number; kind: "payout"; counterparty: string; max_amount: number; expires_at: string; created_by: string; created_at: string; ledger_id: number | null; revoked_at: string | null };
+/**
+ * "Let the agent pay this person on its own for N days, up to $X more." base_paid is what they had been paid in
+ * the last 30 days when the allowance was given, so the allowance adds X on top of it.
+ */
+export type Grant = {
+  id: number; kind: "payout"; counterparty: string; max_amount: number; base_paid: number; expires_at: string;
+  created_by: string; created_at: string; ledger_id: number | null; revoked_at: string | null;
+};
 
 export function addGrant(g: { counterparty: string; maxAmount: number; days: number; createdBy: string; ledgerId?: number }): number {
   const expires = new Date(Date.now() + g.days * 86_400_000).toISOString();
-  return Number(db().prepare("INSERT INTO grants (kind, counterparty, max_amount, expires_at, created_by, created_at, ledger_id) VALUES ('payout', ?, ?, ?, ?, ?, ?)")
-    .run(g.counterparty.toLowerCase(), g.maxAmount, expires, g.createdBy, nowIso(), g.ledgerId ?? null).lastInsertRowid);
+  const base = paidToPayee(g.counterparty, 30).total;
+  return Number(db().prepare("INSERT INTO grants (kind, counterparty, max_amount, base_paid, expires_at, created_by, created_at, ledger_id) VALUES ('payout', ?, ?, ?, ?, ?, ?, ?)")
+    .run(g.counterparty.toLowerCase(), g.maxAmount, base, expires, g.createdBy, nowIso(), g.ledgerId ?? null).lastInsertRowid);
 }
 
 export function activeGrants(): Grant[] {

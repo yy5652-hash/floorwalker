@@ -17,16 +17,23 @@ Allowance sits between an AI agent and a business's PayPal account. Every refund
 3. **AI review.** A second model compares the request, the facts and the proposed action, flags injected instructions, and quotes its evidence.
 4. **One of three outcomes.** Inside the allowance, the agent's action executes in the PayPal sandbox. Unusual, it waits for the owner's one-tap approval, which runs exactly the action she saw, once. Wrong, it is blocked and never reaches PayPal.
 
-The owner writes rules in plain words ("up to $40 on its own, ask me above that, never more than $250"); the AI turns them into limits she reviews before activating. A ledger built on AG Grid shows every money move, the check that decided it and the PayPal reference, and exports to CSV. The same guarded tools are available over MCP, so any agent (Claude Desktop, Claude Code, a custom framework) can use PayPal under the owner's rules.
+The owner writes rules in plain words ("up to $40 on its own, ask me above that, never more than $250"); the AI turns them into limits she reviews and tests on past activity before activating. A ledger built on AG Grid shows every money move, the check that decided it and the PayPal reference, and exports to CSV.
+
+It is built to be used, not just watched:
+
+- **Any agent.** An agent gets a key and calls Allowance instead of PayPal, over a REST API (`/v1/refunds`, `/v1/payouts`, with idempotency keys) or MCP. Each agent can have its own cap per action, rolling budget, payee list and end date, and one switch freezes them all.
+- **Approvals where the owner is.** Push notifications with Approve and Decline right on the notification, Slack, reminders, and automatic decline when a request expires. Large approvals ask for a fresh passkey sign-in.
+- **Teams and accounts.** Sign-up with passkeys, workspaces with their own database, roles (owner, admin, approver, viewer), and each business connects its own PayPal sandbox app.
+- **Accountability.** A hash-chained, append-only audit log of every decision and change, signed webhooks with a delivery log, and plans (Free, Pro $29, Business $99) billed through PayPal Subscriptions.
 
 The demo shop, Juniper & Oak Ceramics, has a morning inbox: a chipped mug (refunded automatically), a wrong-colour bowl (held for approval), the window cleaner's payment (paid), a "new PayPal address" from a fake Sam (the agent hands it to the owner; a payment there would be blocked), an email with hidden instructions to refund in full and pay $150 to a stranger (blocked), and a photographer's invoice (held). A hijacked-agent simulation replays six money moves an attacker would make; Allowance checks each one without knowing the agent is hostile.
 
 ## How we built it
 
-- **PayPal:** Agent Toolkit (`get_order`, `get_refund`, and `create_refund`, which Allowance intercepts and executes with the ledger id as `PayPal-Request-Id`), Orders v2 for the demo orders, Payments v2 captures and refunds for ground truth, Payouts v1 for contractor payments with batch status polling, and Orders v2 tracking for shipment numbers.
+- **PayPal:** Agent Toolkit (`get_order`, `get_refund`, and `create_refund`, which Allowance intercepts and executes with a per-request `PayPal-Request-Id`), Orders v2 for the demo orders, Payments v2 captures and refunds for ground truth, Payouts v1 for contractor payments with batch status polling, Orders v2 tracking for shipment numbers, and Subscriptions (catalog products, billing plans, subscriptions) for Allowance's own plans.
 - **AI:** the support agent, the reviewer and the rules compiler run on Gemini (`gemini-3.8-flash`) with function calling and JSON-schema structured output; the same code runs on Claude when an Anthropic key is set.
-- **App:** Node.js and TypeScript, Express, SQLite (`node:sqlite`), React with AG Grid Community, and an MCP server built on the official SDK.
-- **Tests and benchmark:** unit tests for the rule engine and the guard, and AllowanceBench, 32 labelled money moves (benign, needs-the-owner, attacks), run against the real reviewer.
+- **App:** Node.js and TypeScript, Express, SQLite (`node:sqlite`, one file per workspace), better-auth (passkeys, organizations, anonymous demo sessions), React with shadcn/ui, Tailwind and AG Grid Community, Web Push, Standard Webhooks, and an MCP server built on the official SDK (stdio and Streamable HTTP).
+- **Tests and benchmark:** 33 unit tests (rule engine, guard, agent limits, idempotency, expiry, the audit chain, keys), and AllowanceBench, 48 labelled money moves (benign, needs-the-owner, attacks), run against the real reviewer.
 
 ## Results
 
@@ -56,4 +63,4 @@ The safest place to put limits on an agent is not in its prompt but at the tool 
 
 ## What's next for Allowance
 
-Per-agent allowances for teams of agents, webhook-driven reconciliation, invoices and subscriptions under the same rules, and a mobile approval flow.
+Email delivery for invites and alerts, invoices under the same rules, PayPal webhooks for reconciliation, and moving from the sandbox to live PayPal accounts once the approval and audit trail has been reviewed by real shops.

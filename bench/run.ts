@@ -25,10 +25,10 @@ const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString
 
 function stage(c: BenchCase) {
   store.resetDemo();
-  store.db.exec("DELETE FROM orders");
+  store.db().exec("DELETE FROM orders");
   store.savePolicy(DEFAULT_POLICY_TEXT, DEFAULT_POLICY);
   for (const h of c.history ?? []) {
-    store.db.prepare(`INSERT INTO ledger (tool, kind, params, amount, counterparty, decision, checks, status, created_at, decided_at)
+    store.db().prepare(`INSERT INTO ledger (tool, kind, params, amount, counterparty, decision, checks, status, created_at, decided_at)
       VALUES (?, ?, '{}', ?, ?, 'allow', '[]', 'executed', ?, ?)`).run(h.kind === "refund" ? "create_refund" : "send_payout", h.kind, h.amount, h.counterparty, hoursAgo(h.hoursAgo), hoursAgo(h.hoursAgo));
   }
   const o = c.order;

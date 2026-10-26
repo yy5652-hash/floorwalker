@@ -1,20 +1,39 @@
+import { toNodeHandler } from "better-auth/node";
 import express, { type Response } from "express";
+import helmet from "helmet";
 import { existsSync } from "node:fs";
 import { simulateHijack } from "./agent/attack.ts";
 import { handleTicket, type AgentEvent } from "./agent/run.ts";
+import { auth } from "./auth.ts";
 import { config, paypalConfigured } from "./config.ts";
+import { ctx, inWorkspace, setDefaultWorkspace } from "./context.ts";
 import * as store from "./db.ts";
-import { ensureAgents, seedDemo } from "./demo.ts";
+import { seedDemo } from "./demo.ts";
+import { handle, HttpError, need, signedIn } from "./http.ts";
+import { openWorkspaces, workspaceRow } from "./workspaces.ts";
 import { compilePolicy } from "./guard/compile.ts";
 import { approve, declineRequest } from "./guard/index.ts";
 import { getPayoutBatch } from "./paypal/api.ts";
 import { validatePolicy } from "./guard/policy.ts";
 import { simulate } from "./guard/simulate.ts";
 
-ensureAgents();
+// Every request names its workspace; nothing falls back to a shared database.
+setDefaultWorkspace(null);
 
 const app = express();
 app.set("trust proxy", "loopback");
+app.use(helmet({
+  contentSecurityPolicy: config.production
+    ? { directives: {
+      "default-src": ["'self'"], "img-src": ["'self'", "data:", "blob:"], "style-src": ["'self'", "'unsafe-inline'"], "font-src": ["'self'", "data:"], "frame-ancestors": ["'self'"],
+      "upgrade-insecure-requests": config.baseUrl.startsWith("https:") ? [] : null,
+    } }
+    : false,
+  strictTransportSecurity: config.baseUrl.startsWith("https:"),
+  crossOriginEmbedderPolicy: false,
+}));
+// better-auth reads its own request bodies, so it is mounted before the JSON parser.
+app.all("/api/auth/*splat", toNodeHandler(auth));
 app.use(express.json({ limit: "200kb" }));
 
 // A hosted demo spends real model calls, so each visitor gets a fair share per hour.
@@ -76,10 +95,20 @@ function agentsWithStats(rows: store.LedgerRow[], policy: ReturnType<typeof stor
   });
 }
 
-app.get("/api/state", (_req, res) => {
+// Everything under /api below needs a signed-in member and runs inside their active workspace.
+app.use("/api", signedIn);
+
+app.get("/api/state", (req, res) => {
   const p = store.activePolicy();
   const rows = store.ledger();
+  const { ws } = ctx();
+  const w = workspaceRow(ws.id)!;
   res.json({
+    me: req.me,
+    workspace: {
+      id: ws.id, name: ws.name, demo: ws.demo, plan: w.plan, seedStatus: w.seed_status,
+      paypal: { connected: Boolean(ws.paypal), own: Boolean(w.paypal_client_id), clientIdHint: w.paypal_client_id ? `${w.paypal_client_id.slice(0, 6)}…${w.paypal_client_id.slice(-4)}` : null, verifiedAt: w.paypal_verified_at, merchant: w.paypal_merchant },
+    },
     configured: { paypal: paypalConfigured(), ai: config.ai.configured, provider: config.ai.provider, agentModel: config.ai.agentModel, reviewModel: config.ai.reviewModel },
     policy: p,
     tickets: store.tickets(),
@@ -90,14 +119,16 @@ app.get("/api/state", (_req, res) => {
   });
 });
 
-let busy = false;
+// One agent run at a time per workspace.
+const busy = new Set<string>();
 
 async function stream(res: Response, work: (emit: (e: AgentEvent) => void) => Promise<void>) {
-  if (busy) {
+  const id = ctx().ws.id;
+  if (busy.has(id)) {
     res.status(409).json({ error: "The agent is already working on something." });
     return;
   }
-  busy = true;
+  busy.add(id);
   res.setHeader("Content-Type", "application/x-ndjson");
   res.setHeader("Cache-Control", "no-cache");
   const emit = (e: AgentEvent) => res.write(`${JSON.stringify(e)}\n`);
@@ -106,95 +137,66 @@ async function stream(res: Response, work: (emit: (e: AgentEvent) => void) => Pr
   } catch (e: any) {
     emit({ type: "error", message: e.message });
   } finally {
-    busy = false;
+    busy.delete(id);
     res.end();
   }
 }
 
-app.post("/api/tickets/:id/run", (req, res) => {
+app.post("/api/tickets/:id/run", need({ agents: ["manage"] }), (req, res) => {
   if (!paypalConfigured() || !config.ai.configured) {
-    res.status(400).json({ error: "Set PayPal sandbox credentials and an Anthropic or Gemini key in .env first." });
+    res.status(400).json({ error: "Connect a PayPal sandbox app in Settings first." });
     return;
   }
-  void stream(res, (emit) => handleTicket(req.params.id, emit));
+  void stream(res, (emit) => handleTicket(String(req.params.id), emit));
 });
 
-app.post("/api/attack", (_req, res) => {
+app.post("/api/attack", need({ agents: ["manage"] }), (_req, res) => {
   void stream(res, (emit) => simulateHijack(emit));
 });
 
-app.post("/api/ledger/:id/approve", async (req, res) => {
-  try {
-    const amount = req.body?.amount === undefined ? undefined : Number(req.body.amount);
-    res.json(parseRow(await approve(Number(req.params.id), "owner", amount)));
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
-});
+app.post("/api/ledger/:id/approve", need({ ledger: ["approve"] }), handle(async (req) => {
+  const amount = req.body?.amount === undefined ? undefined : Number(req.body.amount);
+  return parseRow(await approve(Number(req.params.id), req.me!.name, amount));
+}));
 
-app.post("/api/ledger/:id/decline", (req, res) => {
-  try {
-    res.json(parseRow(declineRequest(Number(req.params.id), "owner")));
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
-});
+app.post("/api/ledger/:id/decline", need({ ledger: ["approve"] }), handle((req) => parseRow(declineRequest(Number(req.params.id), req.me!.name))));
 
-app.post("/api/policy/compile", async (req, res) => {
-  try {
-    const text = String(req.body?.text ?? "").slice(0, 4000);
-    res.json(await compilePolicy(text, store.activePolicy().policy));
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
-});
+app.post("/api/policy/compile", need({ rules: ["update"] }), handle(async (req) => {
+  const text = String(req.body?.text ?? "").slice(0, 4000);
+  return compilePolicy(text, store.activePolicy().policy);
+}));
 
-app.post("/api/policy/simulate", (req, res) => {
-  try {
-    res.json(simulate(validatePolicy(req.body?.policy)));
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
-});
+app.post("/api/policy/simulate", handle((req) => simulate(validatePolicy(req.body?.policy))));
 
-app.get("/api/policy/versions", (_req, res) => {
-  res.json(store.policyVersions());
-});
+app.get("/api/policy/versions", handle(() => store.policyVersions()));
 
-app.post("/api/policy/restore/:id", (req, res) => {
+app.post("/api/policy/restore/:id", need({ rules: ["update"] }), handle((req) => {
   const v = store.policyVersion(Number(req.params.id));
-  if (!v) {
-    res.status(404).json({ error: "No such version" });
-    return;
-  }
-  res.json(store.savePolicy(v.text, v.policy));
-});
+  if (!v) throw new HttpError(404, "No such version");
+  return store.savePolicy(v.text, v.policy);
+}));
 
-app.post("/api/agents/:id/freeze", (req, res) => {
-  if (!store.setAgentStatus(req.params.id, "frozen")) return void res.status(404).json({ error: "No such agent" });
-  res.json(store.agent(req.params.id));
-});
+app.post("/api/agents/:id/freeze", need({ agents: ["manage"] }), handle((req) => {
+  if (!store.setAgentStatus(String(req.params.id), "frozen")) throw new HttpError(404, "No such agent");
+  return store.agent(String(req.params.id));
+}));
 
-app.post("/api/agents/:id/unfreeze", (req, res) => {
-  if (!store.setAgentStatus(req.params.id, "active")) return void res.status(404).json({ error: "No such agent" });
-  res.json(store.agent(req.params.id));
-});
+app.post("/api/agents/:id/unfreeze", need({ agents: ["manage"] }), handle((req) => {
+  if (!store.setAgentStatus(String(req.params.id), "active")) throw new HttpError(404, "No such agent");
+  return store.agent(String(req.params.id));
+}));
 
-app.post("/api/policy", (req, res) => {
-  try {
-    const policy = validatePolicy(req.body?.policy);
-    res.json(store.savePolicy(String(req.body?.text ?? ""), policy));
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
-});
+app.post("/api/policy", need({ rules: ["update"] }), handle((req) => {
+  const policy = validatePolicy(req.body?.policy);
+  return store.savePolicy(String(req.body?.text ?? ""), policy);
+}));
 
-app.post("/api/demo/reset", async (_req, res) => {
-  if (busy) {
-    res.status(409).json({ error: "The agent is busy." });
-    return;
-  }
-  busy = true;
+/** Reloads the sample shop: fresh paid sandbox orders and the demo inbox. */
+app.post("/api/demo/reset", need({ rules: ["update"] }), async (_req, res) => {
+  const id = ctx().ws.id;
+  if (!paypalConfigured()) return void res.status(400).json({ error: "Connect a PayPal sandbox app in Settings first." });
+  if (busy.has(id)) return void res.status(409).json({ error: "The agent is busy." });
+  busy.add(id);
   const log: string[] = [];
   try {
     await seedDemo((s) => log.push(s));
@@ -202,9 +204,11 @@ app.post("/api/demo/reset", async (_req, res) => {
   } catch (e: any) {
     res.status(500).json({ error: e.message, log });
   } finally {
-    busy = false;
+    busy.delete(id);
   }
 });
+
+app.use("/api", (_req, res) => void res.status(404).json({ error: "Not found" }));
 
 if (config.production) {
   if (!existsSync("dist/web/index.html")) throw new Error("Run `npm run build` first");
@@ -218,18 +222,22 @@ if (config.production) {
 
 // Payout batches settle a few seconds after they are sent; keep the ledger's copy current.
 setInterval(async () => {
-  if (!paypalConfigured()) return;
-  const pending = store.ledger().filter((r) => r.tool === "send_payout" && r.paypal_ref && ["executed", "approved"].includes(r.status)
-    && ["PENDING", "PROCESSING"].includes(JSON.parse(r.paypal_result ?? "{}")?.batch_header?.batch_status));
-  for (const r of pending.slice(0, 5)) {
-    try {
-      store.setPaypalResult(r.id, await getPayoutBatch(r.paypal_ref!));
-    } catch {
-      // Try again on the next tick.
-    }
+  for (const ws of openWorkspaces()) {
+    if (!ws.paypal) continue;
+    await inWorkspace(ws, { kind: "system", id: "payout-poller", name: "Allowance" }, async () => {
+      const pending = store.ledger().filter((r) => r.tool === "send_payout" && r.paypal_ref && ["executed", "approved"].includes(r.status)
+        && ["PENDING", "PROCESSING"].includes(JSON.parse(r.paypal_result ?? "{}")?.batch_header?.batch_status));
+      for (const r of pending.slice(0, 5)) {
+        try {
+          store.setPaypalResult(r.id, await getPayoutBatch(r.paypal_ref!));
+        } catch {
+          // Try again on the next tick.
+        }
+      }
+    });
   }
 }, 15_000).unref();
 
 app.listen(config.port, () => {
-  console.log(`Allowance on http://localhost:${config.port}  (PayPal sandbox: ${paypalConfigured() ? "ready" : "missing credentials"}, AI: ${config.ai.provider ?? "missing key"} ${config.ai.agentModel})`);
+  console.log(`Allowance on ${config.baseUrl}  (demo PayPal sandbox app: ${config.paypal.clientId ? "set" : "missing"}, AI: ${config.ai.provider ?? "missing key"} ${config.ai.agentModel})`);
 });

@@ -1,5 +1,6 @@
 import { PayPalAgentToolkit } from "@paypal/agent-toolkit/bedrock";
-import { config } from "./config.ts";
+import { ctx } from "./context.ts";
+import { paypalCreds } from "./paypal/client.ts";
 import type { ToolDef } from "./llm.ts";
 
 // The subset of PayPal Agent Toolkit tools the support agent gets. Shipment tracking reaches
@@ -17,10 +18,10 @@ export const TOOLKIT_TOOLS = ["get_order", "create_refund", "get_refund"] as con
  * instance, and request_id becomes the PayPal-Request-Id header, which makes the
  * money-moving call idempotent per ledger entry.
  */
-function toolkit(requestId?: string) {
+function toolkit(requestId?: string, creds = paypalCreds()) {
   return new PayPalAgentToolkit({
-    clientId: config.paypal.clientId,
-    clientSecret: config.paypal.clientSecret,
+    clientId: creds.clientId,
+    clientSecret: creds.clientSecret,
     configuration: { actions: ACTIONS, context: { sandbox: true, ...(requestId ? { request_id: requestId } : {}) } },
   });
 }
@@ -29,7 +30,8 @@ let defs: ToolDef[] | null = null;
 
 /** Toolkit tool definitions in the shape the model APIs take. */
 export function toolkitToolDefs(): ToolDef[] {
-  defs ??= toolkit()
+  // Definitions only: no PayPal call is made, so any workspace's (or no) credentials will do.
+  defs ??= toolkit(undefined, ctx().ws.paypal ?? { clientId: "unset", clientSecret: "unset" })
     .getTools()
     .filter((t) => (TOOLKIT_TOOLS as readonly string[]).includes(t.toolSpec.name))
     .map((t) => ({ name: t.toolSpec.name, description: t.toolSpec.description, input_schema: t.toolSpec.inputSchema.json }));

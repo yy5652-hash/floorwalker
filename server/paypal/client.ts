@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { config } from "../config.ts";
+import { ctx, type PayPalCreds } from "../context.ts";
 
 export class PayPalError extends Error {
   constructor(
@@ -12,16 +13,23 @@ export class PayPalError extends Error {
   }
 }
 
-let cachedToken: { value: string; expiresAt: number } | null = null;
+// One cached token per PayPal app (each workspace connects its own).
+const tokens = new Map<string, { value: string; expiresAt: number }>();
 
-export async function accessToken(): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) return cachedToken.value;
-  const { clientId, clientSecret, baseUrl } = config.paypal;
-  if (!clientId || !clientSecret) throw new Error("PayPal sandbox credentials are not set (see .env.example)");
-  const res = await fetch(`${baseUrl}/v1/oauth2/token`, {
+/** The current workspace's PayPal sandbox app. */
+export function paypalCreds(): PayPalCreds {
+  const creds = ctx().ws.paypal;
+  if (!creds) throw new Error("Connect a PayPal sandbox app in Settings first");
+  return creds;
+}
+
+export async function accessToken(creds: PayPalCreds = paypalCreds()): Promise<string> {
+  const cached = tokens.get(creds.clientId);
+  if (cached && Date.now() < cached.expiresAt - 60_000) return cached.value;
+  const res = await fetch(`${config.paypal.baseUrl}/v1/oauth2/token`, {
     method: "POST",
     headers: {
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      Authorization: `Basic ${Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString("base64")}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: "grant_type=client_credentials",
@@ -30,8 +38,8 @@ export async function accessToken(): Promise<string> {
   if (!res.ok || !body.access_token) {
     throw new PayPalError(`PayPal OAuth failed: ${body.error_description ?? res.status}`, res.status, undefined, body);
   }
-  cachedToken = { value: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 300) * 1000 };
-  return cachedToken.value;
+  tokens.set(creds.clientId, { value: body.access_token, expiresAt: Date.now() + (body.expires_in ?? 300) * 1000 });
+  return body.access_token;
 }
 
 type Options = {

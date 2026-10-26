@@ -35,13 +35,19 @@ Routine service gestures inside the limits are normal and should be approved unl
 
 The rule engine has already checked amounts, limits and budgets; its results are included. Focus on what rules cannot see: whether the story, the facts and the action agree. Quote evidence verbatim, keep the summary short and concrete, and cite the owner's sentence your verdict rests on.`;
 
+const CHANNEL = {
+  task: "owner's to-do note, written by the owner inside Allowance",
+  email: "inbound email",
+  relay: "message an external agent says it received, relayed over the API; Allowance cannot verify who sent it",
+} as const;
+
 export async function reviewAction(input: {
   action: MoneyAction;
   tool: string;
   justification: string;
   facts: unknown;
   checks: Check[];
-  source: { from: string; subject: string; body: string; channel: "email" | "task" } | null;
+  source: { from: string; subject: string; body: string; channel: "email" | "task" | "relay" } | null;
   policy: Policy;
   policyText: string;
 }): Promise<Review> {
@@ -53,7 +59,7 @@ export async function reviewAction(input: {
     `<facts>\n${JSON.stringify(input.facts, null, 2)}\n</facts>`,
     `<rule_checks>\n${input.checks.map((c) => `- [${c.outcome}] ${c.label}: ${c.detail}`).join("\n")}\n</rule_checks>`,
     input.source
-      ? `<source_message channel="${input.source.channel === "task" ? "owner's to-do note, written by the owner inside Allowance" : "inbound email"}" from="${input.source.from}" subject="${input.source.subject.replace(/"/g, "'")}">\n${input.source.body}\n</source_message>`
+      ? `<source_message channel="${CHANNEL[input.source.channel]}" from="${input.source.from}" subject="${input.source.subject.replace(/"/g, "'")}">\n${input.source.body}\n</source_message>`
       : "<source_message>(none: the agent acted without an inbound message)</source_message>",
   ].join("\n\n");
   return structured({ model: config.ai.reviewModel, system: SYSTEM, prompt, schema: ReviewSchema, effort: "medium" });

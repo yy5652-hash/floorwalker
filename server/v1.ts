@@ -84,7 +84,7 @@ v1.get("/agent", (_req, res) => {
 function requestTicket(body: { requester_email?: string; source_message?: string }): store.Ticket | undefined {
   if (!body.requester_email && !body.source_message) return undefined;
   return {
-    id: `API-${Date.now().toString(36)}`, channel: "email", from_name: body.requester_email ?? "unknown", from_email: body.requester_email ?? "",
+    id: `API-${Date.now().toString(36)}`, channel: "relay", from_name: body.requester_email ?? "unknown", from_email: body.requester_email ?? "",
     subject: "Request relayed by an agent over the API", body: body.source_message ?? "", received_at: new Date().toISOString(), status: "open", reply: null,
   };
 }

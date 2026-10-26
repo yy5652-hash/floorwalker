@@ -295,7 +295,8 @@ export function allOrders(): OrderRow[] {
 
 export type Ticket = {
   id: string;
-  channel: "email" | "task";
+  /** "relay": a message an agent says it received, passed in over the API or MCP (never stored as a ticket). */
+  channel: "email" | "task" | "relay";
   from_name: string;
   from_email: string;
   subject: string;

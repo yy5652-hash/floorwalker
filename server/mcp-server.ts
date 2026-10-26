@@ -42,7 +42,7 @@ export function createMcpServer(agentId: string): Server {
     }
     const ticket: store.Ticket | undefined = GUARDED_TOOLS.has(name)
       ? {
-          id: `MCP-${Date.now().toString(36)}`, channel: "email", from_name: String(input.requester_email ?? "unknown"), from_email: String(input.requester_email ?? ""),
+          id: `MCP-${Date.now().toString(36)}`, channel: "relay", from_name: String(input.requester_email ?? "unknown"), from_email: String(input.requester_email ?? ""),
           subject: "Request relayed by an MCP client", body: String(input.source_message ?? ""), received_at: new Date().toISOString(), status: "open", reply: null,
         }
       : undefined;

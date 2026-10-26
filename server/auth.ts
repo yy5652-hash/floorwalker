@@ -56,20 +56,57 @@ export function seedInBackground(id: string, seed: (ws: ReturnType<typeof openWo
 const seedDemo = async () => (await import("./demo.ts")).seedDemo();
 const ensureAgents = async () => (await import("./demo.ts")).ensureAgents();
 
-async function createWorkspaceFor(user: { id: string; name: string; email: string; isAnonymous?: boolean | null }) {
-  const demo = Boolean(user.isAnonymous);
-  const first = user.name?.split(/\s+/)[0] || user.email.split("@")[0];
-  const org = await auth.api.createOrganization({
-    body: {
-      name: demo ? DEMO_NAME : `${first}'s business`,
-      slug: `ws-${randomBytes(6).toString("hex")}`,
-      userId: user.id,
-      metadata: { demo },
-    },
-  });
+// Seeding a demo shop takes PayPal 10-20 seconds, so a few are kept ready, owned by a placeholder user that
+// can't sign in (no password, no passkey). A demo visitor takes one over; the pool then refills in the background.
+const POOL_USER = "allowance-demo-pool";
+const POOL_SIZE = Number(process.env.ALLOWANCE_DEMO_POOL ?? (config.production ? 2 : 0));
+
+function claimPooledDemo(userId: string): string | null {
+  for (let i = 0; i < 3; i++) {
+    const row = core.prepare(`SELECT w.id FROM workspace w JOIN member m ON m.organizationId = w.id
+      WHERE m.userId = ? AND w.seed_status = 'ready' ORDER BY w.created_at LIMIT 1`).get(POOL_USER) as { id: string } | undefined;
+    if (!row) return null;
+    const taken = core.prepare("UPDATE member SET userId = ?, createdAt = ? WHERE organizationId = ? AND userId = ?")
+      .run(userId, new Date().toISOString(), row.id, POOL_USER).changes === 1;
+    if (taken) return row.id;
+  }
+  return null;
+}
+
+let filling = false;
+export async function refillDemoPool() {
+  if (filling || POOL_SIZE <= 0) return;
+  filling = true;
+  try {
+    core.prepare(`INSERT OR IGNORE INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, 'Demo pool', 'pool@demo.allowance.invalid', 0, ?, ?)`)
+      .run(POOL_USER, new Date().toISOString(), new Date().toISOString());
+    const count = () => (core.prepare(`SELECT COUNT(*) AS n FROM member m JOIN workspace w ON w.id = m.organizationId
+      WHERE m.userId = ? AND (w.seed_status = 'ready' OR w.seed_status = 'seeding')`).get(POOL_USER) as { n: number }).n;
+    while (count() < POOL_SIZE) await createDemoWorkspace(POOL_USER);
+  } catch (e: any) {
+    console.error(`demo pool: ${e.message}`);
+  } finally {
+    filling = false;
+  }
+}
+
+async function createDemoWorkspace(userId: string) {
+  const org = await auth.api.createOrganization({ body: { name: DEMO_NAME, slug: `ws-${randomBytes(6).toString("hex")}`, userId, metadata: { demo: true } } });
   if (!org) throw new Error("Could not create a workspace");
-  // afterCreateOrganization has registered it (and given a real workspace its agents).
-  if (demo) seedInBackground(org.id, seedDemo);
+  seedInBackground(org.id, seedDemo);
+}
+
+async function createWorkspaceFor(user: { id: string; name: string; email: string; isAnonymous?: boolean | null }) {
+  if (user.isAnonymous) {
+    const pooled = claimPooledDemo(user.id);
+    if (!pooled) await createDemoWorkspace(user.id);
+    void refillDemoPool();
+    return;
+  }
+  const first = user.name?.split(/\s+/)[0] || user.email.split("@")[0];
+  // afterCreateOrganization registers it and gives it the default agents.
+  const org = await auth.api.createOrganization({ body: { name: `${first}'s business`, slug: `ws-${randomBytes(6).toString("hex")}`, userId: user.id, metadata: { demo: false } } });
+  if (!org) throw new Error("Could not create a workspace");
 }
 
 /** The workspace a fresh session opens in: the one the user joined most recently. */

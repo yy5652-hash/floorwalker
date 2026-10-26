@@ -1,3 +1,5 @@
+import { canManage } from "../api";
+import { isFilm } from "../auth";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -172,7 +174,7 @@ export function Overview(
           ))}
         </div>
       </Card>
-      {!state.tickets.length && (
+      {!state.tickets.length && (state.workspace?.demo || isFilm()) && (
         <Card className="min-w-0 gap-0 py-0 shadow-xs flex flex-wrap items-center gap-4 p-5 [&>div]:flex-1 [&_p]:mt-2 [&_p]:text-muted-foreground">
           <div>
             <h3>Meet your demo shop</h3>
@@ -182,7 +184,7 @@ export function Overview(
             </p>
           </div>
           <Button
-            disabled={props.resetting || !state.configured.paypal}
+            disabled={!canManage(state) || props.resetting || !state.configured.paypal}
             onClick={props.reset}
             variant="default"
             type="button"

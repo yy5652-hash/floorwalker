@@ -1,16 +1,26 @@
+import { isFilm } from "./auth";
+import { canManage } from "./api";
+import { AuthPage } from "./pages/Auth";
+import { Developers, developerTabs } from "./pages/Developers";
+import { Audit } from "./pages/Audit";
+import { Settings as WorkspaceSettings, settingsTabs } from "./pages/Settings";
+import {
+  WorkspaceMenu,
+  UserMenu,
+  UpgradePrompt,
+  DemoBanner,
+} from "./components/AccountMenu";
+import { Modal, useTask } from "./components/Management";
 import {
   ArrowRight,
   BookOpen,
   Bot,
-  CheckCircle2,
-  ChevronsUpDown,
   CircleAlert,
   ClipboardCheck,
   Code2,
   FileClock,
   Inbox as InboxIcon,
   LayoutDashboard,
-  LogOut,
   RefreshCw,
   Search,
   Settings,
@@ -45,7 +55,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -53,14 +62,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   CommandDialog,
   CommandEmpty,
@@ -70,11 +71,6 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
@@ -150,7 +146,7 @@ const pages = [
     subtitle: "A home for your integrations.",
   },
   {
-    id: "audit-log",
+    id: "audit",
     label: "Audit log",
     icon: FileClock,
     subtitle: "Workspace events and changes.",
@@ -180,7 +176,7 @@ function Navigation({ active, waiting }: { active: string; waiting: number }) {
           >
             <a
               href={`/app#${id}`}
-              data-film={`nav-${id}`}
+              data-film={`nav-${id === "audit" ? "audit-log" : id}`}
               aria-current={active === id ? "page" : undefined}
               onClick={() => setOpenMobile(false)}
             >
@@ -221,13 +217,21 @@ function Workspace({ mobile }: { mobile: boolean }) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["state"],
+    queryKey: [
+      "state",
+      mobile ? new URLSearchParams(location.search).get("ws") : null,
+    ],
     queryFn: async ({ signal }) => {
       const data = await getState(signal);
       setDirectory(data);
       return data;
     },
-    refetchInterval: mobile ? 4000 : 8000,
+    refetchInterval: (query) =>
+      query.state.data?.workspace?.seedStatus === "seeding"
+        ? 2000
+        : mobile
+          ? 4000
+          : 8000,
     refetchIntervalInBackground: false,
   });
   const refresh = useCallback(async () => {
@@ -236,13 +240,32 @@ function Workspace({ mobile }: { mobile: boolean }) {
   const notify = useCallback((message: string) => {
     toast(message);
   }, []);
+  useEffect(() => {
+    if (!("serviceWorker" in navigator) || isFilm()) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === "allowance:refresh") void refresh();
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () =>
+      navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [refresh]);
   const [route, setRoute] = useState(location.hash.slice(1) || "overview");
   const [commandOpen, setCommandOpen] = useState(false);
+  const [freezeOpen, setFreezeOpen] = useState(false);
+  const freezeTask = useTask();
   const [resetting, setResetting] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const resetLock = useRef(false);
   const [attackRequest, setAttackRequest] = useState(0);
   const [agentRunning, setAgentRunning] = useState(false);
+  // A new workspace without PayPal opens on the getting-started checklist rather than an empty overview.
+  const workspaceId = state?.workspace?.id;
+  useEffect(() => {
+    if (!state || mobile || location.hash.slice(1) || state.workspace?.demo || state.workspace?.paypal.connected) return;
+    location.hash = "setup";
+    // Only when a workspace is first opened, not on every refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
   useEffect(() => {
     const changed = () => setRoute(location.hash.slice(1) || "overview");
     const keydown = (event: KeyboardEvent) => {
@@ -259,6 +282,8 @@ function Workspace({ mobile }: { mobile: boolean }) {
     };
   }, []);
   async function reset() {
+    if (!state || !canManage(state) || (!state.workspace?.demo && !isFilm()))
+      return;
     if (resetLock.current || agentRunning) return;
     resetLock.current = true;
     setResetting(true);
@@ -296,9 +321,65 @@ function Workspace({ mobile }: { mobile: boolean }) {
         )}
       </main>
     );
+  if (state.workspace?.seedStatus === "seeding" && !isFilm())
+    return (
+      <main className="mx-auto flex min-h-svh max-w-lg flex-col justify-center gap-6 p-6">
+        <Brand />
+        <h1 className="text-3xl">Setting up your demo shop</h1>
+        <p className="text-sm leading-7 text-muted-foreground">
+          Creating paid orders in the PayPal sandbox… This can take a little
+          while.
+        </p>
+        <Skeleton className="h-2 w-full" />
+        <p className="text-xs text-muted-foreground" role="status">
+          We'll open your workspace when everything is ready.
+        </p>
+      </main>
+    );
   const props = { state, refresh, notify };
+  const demo = state.workspace?.demo ?? isFilm();
+  const manageable = canManage(state);
+  const freezeDialog = (
+    <Modal
+      title="Freeze all agents?"
+      description="Stop every active agent from initiating money movements. Requests already executing may finish. You can unfreeze agents individually."
+      open={freezeOpen}
+      onClose={() => !freezeTask.busy && setFreezeOpen(false)}
+    >
+      <Button
+        variant="destructive"
+        disabled={freezeTask.busy}
+        onClick={() =>
+          void freezeTask.run(async () => {
+            const result = await post<{ frozen: number }>(
+              "/api/agents/freeze-all",
+            );
+            await refresh();
+            setFreezeOpen(false);
+            notify(`${result.frozen} agents frozen`);
+          })
+        }
+      >
+        Freeze all agents
+      </Button>
+    </Modal>
+  );
   const waiting = state.ledger.filter((e) => e.status === "awaiting_approval");
-  const page = pages.find((p) => p.id === route.split("/")[0]) ?? pages[0];
+  const focusedEntry = mobile
+    ? state.ledger.find(
+        (e) => String(e.id) === location.hash.slice(1).replace(/^act_/, ""),
+      )
+    : undefined;
+  const phoneEntries =
+    focusedEntry && !waiting.some((e) => e.id === focusedEntry.id)
+      ? [focusedEntry, ...waiting]
+      : waiting;
+  const page =
+    pages.find(
+      (p) =>
+        p.id ===
+        (route.split("/")[0] === "audit-log" ? "audit" : route.split("/")[0]),
+    ) ?? pages[0];
   const feedback = error && (
     <Alert className="mb-6 tone-hold">
       <CircleAlert />
@@ -335,20 +416,69 @@ function Workspace({ mobile }: { mobile: boolean }) {
             </CommandItem>
           ))}
         </CommandGroup>
+        <CommandGroup heading="Settings & developer tabs">
+          {[
+            ...settingsTabs.map(([id, label]) => [
+              `settings/${id}`,
+              `Settings · ${label}`,
+            ]),
+            ...developerTabs.map(([id, label]) => [
+              `developers/${id}`,
+              `Developers · ${label}`,
+            ]),
+          ].map(([id, label]) => (
+            <CommandItem
+              key={id}
+              onSelect={() => {
+                location.hash = id;
+                setCommandOpen(false);
+              }}
+            >
+              {label}
+            </CommandItem>
+          ))}
+        </CommandGroup>
         <CommandSeparator />
-        <CommandGroup heading="Demo actions">
+        <CommandGroup heading="Actions">
           <CommandItem
-            disabled={resetting || agentRunning || !state.configured.paypal}
+            disabled={!manageable || isFilm()}
             onSelect={() => {
+              location.hash = "developers/keys/new";
               setCommandOpen(false);
-              void reset();
             }}
           >
-            <RefreshCw />
-            Reset demo
+            Create agent key
           </CommandItem>
           <CommandItem
+            disabled={!manageable || isFilm()}
+            onSelect={() => {
+              location.hash = "settings/team";
+              setCommandOpen(false);
+            }}
+          >
+            Invite a teammate
+          </CommandItem>
+          {demo && (
+            <CommandItem
+              disabled={
+                !manageable ||
+                resetting ||
+                agentRunning ||
+                !state.configured.paypal
+              }
+              onSelect={() => {
+                setCommandOpen(false);
+                void reset();
+              }}
+            >
+              <RefreshCw />
+              Reset demo
+            </CommandItem>
+          )}
+          <CommandItem
             disabled={
+              !manageable ||
+              !demo ||
               agentRunning ||
               resetting ||
               !state.configured.paypal ||
@@ -363,20 +493,16 @@ function Workspace({ mobile }: { mobile: boolean }) {
             <ShieldAlert />
             Simulate a hijacked agent
           </CommandItem>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div tabIndex={0} aria-label="Freeze all agents — coming soon">
-                <CommandItem disabled>
-                  <Snowflake />
-                  Freeze all agents
-                  <Badge variant="outline" className="ml-auto">
-                    Coming soon
-                  </Badge>
-                </CommandItem>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>coming soon</TooltipContent>
-          </Tooltip>
+          <CommandItem
+            disabled={!manageable}
+            onSelect={() => {
+              setCommandOpen(false);
+              setFreezeOpen(true);
+            }}
+          >
+            <Snowflake />
+            Freeze all agents
+          </CommandItem>
         </CommandGroup>
       </CommandList>
     </CommandDialog>
@@ -384,6 +510,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
   if (mobile)
     return (
       <div className="min-h-svh">
+        <DemoBanner state={state} />
         <header className="flex items-center justify-between border-b bg-card px-4 py-4">
           <Brand />
           <div className="flex items-center gap-2">
@@ -394,7 +521,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
         <main className="mx-auto max-w-lg space-y-6 px-4 py-8">
           <div className="space-y-3">
             <p className="text-xs font-medium tracking-widest text-muted-foreground">
-              JUNIPER &amp; OAK CERAMICS
+              {state.workspace?.name ?? "JUNIPER & OAK CERAMICS"}
             </p>
             <h1>Your call.</h1>
             <p className="text-muted-foreground">
@@ -402,10 +529,16 @@ function Workspace({ mobile }: { mobile: boolean }) {
             </p>
           </div>
           {feedback}
-          {waiting.length ? (
-            waiting.map((entry) => (
-              <ApprovalCard key={entry.id} entry={entry} {...props} />
-            ))
+          {phoneEntries.length ? (
+            [...phoneEntries]
+              .sort(
+                (a, b) =>
+                  Number(String(b.id) === location.hash.slice(1)) -
+                  Number(String(a.id) === location.hash.slice(1)),
+              )
+              .map((entry) => (
+                <ApprovalCard key={entry.id} entry={entry} {...props} />
+              ))
           ) : (
             <Card>
               <EmptyState title="All caught up">
@@ -479,18 +612,27 @@ function Workspace({ mobile }: { mobile: boolean }) {
                 ? state.configured.agentModel
                 : "AI not configured"}
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              disabled={resetting || agentRunning || !state.configured.paypal}
-              onClick={() => void reset()}
-            >
-              <RefreshCw className={resetting ? "animate-spin" : ""} />
-              {resetting ? "Creating orders…" : "Reset demo"}
-            </Button>
+            {demo && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={
+                  !manageable ||
+                  resetting ||
+                  agentRunning ||
+                  !state.configured.paypal
+                }
+                onClick={() => void reset()}
+              >
+                <RefreshCw className={resetting ? "animate-spin" : ""} />
+                {resetting ? "Creating orders…" : "Reset demo"}
+              </Button>
+            )}
             <p className="text-center text-[10px] text-muted-foreground">
-              Demo workspace · sandbox money
+              {demo
+                ? "Demo workspace · sandbox money"
+                : `${state.workspace?.plan ?? "Free"} plan · sandbox money`}
             </p>
           </div>
         </SidebarFooter>
@@ -509,30 +651,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="ml-auto min-w-0 max-w-[200px] flex-1 shrink gap-1 px-2 text-xs sm:max-w-none"
-              >
-                <span className="truncate">
-                  Juniper &amp; Oak Ceramics · Demo
-                </span>
-                <ChevronsUpDown className="size-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Workspace</DropdownMenuLabel>
-              <DropdownMenuItem disabled>
-                <CheckCircle2 />
-                Juniper &amp; Oak Ceramics · Demo
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem disabled>
-                More workspaces coming soon
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <WorkspaceMenu state={state} />
           <Button
             variant="outline"
             size="sm"
@@ -553,30 +672,9 @@ function Workspace({ mobile }: { mobile: boolean }) {
             <Search />
           </Button>
           <ThemeToggle />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Demo owner menu">
-                <Avatar className="size-8">
-                  <AvatarFallback className="text-xs">DO</AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Demo owner</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <a href="/app#settings">
-                  <Settings />
-                  Settings
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                <LogOut />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <UserMenu state={state} />
         </header>
+        <DemoBanner state={state} />
         <main
           id="main-content"
           tabIndex={-1}
@@ -587,7 +685,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
               <p className="text-[10px] font-medium tracking-[.18em] text-muted-foreground">
                 {page.id === "overview"
                   ? "YOUR MONEY, IN GOOD HANDS"
-                  : "JUNIPER & OAK CERAMICS"}
+                  : (state.workspace?.name ?? "JUNIPER & OAK CERAMICS")}
               </p>
               <h1>{page.label}</h1>
               <p className="text-sm leading-relaxed text-muted-foreground">
@@ -595,7 +693,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
               </p>
             </div>
             {page.id === "approvals" ? (
-              <PhoneApproval />
+              <PhoneApproval workspaceId={state.workspace?.id} />
             ) : page.id === "overview" ? (
               <Button asChild variant="outline">
                 <a href="/app#inbox">
@@ -611,6 +709,21 @@ function Workspace({ mobile }: { mobile: boolean }) {
             )}
           </header>
           {feedback}
+          {state.workspace?.seedStatus?.startsWith("failed:") && (
+            <Alert variant="destructive">
+              <AlertTitle>Demo setup needs attention</AlertTitle>
+              <AlertDescription>
+                {state.workspace.seedStatus.slice(7)}
+                <Button
+                  variant="outline"
+                  disabled={resetting || !manageable}
+                  onClick={() => void reset()}
+                >
+                  Retry demo setup
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           {page.id === "overview" && (
             <Overview
               {...props}
@@ -620,11 +733,11 @@ function Workspace({ mobile }: { mobile: boolean }) {
           )}
           <div hidden={page.id !== "inbox"}>
             <Inbox
-              key={resetKey}
+              key={`${state.workspace?.id ?? "film"}-${resetKey}`}
               {...props}
               attackRequest={attackRequest}
               onRunningChange={setAgentRunning}
-              disabled={resetting}
+              disabled={resetting || !manageable}
             />
           </div>
           {page.id === "approvals" && <Approvals {...props} />}
@@ -647,21 +760,20 @@ function Workspace({ mobile }: { mobile: boolean }) {
               resetting={resetting}
             />
           )}
-          {["developers", "audit-log", "settings"].includes(page.id) && (
-            <Card>
-              <EmptyState title={`${page.label} is coming soon`}>
-                <p>
-                  This area is a placeholder. You can manage your agents, rules
-                  and payments from the workspace today.
-                </p>
-                <Button asChild variant="outline" className="mt-4">
-                  <a href="/app#overview">
-                    Back to overview
-                    <ArrowRight />
-                  </a>
-                </Button>
-              </EmptyState>
-            </Card>
+          {page.id === "developers" && (
+            <Developers
+              key={state.workspace?.id}
+              {...props}
+              tab={route.split("/")[1]}
+            />
+          )}
+          {page.id === "audit" && <Audit key={state.workspace?.id} />}
+          {page.id === "settings" && (
+            <WorkspaceSettings
+              key={state.workspace?.id}
+              {...props}
+              tab={route.split("/")[1]}
+            />
           )}
         </main>
         <footer className="flex items-center justify-center gap-2 px-4 py-6 text-[11px] text-muted-foreground">
@@ -670,11 +782,16 @@ function Workspace({ mobile }: { mobile: boolean }) {
         </footer>
       </SidebarInset>
       {palette}
+      {freezeDialog}
     </SidebarProvider>
   );
 }
-export function App() {
+function Routes() {
   const path = location.pathname.replace(/\/+$/, "") || "/";
+  if (path === "/signin" || path === "/signup")
+    return <AuthPage signup={path === "/signup"} />;
+  if (path.startsWith("/invite/"))
+    return <AuthPage invitationId={decodeURIComponent(path.slice(8))} />;
   if (path === "/") return <Landing />;
   if (path === "/approve") return <Workspace mobile />;
   if (path === "/app") return <Workspace mobile={false} />;
@@ -689,5 +806,27 @@ export function App() {
         </a>
       </Button>
     </main>
+  );
+}
+
+export function App() {
+  useEffect(() => {
+    const billing = new URLSearchParams(location.search).get("billing");
+    if (billing) {
+      billing === "ok"
+        ? toast.success("Subscription confirmed. Your plan is ready.")
+        : toast.error(billing);
+      const url = new URL(location.href);
+      url.searchParams.delete("billing");
+      url.hash = "settings/billing";
+      history.replaceState(null, "", url);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
+  }, []);
+  return (
+    <>
+      <Routes />
+      <UpgradePrompt />
+    </>
   );
 }

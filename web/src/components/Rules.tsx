@@ -1,3 +1,4 @@
+import { canManage } from "../api";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Table,
@@ -301,7 +302,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
               variant="outline"
               aria-label="Rule preset"
               className="flex-wrap justify-start"
-              disabled={!!busy}
+              disabled={!canManage(state) || !!busy}
               value={
                 (["Cautious", "Standard", "Generous"] as const).find(
                   (p) =>
@@ -328,7 +329,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
               id="rules-text"
               value={text}
               maxLength={4000}
-              disabled={!!busy}
+              disabled={!canManage(state) || !!busy}
               onChange={(e) => edit(e.target.value)}
             />
             <p className="text-xs leading-relaxed text-muted-foreground">
@@ -338,7 +339,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
             <div className="flex items-center gap-2 flex-wrap">
               <Button
                 data-film="compile"
-                disabled={!!busy || !state.configured.ai || !text.trim()}
+                disabled={!canManage(state) || !!busy || !state.configured.ai || !text.trim()}
                 onClick={() =>
                   void work("compile", async () => {
                     const result = await post<{
@@ -360,7 +361,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
               {preview && (
                 <Button
                   data-film="simulate"
-                  disabled={!!busy}
+                  disabled={!canManage(state) || !!busy}
                   onClick={() =>
                     void work("simulate", async () =>
                       setSimulation(
@@ -428,7 +429,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
             {preview && (
               <div className="flex items-center gap-2">
                 <Button
-                  disabled={!!busy}
+                  disabled={!canManage(state) || !!busy}
                   onClick={() => {
                     setPreview(null);
                     setSuggestions([]);
@@ -442,7 +443,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
                 </Button>
                 <Button
                   data-film="activate"
-                  disabled={!!busy}
+                  disabled={!canManage(state) || !!busy}
                   onClick={() =>
                     void work("activate", async () => {
                       await post("/api/policy", {
@@ -575,7 +576,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
               </Badge>
             ) : (
               <Button
-                disabled={!!busy}
+                disabled={!canManage(state) || !!busy}
                 onClick={() =>
                   void work(`restore-${v.id}`, async () => {
                     await post(`/api/policy/restore/${v.id}`);

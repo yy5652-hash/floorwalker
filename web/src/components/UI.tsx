@@ -1,3 +1,4 @@
+import { isFilm } from "../auth";
 import { Check, CheckCircle2, Clock3, Copy, ShieldX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -70,7 +71,7 @@ export function EmptyState({
     </Empty>
   );
 }
-export const MCP_COMMAND = "claude mcp add allowance -- npx tsx server/mcp.ts";
+export const MCP_COMMAND = isFilm() ? "claude mcp add allowance -- npx tsx server/mcp.ts" : `claude mcp add --transport http allowance ${location.origin}/v1/mcp --header "Authorization: Bearer <key>"`;
 export function ConnectAgent({ notify }: { notify: (s: string) => void }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);

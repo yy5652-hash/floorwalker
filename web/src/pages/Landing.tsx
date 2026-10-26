@@ -1,5 +1,8 @@
+import { DemoButton } from "./Auth";
+import { PlanCards } from "./Settings";
+import { Code } from "../components/Management";
+import { mcpCommand, refundCurl } from "./Developers";
 import {
-  ArrowRight,
   Bot,
   Check,
   Clock3,
@@ -36,11 +39,11 @@ export function Landing() {
             </a>
           </Button>
           <ThemeToggle />
+          <Button asChild size="sm" variant="ghost">
+            <a href="/signin">Sign in</a>
+          </Button>
           <Button asChild size="sm">
-            <a href="/app">
-              Open demo
-              <ArrowRight />
-            </a>
+            <a href="/signup">Create account</a>
           </Button>
         </nav>
       </header>
@@ -66,12 +69,7 @@ export function Landing() {
               one tap, and anything that breaks your rules never reaches PayPal.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Button size="lg" asChild>
-                <a href="/app">
-                  Open the live demo
-                  <ArrowRight />
-                </a>
-              </Button>
+              <DemoButton size="lg" />
               <Button size="lg" variant="outline" asChild>
                 <a href="#how-it-works">How it works</a>
               </Button>
@@ -223,6 +221,46 @@ export function Landing() {
             </Card>
           ))}
         </section>
+        <section id="developers" className="min-w-0 space-y-6 border-t py-16">
+          <div className="max-w-xl space-y-3">
+            <p className="text-[10px] font-medium tracking-[.18em] text-muted-foreground">
+              BUILT FOR YOUR AGENTS
+            </p>
+            <h2 className="text-3xl tracking-tight">
+              A small integration.
+              <br />
+              Clear boundaries from day one.
+            </h2>
+            <p className="text-sm leading-7 text-muted-foreground">
+              Send refunds and payouts through a scoped agent key, or connect
+              your MCP client over HTTP. Follow every request through the same
+              approval workflow.
+            </p>
+          </div>
+          <Code text={refundCurl()} />
+          <h3>Or connect Claude Code</h3>
+          <Code text={mcpCommand()} />
+          <Button asChild variant="outline">
+            <a href="/v1/openapi.json">
+              Read the OpenAPI specification
+              <ExternalLink />
+            </a>
+          </Button>
+        </section>
+        <section id="pricing" className="space-y-8 border-t py-16">
+          <div className="space-y-3 text-center">
+            <p className="text-[10px] font-medium tracking-[.18em] text-muted-foreground">
+              A PLAN FOR YOUR WORKSPACE
+            </p>
+            <h2 className="text-3xl tracking-tight">
+              Start small. Make room as you grow.
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Monthly plans in USD. PayPal sandbox only.
+            </p>
+          </div>
+          <PlanCards />
+        </section>
         <div className="my-12 space-y-5 border-y py-8">
           <p className="text-center text-[10px] tracking-widest text-muted-foreground">
             BUILT WITH
@@ -249,12 +287,12 @@ export function Landing() {
           <h2 className="text-3xl font-medium tracking-tight">
             Give your agents room to help.
           </h2>
-          <Button size="lg" asChild>
-            <a href="/app">
-              Open the live demo
-              <ArrowRight />
-            </a>
-          </Button>
+          <div className="flex flex-wrap justify-center gap-3">
+            <DemoButton size="lg" />
+            <Button size="lg" variant="outline" asChild>
+              <a href="/signup">Create account</a>
+            </Button>
+          </div>
         </section>
       </main>
       <footer className="mx-auto mt-12 flex max-w-6xl flex-wrap items-center justify-between gap-5 border-t px-5 py-8 text-xs text-muted-foreground sm:px-8">

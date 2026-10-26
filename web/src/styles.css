@@ -178,3 +178,33 @@
     scroll-behavior: auto !important;
   }
 }
+
+.manage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  text-align: left;
+}
+.manage-table th {
+  padding: 0.8rem 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--muted);
+}
+.manage-table td {
+  padding: 0.9rem 1rem;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+}
+.manage-table tbody tr:hover {
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+@media (max-width: 480px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

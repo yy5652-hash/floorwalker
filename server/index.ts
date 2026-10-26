@@ -4,7 +4,7 @@ import helmet from "helmet";
 import { existsSync } from "node:fs";
 import { simulateHijack } from "./agent/attack.ts";
 import { handleTicket, type AgentEvent } from "./agent/run.ts";
-import { auth } from "./auth.ts";
+import { auth, refillDemoPool } from "./auth.ts";
 import { config, paypalConfigured } from "./config.ts";
 import { ctx, inWorkspace, setDefaultWorkspace } from "./context.ts";
 import * as store from "./db.ts";
@@ -284,6 +284,7 @@ const prune = () => {
 };
 prune();
 setInterval(prune, 6 * 3_600_000).unref();
+void refillDemoPool();
 
 // Payout batches settle a few seconds after they are sent; keep the ledger's copy current.
 setInterval(async () => {

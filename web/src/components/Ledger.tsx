@@ -83,6 +83,8 @@ function Detail({ entry, close }: { entry: LedgerEntry; close: () => void }) {
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-5 p-4 sm:p-6">
             <DecisionCard entry={entry} />
+            <p className="text-xs text-muted-foreground">Source: {entry.source?.toUpperCase() ?? "Inbox"}</p>
+            {entry.decline_reason && <p className="rounded-lg border p-3 text-sm">Decline reason: {entry.decline_reason}</p>}
             <details className="rounded-lg border p-4 text-muted-foreground">
               <summary className="text-xs">PayPal response · JSON</summary>
               <pre>

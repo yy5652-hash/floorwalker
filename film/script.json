@@ -93,7 +93,7 @@
    "lines": [
     {
      "id": "p1",
-     "text": "So it waits for the owner, on her phone, with the checks and the AI's recommendation.",
+     "text": "So it waits for the owner. Her phone shows the request, with the checks and the AI's recommendation.",
      "gap": 0.0
     },
     {
@@ -172,6 +172,33 @@
    ]
   },
   {
+   "id": "api",
+   "kind": "app",
+   "lead": 0.5,
+   "tail": 0.6,
+   "lines": [
+    {
+     "id": "a1",
+     "text": "Bring your own agent, too. Give it a key and its own limits, and it calls Allowance instead of PayPal, over a REST API or MCP.",
+     "gap": 0.0
+    }
+   ]
+  },
+  {
+   "id": "apiheld",
+   "kind": "app",
+   "lead": 0.4,
+   "tail": 1.0,
+   "lines": [
+    {
+     "id": "a2",
+     "text": "This help-desk bot asks for a $40 refund. Its own cap is $30, so the answer comes back: wait for the owner.",
+     "spoken": "This help-desk bot asks for a forty-dollar refund. Its own cap is thirty, so the answer comes back: wait for the owner.",
+     "gap": 0.0
+    }
+   ]
+  },
+  {
    "id": "rules",
    "kind": "app",
    "lead": 0.5,
@@ -184,9 +211,22 @@
     },
     {
      "id": "r2",
-     "text": "Before going live, she tests them on past activity: of 11 earlier money moves, 2 would now have waited for her.",
+     "text": "Before going live, she tests them on past activity: of 12 earlier money moves, 2 would now have waited for her.",
      "gap": 0.4,
-     "spoken": "Before going live, she tests them on past activity: of eleven earlier money moves, two would now have waited for her."
+     "spoken": "Before going live, she tests them on past activity: of twelve earlier money moves, two would now have waited for her."
+    }
+   ]
+  },
+  {
+   "id": "audit",
+   "kind": "app",
+   "lead": 0.4,
+   "tail": 1.0,
+   "lines": [
+    {
+     "id": "u1",
+     "text": "Every decision and every change goes into a tamper-evident audit log.",
+     "gap": 0.0
     }
    ]
   },

@@ -140,7 +140,7 @@ export function Quickstart() {
   );
 }
 function Keys({ state }: PageProps) {
-  const keys = useResource<AgentKey[]>("/api/keys", !isFilm());
+  const keys = useResource<AgentKey[]>("/api/keys");
   const client = useQueryClient();
   const routeAgent = location.hash.split("/")[3];
   const [open, setOpen] = useState(location.hash.split("/")[2] === "new");
@@ -178,16 +178,14 @@ function Keys({ state }: PageProps) {
           </p>
         </div>
         <Button
-          disabled={isFilm() || !state.agents.length}
+          disabled={!state.agents.length}
           onClick={() => setOpen(true)}
         >
           <Plus />
           Create key
         </Button>
       </div>
-      {isFilm() ? (
-        <p>Account tools are unavailable during filming.</p>
-      ) : (
+      {(
         <Resource query={keys}>
           <Card className="overflow-hidden py-0">
             <div className="overflow-x-auto">
@@ -638,7 +636,7 @@ function pretty(value: string) {
   }
 }
 function Webhooks() {
-  const endpoints = useResource<Endpoint[]>("/api/webhooks", !isFilm());
+  const endpoints = useResource<Endpoint[]>("/api/webhooks");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Endpoint | null>(null);
   const [url, setUrl] = useState("");
@@ -661,7 +659,6 @@ function Webhooks() {
           </p>
         </div>
         <Button
-          disabled={isFilm()}
           onClick={() => {
             setEditing(null);
             setUrl("");
@@ -674,9 +671,7 @@ function Webhooks() {
           Add endpoint
         </Button>
       </div>
-      {isFilm() ? (
-        <p>Account tools are unavailable during filming.</p>
-      ) : (
+      {(
         <Resource query={endpoints}>
           {endpoints.data?.map((ep) => (
             <Card key={ep.id} className="gap-4 overflow-hidden p-5">

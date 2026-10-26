@@ -252,7 +252,10 @@ async function appScene(sc, script) {
 
 // Each app scene loads the app fresh, with that scene's recorded state, streams and responses.
 let initScript = null, takes = 0;
+const LIVE = 'https://allowance.43-160-214-187.sslip.io';
 const setInit = async (state, streams = {}, responses = {}) => {
+  // The run was recorded against a local server; the pages show the hosted app's address instead.
+  if (state) state = { ...state, appUrl: LIVE };
   if (initScript) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: initScript });
   initScript = (await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__filmInit = ${JSON.stringify({ state, streams, responses })};` })).identifier;
 };
@@ -404,6 +407,35 @@ S.freeze = async (B, sc) => {
   hit(B, lineAt(sc, 'f1', true) - 0.4);
   ring(B, lineAt(sc, 'f1', true) + 0.2, sc.end - sc.start - lineAt(sc, 'f1', true) - 0.3, 'frozen', '.frozen-banner', '#dc2626');
 };
+// An outside agent: its key on the Developers page, then the quickstart (REST and MCP).
+S.api = async (B, sc) => {
+  const st = stepOf('agent');
+  await prime(st.after, {}, { keys: st.response.keys }, 'developers/keys');
+  cam = { ...WIDE };
+  ring(B, 0.4, 1.8, 'key', { sel: 'tr', has: 'Help desk' }, '#2563eb');
+  // The tab is a link to /app#developers/quickstart; following it would reload the page without the film's
+  // query string, so the drawn click switches the tab by its hash, as the link does.
+  cursorTo(B, 1.8, 0.65, { sel: 'a', has: 'Quickstart' });
+  B.span(2.5, 0.35, async p => { await js(`film.press(${p})`); });
+  B.do(2.5, async () => { await js(`location.hash = 'developers/quickstart'; true`); events.push({ t: sc.start + 2.5, kind: 'click' }); });
+  camTo(B, 2.9, 1.0, async () => fit(await rect({ sel: 'pre', has: '/v1/refunds' }), { pad: 40, minW: 1000, ay: 0.4 }));
+  ring(B, 3.2, 2.4, 'curl', { sel: 'pre', has: '/v1/refunds' }, '#2563eb');
+  camTo(B, 5.5, 0.6, { ...WIDE });
+  scrollTo(B, 5.6, 0.9, scrollToShow({ sel: 'pre', has: 'claude mcp add' }));
+  camTo(B, 6.5, 0.9, async () => fit(await rect({ sel: 'pre', has: 'claude mcp add' }), { pad: 60, minW: 1000, ay: 0.4 }));
+  ring(B, 6.7, sc.end - sc.start - 6.9, 'mcp', { sel: 'pre', has: 'claude mcp add' }, '#2563eb');
+};
+// The bot's API request, held by its own cap, waiting in Approvals next to the inbox's requests.
+S.apiheld = async (B, sc) => {
+  const st = stepOf('api');
+  await prime(st.after, {}, {}, 'approvals');
+  cam = { ...WIDE };
+  const card = { sel: '[data-film="approval"]', has: 'Help-desk bot' };
+  scrollTo(B, 0.1, 0.6, scrollToShow(card));
+  ring(B, 0.8, 2.0, 'card', card, '#b45309');
+  camTo(B, 2.2, 1.1, async () => fit(await rect(card), { pad: 30, minW: 820, ay: 0.5 }));
+  ring(B, 2.9, sc.end - sc.start - 3.1, 'cap', { ...card, text: 'limit per action' }, '#b45309');
+};
 S.rules = async (B, sc) => {
   const st = stepOf('compile'), sim = stepOf('simulate');
   await prime(st.before, {}, { compile: st.response }, 'rules');
@@ -416,6 +448,15 @@ S.rules = async (B, sc) => {
   click(B, lineAt(sc, 'r2') - 0.3, film('simulate'), sc.start);
   B.do(lineAt(sc, 'r2') + 0.4, () => js(`__film.release('simulate')`));
   scrollTo(B, lineAt(sc, 'r2') + 0.8, 1.2, scrollToShow('.simulation-table'));
+};
+S.audit = async (B, sc) => {
+  const st = stepOf('audit');
+  await prime(st.after, {}, { audit: st.response.log, auditVerify: st.response.verify }, 'audit');
+  cam = { ...WIDE };
+  camTo(B, 0.2, 0.01, async () => fit(await rect('main'), { pad: 0, minW: 1100, ay: 0.3 }));
+  ring(B, 0.3, 1.9, 'agent', { sel: 'tr', has: 'On behalf of' }, '#2563eb');
+  click(B, 2.5, { sel: 'button', has: 'Verify integrity' }, sc.start);
+  ring(B, 3.0, sc.end - sc.start - 3.2, 'chain', { sel: 'main', text: 'Chain intact' }, '#059669');
 };
 S.overview = async (B, sc) => {
   const st = stepOf('simulate');

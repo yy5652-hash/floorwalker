@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Bot, Download, ShieldCheck, User, Cog } from "lucide-react";
 import { api, readJSON, workspaceHeaders } from "../api";
-import { isFilm } from "../auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -52,7 +51,6 @@ export function Audit() {
       ),
     getNextPageParam: (last) =>
       last.length === 50 ? last.at(-1)?.id : undefined,
-    enabled: !isFilm(),
   });
   async function download() {
     const response = await fetch("/api/audit.csv", {
@@ -79,7 +77,7 @@ export function Audit() {
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            disabled={busy || isFilm()}
+            disabled={busy}
             onClick={() =>
               void run(async () => setVerify(await api("/api/audit/verify")))
             }
@@ -89,7 +87,7 @@ export function Audit() {
           </Button>
           <Button
             variant="outline"
-            disabled={busy || isFilm()}
+            disabled={busy}
             onClick={() => void run(download)}
           >
             <Download />
@@ -120,9 +118,7 @@ export function Audit() {
           </Button>
         ))}
       </div>
-      {isFilm() ? (
-        <Card className="p-6">Audit tools are unavailable during filming.</Card>
-      ) : (
+      {(
         <Resource query={query}>
           <Card className="overflow-hidden py-0">
             <div className="overflow-x-auto">

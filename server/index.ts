@@ -123,6 +123,7 @@ app.get("/api/state", (req, res) => {
   const { ws } = ctx();
   const w = workspaceRow(ws.id)!;
   res.json({
+    appUrl: config.baseUrl,
     me: req.me,
     workspace: {
       id: ws.id, name: ws.name, demo: ws.demo, plan: w.plan, seedStatus: w.seed_status,

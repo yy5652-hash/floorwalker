@@ -16,7 +16,8 @@ if (!signIn.ok) throw new Error(`demo sign-in: ${signIn.status} ${await signIn.t
 const COOKIE = signIn.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
 const H = { Cookie: COOKIE, Origin: BASE };
 
-const state = async () => (await fetch(`${BASE}/api/state`, { headers: H })).json();
+const get = async (path) => (await fetch(`${BASE}${path}`, { headers: H })).json();
+const state = () => get('/api/state');
 const post = async (path, body) => {
   const t0 = Date.now();
   const r = await fetch(`${BASE}${path}`, { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
@@ -71,6 +72,33 @@ for (const t of ['T1', 'T2', 'approve', 'T3', 'T4', 'T5', 'T6']) {
 await step('attack', async () => ({ events: await stream('/api/attack') }));
 await step('freeze', async () => ({ response: (await post('/api/agents/support/freeze')).data }));
 
+// An outside agent: the owner adds a help-desk bot with its own limits and gives it a key, and the bot asks for a
+// refund over the API. The key's secret is used here and never written to the recording.
+let botKey;
+await step('agent', async () => {
+  const agent = (await post('/api/agents', { name: 'Help-desk bot', role: 'Answers tickets in the help desk', can_refund: true, max_per_action: 30, budget: 100, budget_period: 'week' })).data;
+  const made = (await post('/api/keys', { agent_id: agent.id, name: 'Help desk (production)' })).data;
+  botKey = made.secret;
+  return { response: { agent, keys: await get('/api/keys') } };
+});
+await step('api', async () => {
+  const maya = (await state()).orders.find((o) => o.customer_email.startsWith('maya'));
+  const request = {
+    capture_id: maya.capture_id,
+    amount: 40,
+    reason: 'Customer reports the second mug and the saucer are cracked too.',
+    requester_email: maya.customer_email,
+    source_message: 'Hi again, the second mug has a hairline crack as well, and so does the saucer. Could you refund $40 for those? Thanks, Maya',
+  };
+  const t0 = Date.now();
+  const r = await fetch(`${BASE}/v1/refunds`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${botKey}`, 'Content-Type': 'application/json', 'Idempotency-Key': 'helpdesk-ticket-4471' },
+    body: JSON.stringify(request),
+  });
+  return { request, status: r.status, ms: Date.now() - t0, response: await r.json() };
+});
+
 // The Rules page's "Cautious" preset, built the same way as in web/src/components/Rules.tsx.
 const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 function cautious(active) {
@@ -84,6 +112,8 @@ const text = cautious((await state()).policy.policy);
 let compiled;
 await step('compile', async () => { const r = await post('/api/policy/compile', { text }); compiled = r.data; return { text, ms: r.ms, response: r.data }; });
 await step('simulate', async () => ({ response: (await post('/api/policy/simulate', { policy: compiled.policy })).data }));
+
+await step('audit', async () => ({ response: { log: await get('/api/audit?limit=100'), verify: await get('/api/audit/verify') } }));
 
 mkdirSync(join(HERE, 'data'), { recursive: true });
 writeFileSync(join(HERE, 'data/run.json'), JSON.stringify(run, null, 1));

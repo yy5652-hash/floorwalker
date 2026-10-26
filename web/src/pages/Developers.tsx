@@ -23,6 +23,8 @@ import {
   useTask,
 } from "../components/Management";
 
+import { appOrigin } from "../api";
+
 export const developerTabs = [
   ["keys", "API keys"],
   ["quickstart", "Quickstart"],
@@ -75,9 +77,9 @@ type Delivery = {
 const date = (value: string | null) =>
   value ? new Date(value).toLocaleString() : "—";
 export const mcpCommand = () =>
-  `claude mcp add --transport http allowance ${location.origin}/v1/mcp --header "Authorization: Bearer <key>"`;
+  `claude mcp add --transport http allowance ${appOrigin()}/v1/mcp --header "Authorization: Bearer <key>"`;
 export const refundCurl = () =>
-  `curl ${location.origin}/v1/refunds \\\n  -H "Authorization: Bearer $ALLOWANCE_KEY" \\\n  -H "Content-Type: application/json" \\\n  -H "Idempotency-Key: refund-order-123" \\\n  -d '{"capture_id":"PAYPAL_CAPTURE_ID","amount":12,"reason":"Damaged item","requester_email":"buyer@example.com"}'`;
+  `curl ${appOrigin()}/v1/refunds \\\n  -H "Authorization: Bearer $ALLOWANCE_KEY" \\\n  -H "Content-Type: application/json" \\\n  -H "Idempotency-Key: refund-order-123" \\\n  -d '{"capture_id":"PAYPAL_CAPTURE_ID","amount":12,"reason":"Damaged item","requester_email":"buyer@example.com"}'`;
 export function Quickstart() {
   return (
     <div className="max-w-4xl space-y-7">
@@ -85,7 +87,7 @@ export function Quickstart() {
         <h2 className="text-lg">Your agent. Your rules. One API.</h2>
         <p className="text-sm leading-6 text-muted-foreground">
           Create a key for an agent, keep it in your application's secret store,
-          then send requests to <code>{location.origin}/v1</code>. The agent's
+          then send requests to <code>{appOrigin()}/v1</code>. The agent's
           permissions and workspace rules apply to every request.
         </p>
       </div>
@@ -96,7 +98,7 @@ export function Quickstart() {
       <section className="space-y-3">
         <h3>2. Request a payout</h3>
         <Code
-          text={`curl ${location.origin}/v1/payouts \\\n  -H "Authorization: Bearer $ALLOWANCE_KEY" \\\n  -H "Content-Type: application/json" \\\n  -H "Idempotency-Key: payout-invoice-456" \\\n  -d '{"email":"payee@example.com","amount":25,"reason":"Invoice 456","requester_email":"owner@example.com"}'`}
+          text={`curl ${appOrigin()}/v1/payouts \\\n  -H "Authorization: Bearer $ALLOWANCE_KEY" \\\n  -H "Content-Type: application/json" \\\n  -H "Idempotency-Key: payout-invoice-456" \\\n  -d '{"email":"payee@example.com","amount":25,"reason":"Invoice 456","requester_email":"owner@example.com"}'`}
         />
       </section>
       <section className="space-y-3">
@@ -106,7 +108,7 @@ export function Quickstart() {
           when retrying the same request.
         </p>
         <Code
-          text={`curl ${location.origin}/v1/actions/act_42 \\\n  -H "Authorization: Bearer $ALLOWANCE_KEY"`}
+          text={`curl ${appOrigin()}/v1/actions/act_42 \\\n  -H "Authorization: Bearer $ALLOWANCE_KEY"`}
         />
       </section>
       <section className="space-y-3">
@@ -118,7 +120,7 @@ export function Quickstart() {
               mcpServers: {
                 allowance: {
                   type: "http",
-                  url: `${location.origin}/v1/mcp`,
+                  url: `${appOrigin()}/v1/mcp`,
                   headers: { Authorization: "Bearer <key>" },
                 },
               },

@@ -8,6 +8,8 @@
 //   POST /api/policy/simulate       -> held until __film.release('simulate'), then the recorded response
 //   POST /api/agents/:id/freeze     -> ok at once (the director swaps in the recorded state after the click)
 //   GET  /api/policy/versions       -> the active version from the current state
+//   GET  /api/keys, /api/audit, …   -> the recorded responses in __film.responses (keys, audit, auditVerify), or
+//                                      what an untouched workspace answers (settings, billing, webhooks, …)
 (() => {
   if (window.__film) return;
   // The director passes each scene's data in window.__filmInit, set by a script that runs right after this one.
@@ -22,6 +24,21 @@
     load();
     if (url.pathname === '/api/state') return Promise.resolve(json(F.state));
     if (url.pathname === '/api/policy/versions') return Promise.resolve(json(F.state?.policy ? [{ ...F.state.policy, created_at: new Date().toISOString() }] : []));
+    if (method === 'GET') {
+      const reads = {
+        '/api/keys': () => F.responses.keys ?? [],
+        '/api/audit': () => F.responses.audit ?? [],
+        '/api/audit/verify': () => F.responses.auditVerify ?? { ok: true, entries: (F.responses.audit ?? []).length },
+        '/api/webhooks': () => [],
+        '/api/grants': () => [],
+        '/api/settings/slack': () => ({ configured: false, events: ['action.held', 'action.blocked'] }),
+        '/api/me/notifications': () => ({ prefs: { push_held: true, push_blocked: true, push_reminders: true, push_executed: false }, devices: [] }),
+        '/api/push/key': () => ({ publicKey: '' }),
+        '/api/settings': () => ({ approval_ttl_hours: 72, step_up_over: 250, reminder_after_minutes: 60, paypal: { connected: true, own: false, client_id_hint: null, verified_at: null, app: null } }),
+      };
+      const read = reads[url.pathname];
+      if (read) return Promise.resolve(json(read()));
+    }
     if (method === 'POST' && /^\/api\/agents\/[^/]+\/(freeze|unfreeze)$/.test(url.pathname)) return Promise.resolve(json({ ok: true }));
     const run = url.pathname.match(/^\/api\/tickets\/([^/]+)\/run$/);
     if (method === 'POST' && (run || url.pathname === '/api/attack')) {

@@ -260,7 +260,7 @@ const prime = async (state, streams = {}, responses = {}, page = 'inbox') => {
   await setInit(state, streams, responses);
   // A fresh query string per scene forces a full load (a hash-only change would keep the previous scene's data).
   await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/app?take=${++takes}#${page}` });
-  await until(() => js(`document.readyState === 'complete' && !!document.querySelector('.sidebar') && !!document.querySelector('main')`), 'app');
+  await until(() => js(`document.readyState === 'complete' && !!document.querySelector('[data-slot="sidebar"]') && !!document.querySelector('main')`), 'app');
   await js('document.fonts.ready.then(() => true)');
   await js(UI);
   await js('window.scrollTo(0, 0); true');
@@ -316,15 +316,26 @@ async function phoneScene(sc) {
   const rel = Object.fromEntries(sc.lines.map(l => [l.id, [l.start - sc.start, l.end - sc.start]]));
   await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); true`);
   const inner = sel => js(`(() => { const f = document.getElementById('app'), r = f.getBoundingClientRect(), e = f.contentDocument.querySelector(${JSON.stringify(sel)}); if (!e) return null; const b = e.getBoundingClientRect(); return { x: r.left + b.left + b.width / 2, y: r.top + b.top + b.height / 2 }; })()`);
+  // The push notification shows the same text the server sends (server/notify.ts), for the recorded request.
+  const row = st.after.ledger.find(r => r.id === ap.ledgerId);
+  const note = { title: `Approve a $${row.amount.toFixed(2)} ${row.kind}?`, body: `Support agent → ${row.counterparty} · AI review: ${row.review?.verdict ?? 'unavailable'}` };
+  const noteTap = lineAt(sc, 'p1', true) - 0.3;
+  await js(`window.NOTE = ${JSON.stringify(note)}; window.NOTE_OUT = ${noteTap + 0.15}; render(1.2); true`);
+  const noteAt = await js(`(() => { const b = document.getElementById('note').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height * 0.42 }; })()`);
   const tapAt = lineAt(sc, 'p2') + 0.3;
   let from = { x: 1700, y: 900 }, to = null, tapped = false;
   const n = Math.round((sc.end - sc.start) * FPS);
   for (let f = 0; f < n; f++) {
     const t = f / FPS;
+    if (t >= noteTap - 1.0 && t < noteTap) {
+      const p = ease(clamp((t - (noteTap - 1.0)) / 0.9));
+      await js(`film.cursor(${lerp(from.x, noteAt.x, p)}, ${lerp(from.y, noteAt.y, p)}, true); true`);
+    }
+    if (t >= noteTap && t < noteTap + 0.35) await js(`film.press(${(t - noteTap) / 0.35}); true`);
     if (t >= tapAt - 1.2 && t < tapAt) {
       to ??= await inner('[data-film="approve"]');
       const p = ease(clamp((t - (tapAt - 1.2)) / 1.1));
-      if (to) await js(`film.cursor(${lerp(from.x, to.x, p)}, ${lerp(from.y, to.y, p)}, true); true`);
+      if (to) await js(`film.cursor(${lerp(noteAt.x, to.x, p)}, ${lerp(noteAt.y, to.y, p)}, true); true`);
     }
     if (t >= tapAt && t < tapAt + 0.35) await js(`film.press(${(t - tapAt) / 0.35}); true`);
     if (!tapped && t >= tapAt) {

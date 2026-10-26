@@ -8,16 +8,52 @@
   .phone { position: absolute; left: 1060px; top: 38px; width: 430px; height: 1004px; border-radius: 64px; background: #0f172a; box-shadow: 0 40px 90px rgba(15, 23, 42, .28), inset 0 0 0 3px #334155; }
   .screen { position: absolute; left: 20px; top: 20px; width: 390px; height: 964px; border-radius: 46px; overflow: hidden; background: #f7f8fa; }
   .screen iframe { width: 390px; height: 964px; border: 0; display: block; }
-  .notch { position: absolute; left: 50%; top: 30px; width: 120px; height: 32px; margin-left: -60px; border-radius: 20px; background: #0f172a; z-index: 2; }
+  .notch { position: absolute; left: 50%; top: 30px; width: 120px; height: 32px; margin-left: -60px; border-radius: 20px; background: #0f172a; z-index: 3; }
+  /* The push notification as the phone shows it (Approve and Decline are the notification's own actions). */
+  .note { position: absolute; left: 32px; top: 74px; width: 366px; z-index: 2; border-radius: 26px; background: rgba(248, 250, 252, .94); backdrop-filter: blur(18px);
+    box-shadow: 0 18px 50px rgba(15, 23, 42, .28), 0 0 0 1px rgba(15, 23, 42, .06); font-family: inherit; opacity: 0; }
+  .note .top { display: flex; align-items: center; gap: 10px; padding: 16px 18px 6px; font-size: 14px; color: #64748b; letter-spacing: .02em; }
+  .note .top img { width: 26px; height: 26px; border-radius: 7px; }
+  .note .top b { color: #334155; font-weight: 600; letter-spacing: .04em; }
+  .note .top span { margin-left: auto; }
+  .note .title { padding: 0 18px; font-size: 19px; font-weight: 650; color: #0f172a; }
+  .note .body { padding: 4px 18px 14px; font-size: 16px; line-height: 1.35; color: #334155; }
+  .note .actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(15, 23, 42, .08); }
+  .note .actions div { padding: 14px 0; text-align: center; font-size: 17px; font-weight: 600; color: #2563eb; }
+  .note .actions div + div { border-left: 1px solid rgba(15, 23, 42, .08); color: #475569; }
+  .scrim { position: absolute; inset: 0; z-index: 1; background: rgba(15, 23, 42, .18); opacity: 0; pointer-events: none; }
 </style></head><body>
 <div class="side fade" id="a">
   <h1>Approve from your phone</h1>
   <p>Every request arrives already checked against PayPal's records and your rules. One tap runs exactly that action, once.</p>
   <div class="chip">✓ Rules · PayPal facts · AI review</div>
 </div>
-<div class="phone"><div class="notch"></div><div class="screen"><iframe id="app" src="/approve"></iframe></div></div>
+<div class="phone"><div class="notch"></div><div class="screen">
+  <div class="scrim" id="scrim"></div>
+  <div class="note" id="note">
+    <div class="top"><img src="/favicon.svg" alt=""><b>ALLOWANCE</b><span>now</span></div>
+    <div class="title" id="note-title"></div>
+    <div class="body" id="note-body"></div>
+    <div class="actions"><div>Approve</div><div>Decline</div></div>
+  </div>
+  <iframe id="app" src="/approve"></iframe>
+</div></div>
 <script>
-  const show = (id, t, at) => { const e = document.getElementById(id); const p = Math.max(0, Math.min(1, (t - at) / 0.6)); e.style.opacity = p; e.style.transform = `translateY(${18 * (1 - p)}px)`; };
-  window.render = t => { show('a', t, 0.2); };
+  const ease = p => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+  const clamp = v => Math.max(0, Math.min(1, v));
+  const show = (id, t, at) => { const e = document.getElementById(id); const p = clamp((t - at) / 0.6); e.style.opacity = p; e.style.transform = `translateY(${18 * (1 - p)}px)`; };
+  // The director sets NOTE (text from the recorded request) and NOTE_OUT (when the notification is tapped open).
+  window.NOTE = { title: '', body: '' };
+  window.NOTE_OUT = 1e9;
+  window.render = t => {
+    show('a', t, 0.2);
+    document.getElementById('note-title').textContent = NOTE.title;
+    document.getElementById('note-body').textContent = NOTE.body;
+    const inP = ease(clamp((t - 0.4) / 0.5)), outP = ease(clamp((t - NOTE_OUT) / 0.45));
+    const note = document.getElementById('note');
+    note.style.opacity = inP * (1 - outP);
+    note.style.transform = `translateY(${-60 * (1 - inP) - 80 * outP}px) scale(${1 - 0.04 * outP})`;
+    document.getElementById('scrim').style.opacity = inP * (1 - outP);
+  };
   window.ready = true;
 </script></body></html>

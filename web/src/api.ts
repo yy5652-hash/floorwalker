@@ -127,6 +127,7 @@ export type PolicyVersion = {
   created_at: string;
 };
 export type State = {
+  appUrl?: string;
   me?: {
     userId: string;
     name: string;
@@ -335,7 +336,12 @@ export const amountOf = (e: LedgerEntry) => e.approved_amount ?? e.amount;
 
 // People are shown by name: payees from the rules, buyers from the shop's orders. Refreshed with every state load.
 let directory = new Map<string, string>();
+// The public address of this Allowance (the server's configured URL, else the browser's origin).
+let publicOrigin = "";
+export const appOrigin = () => publicOrigin || location.origin;
+
 export function setDirectory(s: State) {
+  publicOrigin = (s.appUrl ?? "").replace(/\/$/, "");
   directory = new Map([
     ...s.orders.map(
       (o: any) =>

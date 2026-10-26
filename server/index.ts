@@ -13,6 +13,7 @@ import { audit } from "./audit.ts";
 import { publish } from "./events.ts";
 import { handle, HttpError, need, signedIn } from "./http.ts";
 import { manage, stepUpOver } from "./manage.ts";
+import { remindWaiting } from "./notify.ts";
 import { v1 } from "./v1.ts";
 import { core, openWorkspace, openWorkspaces, workspaceRow } from "./workspaces.ts";
 import { compilePolicy } from "./guard/compile.ts";
@@ -248,9 +249,14 @@ for (const { id } of core.prepare("SELECT id FROM workspace WHERE demo = 0 OR cr
   }
 }
 
-// Held requests nobody answered in time are declined (fail closed).
+// Held requests nobody answered in time are declined (fail closed); ones waiting a while get one reminder.
 setInterval(() => {
-  for (const ws of openWorkspaces()) inWorkspace(ws, { kind: "system", id: "expiry", name: "Allowance" }, () => expireOverdue());
+  for (const ws of openWorkspaces()) {
+    inWorkspace(ws, { kind: "system", id: "expiry", name: "Allowance" }, () => {
+      expireOverdue();
+      void remindWaiting().catch((e) => console.error(`reminders ${ws.id}: ${e.message}`));
+    });
+  }
 }, 60_000).unref();
 
 // Payout batches settle a few seconds after they are sent; keep the ledger's copy current.

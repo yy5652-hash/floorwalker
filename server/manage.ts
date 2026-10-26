@@ -6,10 +6,12 @@ import { z } from "zod/v4";
 import { audit, auditLog, verifyAudit } from "./audit.ts";
 import { ctx } from "./context.ts";
 import * as store from "./db.ts";
-import { publish } from "./events.ts";
+import { EVENT_TYPES, publish } from "./events.ts";
 import { HttpError, handle, need } from "./http.ts";
 import { createKey, listKeys, revokeKey, revokeKeysForAgent } from "./keys.ts";
 import { verifyPayPalApp } from "./paypal/client.ts";
+import { prefs, pushDevices, removePushSubscription, savePushSubscription, setPrefs, setSlack, SLACK_EVENTS, slackConfig, vapidPublicKey } from "./notify.ts";
+import { createEndpoint, deleteEndpoint, deliveries, endpoint, endpoints, endpointSecret, redeliver, sendTest, updateEndpoint } from "./webhooks.ts";
 import { setWorkspacePayPal, workspaceRow } from "./workspaces.ts";
 
 export const manage = Router();
@@ -186,4 +188,87 @@ manage.delete("/settings/paypal", need({ organization: ["update"] }), handle(() 
   setWorkspacePayPal(wsId(), null);
   audit("paypal.disconnected");
   return settingsView();
+}));
+
+// ---------------------------------------------------------------- notifications
+manage.get("/push/key", (_req, res) => void res.json({ publicKey: vapidPublicKey }));
+
+manage.post("/push/subscribe", handle((req) => {
+  const b = parse(z.object({ endpoint: z.url(), keys: z.object({ p256dh: z.string().min(10), auth: z.string().min(8) }) }), req.body?.subscription ?? req.body);
+  savePushSubscription(req.me!.userId, b, req.header("user-agent"));
+  return { ok: true };
+}));
+
+manage.delete("/push/subscribe", handle((req) => {
+  removePushSubscription(req.me!.userId, String(req.body?.endpoint ?? ""));
+  return { ok: true };
+}));
+
+manage.get("/me/notifications", handle((req) => ({ prefs: prefs(req.me!.userId, wsId()), devices: pushDevices(req.me!.userId) })));
+
+manage.patch("/me/notifications", handle((req) => {
+  const b = parse(z.object({ push_held: z.boolean(), push_blocked: z.boolean(), push_reminders: z.boolean(), push_executed: z.boolean() }).partial(), req.body);
+  return { prefs: setPrefs(req.me!.userId, wsId(), b) };
+}));
+
+manage.get("/settings/slack", handle(() => slackConfig()));
+
+manage.put("/settings/slack", need({ organization: ["update"] }), handle(async (req) => {
+  const b = parse(z.object({ url: z.url().optional(), events: z.array(z.enum(SLACK_EVENTS)).optional() }), req.body);
+  if (b.url === undefined && !slackConfig().configured) throw new HttpError(400, "Paste a Slack incoming webhook URL first.");
+  if (b.url !== undefined) await setSlack(b.url, b.events);
+  else store.setSetting("slack_events", b.events ?? slackConfig().events);
+  audit("slack.updated", null, { events: b.events });
+  return slackConfig();
+}));
+
+manage.delete("/settings/slack", need({ organization: ["update"] }), handle(async () => {
+  await setSlack(null);
+  audit("slack.disconnected");
+  return slackConfig();
+}));
+
+// ---------------------------------------------------------------- webhooks
+const Events = z.array(z.enum([...EVENT_TYPES, "*"])).min(1);
+
+manage.get("/webhooks", need({ developers: ["manage"] }), handle(() => endpoints(wsId())));
+
+manage.post("/webhooks", need({ developers: ["manage"] }), handle(async (req) => {
+  const b = parse(z.object({ url: z.url().max(500), description: z.string().max(200).optional(), events: Events.default(["*"]) }), req.body);
+  const out = await createEndpoint({ wsId: wsId(), url: b.url, description: b.description, events: b.events, createdBy: req.me!.name });
+  audit("webhook.created", out.endpoint.id, { url: b.url, events: b.events });
+  return out;
+}));
+
+manage.patch("/webhooks/:id", need({ developers: ["manage"] }), handle((req) => {
+  const b = parse(z.object({ enabled: z.boolean().optional(), events: Events.optional(), description: z.string().max(200).optional() }), req.body);
+  const e = updateEndpoint(wsId(), String(req.params.id), b);
+  if (!e) throw new HttpError(404, "No such endpoint");
+  audit("webhook.updated", e.id, b);
+  return e;
+}));
+
+manage.delete("/webhooks/:id", need({ developers: ["manage"] }), handle((req) => {
+  if (!deleteEndpoint(wsId(), String(req.params.id))) throw new HttpError(404, "No such endpoint");
+  audit("webhook.deleted", String(req.params.id));
+  return { ok: true };
+}));
+
+manage.get("/webhooks/:id/secret", need({ developers: ["manage"] }), handle((req) => {
+  const secret = endpointSecret(wsId(), String(req.params.id));
+  if (!secret) throw new HttpError(404, "No such endpoint");
+  return { secret };
+}));
+
+manage.get("/webhooks/:id/deliveries", need({ developers: ["manage"] }), handle((req) => deliveries(wsId(), String(req.params.id))));
+
+manage.post("/webhooks/:id/test", need({ developers: ["manage"] }), handle((req) => {
+  if (!endpoint(wsId(), String(req.params.id))) throw new HttpError(404, "No such endpoint");
+  sendTest(wsId(), String(req.params.id));
+  return { ok: true };
+}));
+
+manage.post("/webhooks/deliveries/:id/redeliver", need({ developers: ["manage"] }), handle((req) => {
+  if (!redeliver(wsId(), String(req.params.id))) throw new HttpError(404, "No such delivery");
+  return { ok: true };
 }));

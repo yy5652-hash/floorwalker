@@ -30,14 +30,17 @@ export async function signedIn(req: Request, res: Response, next: NextFunction) 
   if (!s) return void res.status(401).json({ error: "Sign in to continue.", code: "signin" });
   const roleIn = (id: string | null | undefined) =>
     id ? (core.prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?").get(id, s.user.id) as { role: string } | undefined) : undefined;
-  let wsId: string | null = s.session.activeOrganizationId ?? null;
+  // A notification action names its workspace, which may not be the one this browser has open.
+  const named = req.header("x-workspace");
+  let wsId: string | null = named || s.session.activeOrganizationId || null;
   let member = roleIn(wsId);
+  if (named && (!member || !workspaceRow(named))) return void res.status(403).json({ error: "You're not a member of that workspace.", code: "forbidden" });
   if (!member || !workspaceRow(wsId!)) {
     // A session started before its workspace existed (sign-up), or one whose workspace was left: open the latest one.
     wsId = latestWorkspaceOf(s.user.id);
     member = roleIn(wsId);
     if (!wsId || !member) return void res.status(409).json({ error: "You're not in a workspace yet.", code: "workspace" });
-    core.prepare("UPDATE session SET activeOrganizationId = ? WHERE id = ?").run(wsId, s.session.id);
+    if (wsId) core.prepare("UPDATE session SET activeOrganizationId = ? WHERE id = ?").run(wsId, s.session.id);
   }
   if (!wsId || !member) return void res.status(409).json({ error: "You're not in a workspace yet.", code: "workspace" });
   const name = s.user.name || s.user.email;

@@ -8,7 +8,8 @@ import { randomBytes } from "node:crypto";
 import { config } from "./config.ts";
 import { inWorkspace } from "./context.ts";
 import { serverSecret } from "./crypto.ts";
-import { core, openWorkspace, registerWorkspace, setSeedStatus } from "./workspaces.ts";
+import { limitsFor } from "./billing.ts";
+import { core, openWorkspace, registerWorkspace, setSeedStatus, workspaceRow } from "./workspaces.ts";
 
 // ---------------------------------------------------------------- roles
 // Owner: everything, including billing. Admin: everything but billing. Approver: answers spend
@@ -102,6 +103,11 @@ const options = {
       roles,
       creatorRole: "owner",
       organizationLimit: 20,
+      membershipLimit: async (_user, org) => {
+        const row = workspaceRow(org.id);
+        const n = row ? limitsFor(row).members : 3;
+        return Number.isFinite(n) ? n : 10_000;
+      },
       // There is no outbound email yet: the Team page shows each invite as a link to copy.
       sendInvitationEmail: async () => {},
     }),

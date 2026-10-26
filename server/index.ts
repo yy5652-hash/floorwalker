@@ -10,6 +10,7 @@ import { ctx, inWorkspace, setDefaultWorkspace } from "./context.ts";
 import * as store from "./db.ts";
 import { seedDemo } from "./demo.ts";
 import { audit } from "./audit.ts";
+import { assertActionQuota } from "./billing.ts";
 import { publish } from "./events.ts";
 import { handle, HttpError, need, signedIn } from "./http.ts";
 import { manage, stepUpOver } from "./manage.ts";
@@ -156,6 +157,11 @@ app.post("/api/tickets/:id/run", need({ agents: ["manage"] }), (req, res) => {
   if (!paypalConfigured() || !config.ai.configured) {
     res.status(400).json({ error: "Connect a PayPal sandbox app in Settings first." });
     return;
+  }
+  try {
+    assertActionQuota(ctx().ws.id, store.actionsThisMonth());
+  } catch (e: any) {
+    return void res.status(402).json({ error: e.message, code: e.code });
   }
   void stream(res, (emit) => handleTicket(String(req.params.id), emit));
 });

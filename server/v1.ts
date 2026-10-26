@@ -10,6 +10,7 @@ import * as store from "./db.ts";
 import { actionView, guard } from "./guard/index.ts";
 import { verifyKey, type ApiKey } from "./keys.ts";
 import { createMcpServer } from "./mcp-server.ts";
+import { assertActionQuota } from "./billing.ts";
 import { buildOpenApi } from "./openapi.ts";
 import { openWorkspace, workspaceRow } from "./workspaces.ts";
 
@@ -94,6 +95,11 @@ async function moveMoney(req: Request, res: Response, tool: "create_refund" | "s
   const idem = req.header("Idempotency-Key");
   if (idem !== undefined && !/^[\x21-\x7e]{1,255}$/.test(idem)) return fail(res, 400, "invalid_request", "Idempotency-Key must be 1-255 visible ASCII characters.");
   const b: any = parsed.data;
+  try {
+    assertActionQuota(ctx().ws.id, store.actionsThisMonth());
+  } catch (e: any) {
+    return fail(res, 402, e.code ?? "plan_limit", e.message);
+  }
   const input = tool === "create_refund"
     ? { capture_id: b.capture_id, ...(b.amount ? { amount: { value: b.amount.toFixed(2), currency_code: "USD" } } : {}), note_to_payer: b.note }
     : { email: b.email, amount: b.amount, note: b.note ?? "" };

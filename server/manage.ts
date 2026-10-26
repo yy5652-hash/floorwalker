@@ -4,6 +4,8 @@ import { Router } from "express";
 import { randomBytes } from "node:crypto";
 import { z } from "zod/v4";
 import { audit, auditLog, verifyAudit } from "./audit.ts";
+import { assertBelow, billingView, cancel, checkout, refreshIfStale, syncSubscription } from "./billing.ts";
+import { config } from "./config.ts";
 import { ctx } from "./context.ts";
 import * as store from "./db.ts";
 import { EVENT_TYPES, publish } from "./events.ts";
@@ -12,7 +14,7 @@ import { createKey, listKeys, revokeKey, revokeKeysForAgent } from "./keys.ts";
 import { verifyPayPalApp } from "./paypal/client.ts";
 import { prefs, pushDevices, removePushSubscription, savePushSubscription, setPrefs, setSlack, SLACK_EVENTS, slackConfig, vapidPublicKey } from "./notify.ts";
 import { createEndpoint, deleteEndpoint, deliveries, endpoint, endpoints, endpointSecret, redeliver, sendTest, updateEndpoint } from "./webhooks.ts";
-import { setWorkspacePayPal, workspaceRow } from "./workspaces.ts";
+import { core, setWorkspacePayPal, workspaceRow } from "./workspaces.ts";
 
 export const manage = Router();
 
@@ -52,6 +54,7 @@ function applyControls(id: string, b: Partial<z.infer<typeof AgentBody>>) {
 
 manage.post("/agents", need({ agents: ["manage"] }), handle((req) => {
   const b = parse(AgentBody, req.body);
+  assertBelow(wsId(), "agents", store.agents().length);
   const slug = b.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "agent";
   const id = `${slug}-${randomBytes(3).toString("hex")}`;
   store.upsertAgent({ id, name: b.name, role: b.role, can_refund: b.can_refund ? 1 : 0, can_payout: b.can_payout ? 1 : 0 });
@@ -235,6 +238,7 @@ manage.get("/webhooks", need({ developers: ["manage"] }), handle(() => endpoints
 
 manage.post("/webhooks", need({ developers: ["manage"] }), handle(async (req) => {
   const b = parse(z.object({ url: z.url().max(500), description: z.string().max(200).optional(), events: Events.default(["*"]) }), req.body);
+  assertBelow(wsId(), "webhooks", endpoints(wsId()).length);
   const out = await createEndpoint({ wsId: wsId(), url: b.url, description: b.description, events: b.events, createdBy: req.me!.name });
   audit("webhook.created", out.endpoint.id, { url: b.url, events: b.events });
   return out;
@@ -271,4 +275,42 @@ manage.post("/webhooks/:id/test", need({ developers: ["manage"] }), handle((req)
 manage.post("/webhooks/deliveries/:id/redeliver", need({ developers: ["manage"] }), handle((req) => {
   if (!redeliver(wsId(), String(req.params.id))) throw new HttpError(404, "No such delivery");
   return { ok: true };
+}));
+
+// ---------------------------------------------------------------- billing
+function usage() {
+  const members = (core.prepare("SELECT COUNT(*) AS n FROM member WHERE organizationId = ?").get(wsId()) as { n: number }).n;
+  return { agents: store.agents().length, actions_this_month: store.actionsThisMonth(), members, webhooks: endpoints(wsId()).length };
+}
+
+manage.get("/billing", handle(async () => {
+  await refreshIfStale(wsId());
+  return { ...billingView(wsId()), usage: usage() };
+}));
+
+manage.post("/billing/checkout", need({ billing: ["manage"] }), handle(async (req) => {
+  const { plan } = parse(z.object({ plan: z.enum(["pro", "business"]) }), req.body);
+  if (ctx().ws.demo) throw new HttpError(400, "The demo workspace already has every feature. Create your own account to subscribe.");
+  const out = await checkout(wsId(), plan, { email: req.me!.email, name: req.me!.name });
+  audit("billing.checkout_started", out.subscriptionId, { plan });
+  return out;
+}));
+
+// PayPal sends the customer back here after they approve the subscription.
+manage.get("/billing/return", async (req, res) => {
+  const id = typeof req.query.subscription_id === "string" ? req.query.subscription_id : "";
+  try {
+    if (!id) throw new Error("missing subscription");
+    const view = await syncSubscription(wsId(), id);
+    audit("billing.subscribed", id, { plan: view.plan, status: view.status });
+    res.redirect(`${config.baseUrl.replace(/\/$/, "")}/app?billing=ok#settings`);
+  } catch (e: any) {
+    res.redirect(`${config.baseUrl.replace(/\/$/, "")}/app?billing=${encodeURIComponent(e.message)}#settings`);
+  }
+});
+
+manage.post("/billing/cancel", need({ billing: ["manage"] }), handle(async (req) => {
+  const view = await cancel(wsId(), String(req.body?.reason ?? ""));
+  audit("billing.cancelled", view.subscription_id);
+  return { ...view, usage: usage() };
 }));

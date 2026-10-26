@@ -63,10 +63,12 @@ type Options = {
   // PayPal-Request-Id makes POSTs idempotent: a retried request returns the original result.
   requestId?: string;
   headers?: Record<string, string>;
+  /** Another PayPal app than the workspace's (billing runs on Allowance's own). */
+  creds?: PayPalCreds;
 };
 
 export async function paypal<T = any>(method: string, path: string, body?: unknown, opts: Options = {}): Promise<T> {
-  const token = await accessToken();
+  const token = await accessToken(opts.creds ?? paypalCreds());
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",

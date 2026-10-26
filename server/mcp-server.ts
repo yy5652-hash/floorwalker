@@ -1,6 +1,8 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { agentTools, runTool, toolsForAgent } from "./agent/tools.ts";
+import { assertActionQuota } from "./billing.ts";
+import { ctx } from "./context.ts";
 import * as store from "./db.ts";
 import { GUARDED_TOOLS } from "./guard/index.ts";
 
@@ -31,6 +33,13 @@ export function createMcpServer(agentId: string): Server {
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const { name, arguments: input = {} } = req.params as { name: string; arguments?: Record<string, any> };
     if (!allowed().has(name)) return { content: [{ type: "text", text: `This agent can't use ${name}.` }], isError: true };
+    if (GUARDED_TOOLS.has(name)) {
+      try {
+        assertActionQuota(ctx().ws.id, store.actionsThisMonth());
+      } catch (e: any) {
+        return { content: [{ type: "text", text: e.message }], isError: true };
+      }
+    }
     const ticket: store.Ticket | undefined = GUARDED_TOOLS.has(name)
       ? {
           id: `MCP-${Date.now().toString(36)}`, channel: "email", from_name: String(input.requester_email ?? "unknown"), from_email: String(input.requester_email ?? ""),

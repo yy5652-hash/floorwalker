@@ -396,6 +396,13 @@ export function ledger(): LedgerRow[] {
   return db().prepare("SELECT * FROM ledger ORDER BY id DESC").all() as any;
 }
 
+/** Money moves checked since the start of this calendar month (UTC), for plan limits. */
+export function actionsThisMonth(): number {
+  const d = new Date();
+  const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
+  return (db().prepare("SELECT COUNT(*) AS n FROM ledger WHERE created_at >= ?").get(start) as { n: number }).n;
+}
+
 export function ledgerByIdempotencyKey(agentId: string, key: string): LedgerRow | undefined {
   return db().prepare("SELECT * FROM ledger WHERE agent_id = ? AND idempotency_key = ?").get(agentId, key) as any;
 }

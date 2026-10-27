@@ -2,6 +2,11 @@
 
 **Tagline:** Give your AI agent an allowance, not your wallet.
 
+## Try it
+
+- **Live:** https://allowance.43-160-214-187.sslip.io. Open the demo for a ready shop with sandbox money in a couple of seconds, no sign-up; or create an account and connect your own PayPal sandbox app.
+- **Code (MIT):** https://github.com/yy5652-hash/allowance, with setup and run instructions in the README.
+
 ## Inspiration
 
 PayPal's Agent Toolkit and MCP server let an AI agent do real work with money: refund a customer, pay a contractor, send an invoice. For a small shop that is the dream support agent. It is also a new way to lose money. The costliest scam businesses already face is payment redirection ("my PayPal changed, please pay the new address"), and an agent reading the inbox falls for the same story a tired person does. Add prompt injection (OWASP's number one LLM risk) hidden in an email, and the agent can be told to refund in full and pay a stranger.

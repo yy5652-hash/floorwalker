@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Allowance",
-  "short_name": "Allowance",
-  "description": "Review your agents' payment requests and keep money within your rules.",
+  "name": "Floorwalker",
+  "short_name": "Floorwalker",
+  "description": "Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.",
   "start_url": "/approve",
   "scope": "/",
   "display": "standalone",

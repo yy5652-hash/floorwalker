@@ -1,7 +1,7 @@
 import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 
-process.env.ALLOWANCE_DB = ":memory:";
+process.env.FLOORWALKER_DB = ":memory:";
 process.env.ANTHROPIC_API_KEY = "test";
 process.env.PAYPAL_CLIENT_ID = "test";
 process.env.PAYPAL_CLIENT_SECRET = "test";

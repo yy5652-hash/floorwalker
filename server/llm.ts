@@ -4,7 +4,7 @@ import { GoogleGenAI, type Content, type Part } from "@google/genai";
 import { z } from "zod/v4";
 import { config } from "./config.ts";
 
-// Allowance runs on Claude when ANTHROPIC_API_KEY is set, otherwise on Gemini.
+// Floorwalker runs on Claude when ANTHROPIC_API_KEY is set, otherwise on Gemini.
 let anthropicClient: Anthropic | null = null;
 let geminiClient: GoogleGenAI | null = null;
 

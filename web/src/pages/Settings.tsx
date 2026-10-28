@@ -224,7 +224,7 @@ function PayPal({ state, refresh }: PageProps) {
               <p className="rounded-lg bg-muted p-3 text-sm">
                 {settings.data.paypal.own
                   ? "This demo is using your connected sandbox app."
-                  : "This demo workspace uses Allowance's sandbox app."}
+                  : "This demo workspace uses Floorwalker's sandbox app."}
               </p>
             )}
             {settings.data.paypal.own && (
@@ -259,7 +259,7 @@ function PayPal({ state, refresh }: PageProps) {
                 <Confirm
                   disabled={!editable}
                   title="Disconnect PayPal?"
-                  description="Your agents will lose access to this sandbox app. Demo workspaces fall back to Allowance's demo app."
+                  description="Your agents will lose access to this sandbox app. Demo workspaces fall back to Floorwalker's demo app."
                   label="Disconnect"
                   onConfirm={async () => {
                     await api("/api/settings/paypal", "DELETE");
@@ -571,7 +571,7 @@ export async function enablePush() {
     !("Notification" in window)
   )
     throw new Error(
-      "Push isn't supported here. On iPhone, add Allowance to your Home Screen, then enable push from there.",
+      "Push isn't supported here. On iPhone, add Floorwalker to your Home Screen, then enable push from there.",
     );
   if (Notification.permission === "denied")
     throw new Error(

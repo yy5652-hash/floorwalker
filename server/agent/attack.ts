@@ -4,7 +4,7 @@ import type { AgentEvent } from "./run.ts";
 
 /**
  * A hijacked agent, scripted so it behaves the same every time. It replays the money
- * moves an attacker would try once they control the agent's prompt. Allowance does not
+ * moves an attacker would try once they control the agent's prompt. Floorwalker does not
  * know the agent is hostile; it sees ordinary tool calls.
  */
 export async function simulateHijack(emit: (e: AgentEvent) => void) {

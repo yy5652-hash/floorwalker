@@ -25,7 +25,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-const github = "https://github.com/yy5652-hash/allowance";
+const github = "https://github.com/yy5652-hash/floorwalker";
 export function Landing() {
   return (
     <div className="min-h-svh bg-background">
@@ -58,15 +58,12 @@ export function Landing() {
               Clear boundaries.
             </Badge>
             <h1 className="text-5xl leading-[1.08] font-medium tracking-[-.045em] sm:text-6xl">
-              Give your AI agent an{" "}
-              <span className="text-allow">allowance,</span>
+              Every refund checked.
               <br />
-              not your wallet.
+              <span className="text-allow">Fewer taps every week.</span>
             </h1>
             <p className="max-w-xl text-base leading-8 text-muted-foreground">
-              Allowance sits between AI agents and your PayPal account. Small
-              refunds and payouts go through on their own, unusual ones wait for
-              one tap, and anything that breaks your rules never reaches PayPal.
+              Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.
             </p>
             <div className="flex flex-wrap gap-3">
               <DemoButton size="lg" />
@@ -81,11 +78,11 @@ export function Landing() {
           </div>
           <div
             className="rounded-2xl border bg-muted/40 p-5 sm:p-7"
-            aria-label="How Allowance routes a payment request"
+            aria-label="How Floorwalker routes a payment request"
           >
             <div className="mb-6 flex items-center justify-between">
               <span className="text-[10px] font-medium tracking-[.18em] text-muted-foreground">
-                THE ALLOWANCE CHECKPOINT
+                THE FLOORWALKER CHECKPOINT
               </span>
               <ShieldCheck className="size-5 text-muted-foreground" />
             </div>
@@ -159,7 +156,7 @@ export function Landing() {
               },
               {
                 icon: SlidersHorizontal,
-                title: "Allowance",
+                title: "Floorwalker",
                 description: "Rules · PayPal facts · AI review",
                 step: "02",
               },
@@ -297,7 +294,7 @@ export function Landing() {
       </main>
       <footer className="mx-auto mt-12 flex max-w-6xl flex-wrap items-center justify-between gap-5 border-t px-5 py-8 text-xs text-muted-foreground sm:px-8">
         <Brand />
-        <span>Give your AI agent an allowance, not your wallet.</span>
+        <span>Every refund checked. Fewer taps every week.</span>
         <a
           href={github}
           target="_blank"

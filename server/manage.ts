@@ -142,7 +142,7 @@ manage.get("/audit.csv", (_req, res) => {
   const rows = auditLog({ limit: 500 });
   const head = ["id", "at", "actor_kind", "actor_id", "actor_name", "on_behalf_of", "action", "target", "detail", "ip", "hash"];
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="allowance-audit-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.setHeader("Content-Disposition", `attachment; filename="floorwalker-audit-${new Date().toISOString().slice(0, 10)}.csv"`);
   res.send([head.join(","), ...rows.map((r: any) => head.map((h) => cell(r[h])).join(","))].join("\n"));
 });
 

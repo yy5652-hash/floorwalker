@@ -17,6 +17,7 @@ export function serverSecret(): string {
   return (secret = readFileSync(file, "utf8").trim());
 }
 
+// Keep the original HKDF salt so previously encrypted credentials still decrypt.
 const key = (purpose: string) => Buffer.from(hkdfSync("sha256", serverSecret(), "allowance", purpose, 32));
 
 /** AES-256-GCM; the output carries its own nonce and tag. */

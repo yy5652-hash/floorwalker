@@ -205,7 +205,7 @@ export function Ledger({
           variant="outline"
           onClick={() =>
             grid.current?.api.exportDataAsCsv({
-              fileName: "allowance-ledger.csv",
+              fileName: "floorwalker-ledger.csv",
               processCellCallback: (p) => {
                 const field = p.column.getColId();
                 const row = p.node?.data as LedgerEntry | undefined;

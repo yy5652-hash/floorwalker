@@ -1,7 +1,7 @@
-// Allowance as a local MCP server: any MCP client (Claude Desktop, Claude Code, your own agent)
+// Floorwalker as a local MCP server: any MCP client (Claude Desktop, Claude Code, your own agent)
 // gets the PayPal tools with every money move checked against the owner's rules.
 // It works on the local workspace; the hosted app serves the same tools at /v1/mcp with an agent key.
-//   claude mcp add allowance -- npx tsx server/mcp.ts
+//   claude mcp add floorwalker -- npx tsx server/mcp.ts
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as store from "./db.ts";
 import { createMcpServer } from "./mcp-server.ts";

@@ -25,7 +25,7 @@ const body = (r: Omit<AuditRow, "id" | "prev_hash" | "hash">) =>
 
 /**
  * Appends one entry for the current actor. Each entry carries the hash of the one before it, so an edit
- * made outside Allowance (straight in the database file) breaks the chain and verifyAudit() shows where.
+ * made outside Floorwalker (straight in the database file) breaks the chain and verifyAudit() shows where.
  */
 export function audit(action: string, target?: string | number | null, detail?: unknown, as?: { kind: "agent"; id: string; name: string }) {
   const { actor } = ctx();

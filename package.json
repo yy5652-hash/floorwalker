@@ -1,8 +1,8 @@
 {
-  "name": "allowance",
+  "name": "floorwalker",
   "version": "0.1.0",
   "private": true,
-  "description": "Give your AI agent an allowance, not your wallet. A spend-control layer between AI agents and PayPal.",
+  "description": "Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.",
   "type": "module",
   "license": "MIT",
   "engines": {

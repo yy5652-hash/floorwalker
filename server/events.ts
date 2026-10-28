@@ -7,8 +7,8 @@ export const EVENT_TYPES = [
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
-export type AllowanceEvent = { id: string; type: EventType; workspace_id: string; created_at: string; data: unknown };
-type Listener = (e: AllowanceEvent, ws: Workspace) => unknown;
+export type FloorwalkerEvent = { id: string; type: EventType; workspace_id: string; created_at: string; data: unknown };
+type Listener = (e: FloorwalkerEvent, ws: Workspace) => unknown;
 
 const listeners: Listener[] = [];
 
@@ -20,7 +20,7 @@ export function subscribe(l: Listener) {
 /** Tells every subscriber; a failing subscriber never affects the money path. */
 export function publish(type: EventType, data: unknown) {
   const { ws } = ctx();
-  const e: AllowanceEvent = { id: `evt_${randomUUID().replaceAll("-", "")}`, type, workspace_id: ws.id, created_at: new Date().toISOString(), data };
+  const e: FloorwalkerEvent = { id: `evt_${randomUUID().replaceAll("-", "")}`, type, workspace_id: ws.id, created_at: new Date().toISOString(), data };
   for (const l of listeners) {
     try {
       Promise.resolve(l(e, ws)).catch((err) => console.error(`event ${type}: ${err?.message ?? err}`));

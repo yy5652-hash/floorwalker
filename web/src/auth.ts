@@ -63,7 +63,7 @@ async function checked<T>(
       result.error.code?.includes("MEMBERSHIP_LIMIT")
     )
       window.dispatchEvent(
-        new CustomEvent("allowance:upgrade", { detail: result.error.message }),
+        new CustomEvent("floorwalker:upgrade", { detail: result.error.message }),
       );
     throw new Error(
       result.error.message || "The account request failed. Please try again.",

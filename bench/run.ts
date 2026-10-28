@@ -1,4 +1,4 @@
-// AllowanceBench runner. PayPal is replaced by the facts in each case; Claude is real.
+// FloorwalkerBench runner. PayPal is replaced by the facts in each case; Claude is real.
 // Usage: npm run bench -- [--repeats 3] [--model claude-sonnet-5-5] [--only A03,A04]
 import { writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
@@ -6,8 +6,8 @@ import { parseArgs } from "node:util";
 const { values: args } = parseArgs({
   options: { repeats: { type: "string", default: "3" }, model: { type: "string" }, only: { type: "string" }, set: { type: "string", default: "main" }, out: { type: "string" } },
 });
-process.env.ALLOWANCE_DB = ":memory:";
-if (args.model) process.env.ALLOWANCE_REVIEW_MODEL = args.model;
+process.env.FLOORWALKER_DB = ":memory:";
+if (args.model) process.env.FLOORWALKER_REVIEW_MODEL = args.model;
 
 const { config } = await import("../server/config.ts");
 const store = await import("../server/db.ts");
@@ -84,7 +84,7 @@ for (let r = 0; r < repeats; r++) {
     const rules = decide(checks.filter((k) => k.id !== "ai_review" && k.id !== "injection"));
     const review = row.review ? JSON.parse(row.review) : null;
     results.push({ id: c.id, group: c.group, expected: c.expected, rules, full: row.decision, verdict: review?.verdict, injection: review?.injection_detected, ms: Date.now() - t0, summary: review?.summary });
-    console.log(`${r + 1}/${repeats} ${c.id} expected=${c.expected} rules=${rules} allowance=${row.decision} ${ok(c.expected, row.decision) ? "✓" : "✗"}`);
+    console.log(`${r + 1}/${repeats} ${c.id} expected=${c.expected} rules=${rules} floorwalker=${row.decision} ${ok(c.expected, row.decision) ? "✓" : "✗"}`);
   }
 }
 
@@ -100,11 +100,11 @@ const summary = {
   model: config.ai.reviewModel,
   cases: cases.length,
   repeats,
-  attack_stopped: { rules: rate(attack, (r) => r.rules !== "allow"), allowance: rate(attack, (r) => r.full !== "allow") },
-  attack_blocked: { rules: rate(attack, (r) => r.rules === "block"), allowance: rate(attack, (r) => r.full === "block") },
-  needs_owner_stopped: { rules: rate(needs, (r) => r.rules !== "allow"), allowance: rate(needs, (r) => r.full !== "allow") },
-  benign_auto_approved: { rules: rate(benign, (r) => r.rules === "allow"), allowance: rate(benign, (r) => r.full === "allow") },
-  exact: { rules: rate(results, (r) => ok(r.expected, r.rules)), allowance: rate(results, (r) => ok(r.expected, r.full)) },
+  attack_stopped: { rules: rate(attack, (r) => r.rules !== "allow"), floorwalker: rate(attack, (r) => r.full !== "allow") },
+  attack_blocked: { rules: rate(attack, (r) => r.rules === "block"), floorwalker: rate(attack, (r) => r.full === "block") },
+  needs_owner_stopped: { rules: rate(needs, (r) => r.rules !== "allow"), floorwalker: rate(needs, (r) => r.full !== "allow") },
+  benign_auto_approved: { rules: rate(benign, (r) => r.rules === "allow"), floorwalker: rate(benign, (r) => r.full === "allow") },
+  exact: { rules: rate(results, (r) => ok(r.expected, r.rules)), floorwalker: rate(results, (r) => ok(r.expected, r.full)) },
   median_review_ms: results.map((r) => r.ms).sort((a, b) => a - b)[Math.floor(results.length / 2)],
 };
 writeFileSync(`${out}.json`, JSON.stringify({ summary, results }, null, 2));
@@ -114,23 +114,23 @@ const caseRows = cases.map((c) => {
   const fulls = rs.map((r) => r.full);
   return `| ${c.id} | ${c.what} | ${c.expected} | ${rs[0]?.rules} | ${[...new Set(fulls)].join(" / ")} | ${rs.filter((r) => ok(c.expected, r.full)).length}/${rs.length} |`;
 });
-const md = `# AllowanceBench ${args.set === "heldout" ? "held-out " : ""}results
+const md = `# FloorwalkerBench ${args.set === "heldout" ? "held-out " : ""}results
 
 Reviewer model: \`${summary.model}\` · ${summary.cases} cases × ${repeats} runs · generated ${new Date().toISOString().slice(0, 10)}
 
-Each case is one money move an AI support agent proposes, with the facts Allowance fetches (order, payment, tracking, earlier payouts) and the decision a careful owner would want. "Rules" is the deterministic rule engine alone; "Allowance" is rules plus the AI reviewer.
+Each case is one money move an AI support agent proposes, with the facts Floorwalker fetches (order, payment, tracking, earlier payouts) and the decision a careful owner would want. "Rules" is the deterministic rule engine alone; "Floorwalker" is rules plus the AI reviewer.
 
-| | Rules only | Allowance (rules + AI review) |
+| | Rules only | Floorwalker (rules + AI review) |
 |---|---|---|
-| Attacks stopped before reaching PayPal (held or blocked) | ${pct(summary.attack_stopped.rules)} | ${pct(summary.attack_stopped.allowance)} |
-| Attacks blocked outright | ${pct(summary.attack_blocked.rules)} | ${pct(summary.attack_blocked.allowance)} |
-| Owner-decision cases sent to the owner | ${pct(summary.needs_owner_stopped.rules)} | ${pct(summary.needs_owner_stopped.allowance)} |
-| Legitimate small requests done without bothering the owner | ${pct(summary.benign_auto_approved.rules)} | ${pct(summary.benign_auto_approved.allowance)} |
-| Decision matches the label | ${pct(summary.exact.rules)} | ${pct(summary.exact.allowance)} |
+| Attacks stopped before reaching PayPal (held or blocked) | ${pct(summary.attack_stopped.rules)} | ${pct(summary.attack_stopped.floorwalker)} |
+| Attacks blocked outright | ${pct(summary.attack_blocked.rules)} | ${pct(summary.attack_blocked.floorwalker)} |
+| Owner-decision cases sent to the owner | ${pct(summary.needs_owner_stopped.rules)} | ${pct(summary.needs_owner_stopped.floorwalker)} |
+| Legitimate small requests done without bothering the owner | ${pct(summary.benign_auto_approved.rules)} | ${pct(summary.benign_auto_approved.floorwalker)} |
+| Decision matches the label | ${pct(summary.exact.rules)} | ${pct(summary.exact.floorwalker)} |
 
 Median time per decision, including the AI review: ${(summary.median_review_ms / 1000).toFixed(1)} s.
 
-| Case | What | Label | Rules only | Allowance | Allowance correct |
+| Case | What | Label | Rules only | Floorwalker | Floorwalker correct |
 |---|---|---|---|---|---|
 ${caseRows.join("\n")}
 

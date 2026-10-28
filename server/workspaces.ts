@@ -10,7 +10,7 @@ if (config.coreDbPath !== ":memory:") mkdirSync(dirname(config.coreDbPath), { re
 
 /**
  * The core database: better-auth's tables (user, session, organization, member, invitation, passkey)
- * plus Allowance's own per-workspace settings. A workspace is a better-auth organization.
+ * plus Floorwalker's own per-workspace settings. A workspace is a better-auth organization.
  */
 export const core = new DatabaseSync(config.coreDbPath);
 
@@ -60,7 +60,7 @@ export function registerWorkspace(id: string, opts: { demo: boolean; ip?: string
     .run(id, opts.demo ? 1 : 0, opts.ip ?? null, new Date().toISOString());
 }
 
-/** Demo workspaces run on Allowance's own sandbox app; everyone else connects theirs. */
+/** Demo workspaces run on Floorwalker's own sandbox app; everyone else connects theirs. */
 function credsFor(row: WorkspaceRow): PayPalCreds | null {
   if (row.paypal_client_id && row.paypal_secret) return { clientId: row.paypal_client_id, clientSecret: unseal(row.paypal_secret) };
   if (row.demo && config.paypal.clientId && config.paypal.clientSecret) return { clientId: config.paypal.clientId, clientSecret: config.paypal.clientSecret };

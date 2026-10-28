@@ -63,7 +63,7 @@ type Options = {
   // PayPal-Request-Id makes POSTs idempotent: a retried request returns the original result.
   requestId?: string;
   headers?: Record<string, string>;
-  /** Another PayPal app than the workspace's (billing runs on Allowance's own). */
+  /** Another PayPal app than the workspace's (billing runs on Floorwalker's own). */
   creds?: PayPalCreds;
 };
 

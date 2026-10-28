@@ -5,7 +5,7 @@ import { callToolkit, toolkitToolDefs } from "../toolkit.ts";
 
 const REASON = {
   type: "string",
-  description: "Why this is the right action, citing the customer's message and the order facts. Allowance shows this to the owner.",
+  description: "Why this is the right action, citing the customer's message and the order facts. Floorwalker shows this to the owner.",
 };
 
 const OWN_TOOLS: ToolDef[] = [
@@ -36,7 +36,7 @@ const OWN_TOOLS: ToolDef[] = [
 ];
 
 /**
- * The agent's tools: PayPal Agent Toolkit tools plus Allowance's own. Money-moving tools
+ * The agent's tools: PayPal Agent Toolkit tools plus Floorwalker's own. Money-moving tools
  * get a required `reason`, and any `extra` properties (the MCP server adds the requester).
  */
 export function agentTools(extra: Record<string, unknown> = {}, extraRequired: string[] = []): ToolDef[] {

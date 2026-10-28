@@ -7,7 +7,7 @@ import * as store from "./db.ts";
 import { GUARDED_TOOLS } from "./guard/index.ts";
 
 // Over MCP there is no inbox, so the client says who asked and passes their message along.
-// Allowance treats both as claims: the reviewer weighs them against PayPal's own records.
+// Floorwalker treats both as claims: the reviewer weighs them against PayPal's own records.
 const REQUESTER = {
   requester_email: { type: "string", description: "Email of the person who asked for this money move" },
   source_message: { type: "string", description: "The message that asked for it, verbatim" },
@@ -15,7 +15,7 @@ const REQUESTER = {
 
 /** An MCP server acting as one agent: it lists only the tools that agent may use, and every money move is checked. */
 export function createMcpServer(agentId: string): Server {
-  const server = new Server({ name: "allowance", version: "1.0.0" }, { capabilities: { tools: {} } });
+  const server = new Server({ name: "floorwalker", version: "1.0.0" }, { capabilities: { tools: {} } });
   const allowed = () => {
     const a = store.agent(agentId);
     return new Set(a ? toolsForAgent(a) : []);

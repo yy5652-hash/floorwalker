@@ -243,7 +243,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
   useEffect(() => {
     if (!("serviceWorker" in navigator) || isFilm()) return;
     const onMessage = (event: MessageEvent) => {
-      if (event.data?.type === "allowance:refresh") void refresh();
+      if (event.data?.type === "floorwalker:refresh") void refresh();
     };
     navigator.serviceWorker.addEventListener("message", onMessage);
     return () =>
@@ -578,11 +578,11 @@ function Workspace({ mobile }: { mobile: boolean }) {
           <a
             href="/"
             className="flex items-center gap-2 text-xl font-semibold tracking-tight"
-            aria-label="Allowance home"
+            aria-label="Floorwalker home"
           >
             <img src="/favicon.svg" width="28" height="28" alt="" />
             <span className="group-data-[collapsible=icon]:hidden">
-              Allowance
+              Floorwalker
             </span>
           </a>
         </SidebarHeader>
@@ -780,7 +780,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
         </main>
         <footer className="flex items-center justify-center gap-2 px-4 py-6 text-[11px] text-muted-foreground">
           <ShieldCheck className="size-3" />
-          Give your AI agent an allowance, not your wallet.
+          Every refund checked. Fewer taps every week.
         </footer>
       </SidebarInset>
       {palette}

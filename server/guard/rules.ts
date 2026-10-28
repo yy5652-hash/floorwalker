@@ -9,7 +9,7 @@ export type PayoutAction = { kind: "payout"; email: string; amount: number; note
 export type InvoiceAction = { kind: "invoice"; recipientEmail: string; total: number; discountPercent: number };
 export type MoneyAction = RefundAction | PayoutAction | InvoiceAction;
 
-/** Ground truth fetched by Allowance itself (from PayPal and its own ledger), never taken from the agent. */
+/** Ground truth fetched by Floorwalker itself (from PayPal and its own ledger), never taken from the agent. */
 export type RefundFacts = {
   captureFound: boolean;
   captureStatus?: string;

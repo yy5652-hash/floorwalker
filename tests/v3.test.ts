@@ -2,8 +2,8 @@
 import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 
-process.env.ALLOWANCE_DB = ":memory:";
-process.env.ALLOWANCE_CORE_DB = ":memory:";
+process.env.FLOORWALKER_DB = ":memory:";
+process.env.FLOORWALKER_CORE_DB = ":memory:";
 process.env.ANTHROPIC_API_KEY = "test";
 process.env.PAYPAL_CLIENT_ID = "test";
 process.env.PAYPAL_CLIENT_SECRET = "test";
@@ -14,7 +14,8 @@ const guard = await import("../server/guard/index.ts");
 const { audit, auditLog, verifyAudit } = await import("../server/audit.ts");
 const { DEFAULT_POLICY, DEFAULT_POLICY_TEXT } = await import("../server/guard/policy.ts");
 const { createKey, revokeKey, verifyKey } = await import("../server/keys.ts");
-const { seal, unseal } = await import("../server/crypto.ts");
+const { seal, unseal, sha256 } = await import("../server/crypto.ts");
+const { core } = await import("../server/workspaces.ts");
 
 const capture = {
   id: "CAP1", status: "COMPLETED", amount: { value: "94.00" }, create_time: new Date().toISOString(),
@@ -139,10 +140,25 @@ test("the audit log records agents and people, is hash-chained, and refuses edit
 
 test("agent keys are shown once, stored as hashes, and stop working when revoked", () => {
   const { secret, key } = createKey({ wsId: "ws_test_1", agentId: "bot", name: "prod", createdBy: "Owner" });
-  assert.match(secret, /^alw_[A-Za-z0-9_-]{32}$/);
+  assert.match(secret, /^fw_[A-Za-z0-9_-]{32}$/);
+  assert.equal(key.prefix, secret.slice(0, 12));
+  assert.equal(key.prefix.length, 12);
   assert.equal(verifyKey(secret)?.id, key.id);
   assert.equal(verifyKey(`${secret.slice(0, -1)}x`), undefined);
   assert.ok(revokeKey("ws_test_1", key.id));
+  assert.equal(verifyKey(secret), undefined);
+});
+
+test("previously issued agent keys retain their display prefix, verification and revocation", () => {
+  const secret = `alw_${"a".repeat(32)}`;
+  core.prepare("INSERT INTO api_key (id, ws_id, agent_id, name, prefix, hash, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .run("key_legacy", "ws_test_1", "bot", "legacy", secret.slice(0, 12), sha256(secret), "Owner", new Date().toISOString());
+  const key = verifyKey(secret);
+  assert.equal(key?.id, "key_legacy");
+  assert.equal(key?.prefix, secret.slice(0, 12));
+  assert.equal(key?.prefix.length, 12);
+  assert.equal(verifyKey(`fw_${"a".repeat(32)}`), undefined);
+  assert.ok(revokeKey("ws_test_1", "key_legacy"));
   assert.equal(verifyKey(secret), undefined);
 });
 

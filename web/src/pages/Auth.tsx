@@ -237,7 +237,7 @@ export function AuthPage({
                 </Button>
               )}
               <p className="text-center text-sm text-muted-foreground">
-                {signup ? "Already have an account?" : "New to Allowance?"}{" "}
+                {signup ? "Already have an account?" : "New to Floorwalker?"}{" "}
                 <a
                   className="font-medium text-foreground underline underline-offset-4"
                   href={`/${signup ? "signin" : "signup"}?next=${encodeURIComponent(next)}`}

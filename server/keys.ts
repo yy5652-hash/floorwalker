@@ -36,7 +36,7 @@ const COLUMNS = "id, ws_id, agent_id, name, prefix, created_by, created_at, expi
 
 /** A new key for one agent. The secret is returned once; only its hash is kept. */
 export function createKey(o: { wsId: string; agentId: string; name: string; createdBy: string; expiresInDays?: number }): { secret: string; key: ApiKey } {
-  const secret = `alw_${randomBytes(24).toString("base64url")}`;
+  const secret = `fw_${randomBytes(24).toString("base64url")}`;
   const id = `key_${randomBytes(8).toString("hex")}`;
   const expires = o.expiresInDays ? new Date(Date.now() + o.expiresInDays * 86_400_000).toISOString() : null;
   core.prepare("INSERT INTO api_key (id, ws_id, agent_id, name, prefix, hash, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
@@ -62,7 +62,7 @@ export function revokeKeysForAgent(wsId: string, agentId: string): number {
 
 /** The live key for a presented secret, or undefined (unknown, revoked or expired). */
 export function verifyKey(secret: string): ApiKey | undefined {
-  if (!/^alw_[A-Za-z0-9_-]{32}$/.test(secret)) return undefined;
+  if (!/^(?:fw_|alw_)[A-Za-z0-9_-]{32}$/.test(secret)) return undefined;
   const key = core.prepare(`SELECT ${COLUMNS} FROM api_key WHERE hash = ?`).get(sha256(secret)) as ApiKey | undefined;
   if (!key || key.revoked_at || (key.expires_at && Date.parse(key.expires_at) <= Date.now())) return undefined;
   // Last use is shown to the owner; minute precision is plenty and saves a write per call.

@@ -7,7 +7,7 @@ import { isIP } from "node:net";
 import { Webhook } from "standardwebhooks";
 import { config } from "./config.ts";
 import { seal, unseal } from "./crypto.ts";
-import { subscribe, type AllowanceEvent } from "./events.ts";
+import { subscribe, type FloorwalkerEvent } from "./events.ts";
 import { core } from "./workspaces.ts";
 
 core.exec(`
@@ -118,7 +118,7 @@ export function deliveries(wsId: string, endpointId: string, limit = 50): Delive
   return core.prepare("SELECT * FROM webhook_delivery WHERE ws_id = ? AND endpoint_id = ? ORDER BY created_at DESC LIMIT ?").all(wsId, endpointId, limit) as any;
 }
 
-function enqueue(e: AllowanceEvent, endpointId: string) {
+function enqueue(e: FloorwalkerEvent, endpointId: string) {
   const body = JSON.stringify({ id: e.id, type: e.type, created_at: e.created_at, workspace_id: e.workspace_id, data: e.data });
   core.prepare(`INSERT INTO webhook_delivery (id, ws_id, endpoint_id, event_id, event_type, payload, status, next_attempt_at, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`).run(`wd_${randomBytes(8).toString("hex")}`, e.workspace_id, endpointId, e.id, e.type, body, e.created_at, e.created_at);
@@ -126,7 +126,7 @@ function enqueue(e: AllowanceEvent, endpointId: string) {
 
 /** Queues a test event to one endpoint. */
 export function sendTest(wsId: string, endpointId: string) {
-  enqueue({ id: `evt_test_${randomBytes(6).toString("hex")}`, type: "action.held" as any, workspace_id: wsId, created_at: new Date().toISOString(), data: { test: true, message: "A test event from Allowance." } }, endpointId);
+  enqueue({ id: `evt_test_${randomBytes(6).toString("hex")}`, type: "action.held" as any, workspace_id: wsId, created_at: new Date().toISOString(), data: { test: true, message: "A test event from Floorwalker." } }, endpointId);
   void work();
 }
 
@@ -179,7 +179,7 @@ async function attempt(d: Delivery) {
       signal: AbortSignal.timeout(10_000),
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": "Allowance-Webhooks/1.0",
+        "User-Agent": "Floorwalker-Webhooks/1.0",
         "webhook-id": d.event_id,
         "webhook-timestamp": String(Math.floor(now.getTime() / 1000)),
         "webhook-signature": signature,

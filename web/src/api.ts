@@ -246,7 +246,7 @@ export async function readJSON<T>(response: Response): Promise<T> {
     if (response.status === 401 && data.code === "signin") signinRedirect();
     if (response.status === 402)
       window.dispatchEvent(
-        new CustomEvent("allowance:upgrade", { detail: data.error }),
+        new CustomEvent("floorwalker:upgrade", { detail: data.error }),
       );
     throw new ApiError(
       data.error ?? response.statusText,
@@ -336,7 +336,7 @@ export const amountOf = (e: LedgerEntry) => e.approved_amount ?? e.amount;
 
 // People are shown by name: payees from the rules, buyers from the shop's orders. Refreshed with every state load.
 let directory = new Map<string, string>();
-// The public address of this Allowance (the server's configured URL, else the browser's origin).
+// The public address of this Floorwalker (the server's configured URL, else the browser's origin).
 let publicOrigin = "";
 export const appOrigin = () => publicOrigin || location.origin;
 

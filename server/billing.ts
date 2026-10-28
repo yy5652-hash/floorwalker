@@ -1,4 +1,4 @@
-// Plans and billing. Allowance bills with PayPal Subscriptions on its own sandbox app (the server's
+// Plans and billing. Floorwalker bills with PayPal Subscriptions on its own sandbox app (the server's
 // credentials), whatever PayPal app a workspace connects for its agents.
 import { config } from "./config.ts";
 import type { PayPalCreds } from "./context.ts";
@@ -26,29 +26,29 @@ for (const col of ["plan_until TEXT", "plan_checked_at TEXT"]) {
 }
 core.exec("CREATE TABLE IF NOT EXISTS billing_plan (plan TEXT PRIMARY KEY, paypal_plan_id TEXT NOT NULL, product_id TEXT NOT NULL)");
 
-const allowanceApp = (): PayPalCreds => {
+const floorwalkerApp = (): PayPalCreds => {
   if (!config.paypal.clientId || !config.paypal.clientSecret) throw new Error("Billing isn't set up on this server.");
   return { clientId: config.paypal.clientId, clientSecret: config.paypal.clientSecret };
 };
-const call = <T = any>(method: string, path: string, body?: unknown, requestId?: string) => paypal<T>(method, path, body, { requestId, creds: allowanceApp() });
+const call = <T = any>(method: string, path: string, body?: unknown, requestId?: string) => paypal<T>(method, path, body, { requestId, creds: floorwalkerApp() });
 
-/** The PayPal billing plan for a paid tier, created once on Allowance's sandbox app. */
+/** The PayPal billing plan for a paid tier, created once on Floorwalker's sandbox app. */
 async function paypalPlanId(plan: Exclude<PlanId, "free">): Promise<string> {
   const known = core.prepare("SELECT paypal_plan_id FROM billing_plan WHERE plan = ?").get(plan) as { paypal_plan_id: string } | undefined;
   if (known) return known.paypal_plan_id;
   let product = (core.prepare("SELECT product_id FROM billing_plan LIMIT 1").get() as { product_id: string } | undefined)?.product_id;
   if (!product) {
-    const p = await call("POST", "/v1/catalogs/products", { name: "Allowance", description: "Spend control for AI agents on PayPal", type: "SERVICE", category: "SOFTWARE" }, "allowance-product-v1");
+    const p = await call("POST", "/v1/catalogs/products", { name: "Floorwalker", description: "Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.", type: "SERVICE", category: "SOFTWARE" }, "floorwalker-product-v1");
     product = p.id as string;
   }
   const { name, price } = PLANS[plan];
   const created = await call("POST", "/v1/billing/plans", {
     product_id: product,
-    name: `Allowance ${name}`,
-    description: `Allowance ${name}, billed monthly`,
+    name: `Floorwalker ${name}`,
+    description: `Floorwalker ${name}, billed monthly`,
     billing_cycles: [{ frequency: { interval_unit: "MONTH", interval_count: 1 }, tenure_type: "REGULAR", sequence: 1, total_cycles: 0, pricing_scheme: { fixed_price: { value: price.toFixed(2), currency_code: "USD" } } }],
     payment_preferences: { auto_bill_outstanding: true, payment_failure_threshold: 2 },
-  }, `allowance-plan-${plan}-v1`);
+  }, `floorwalker-plan-${plan}-v1`);
   core.prepare("INSERT OR REPLACE INTO billing_plan (plan, paypal_plan_id, product_id) VALUES (?, ?, ?)").run(plan, created.id, product);
   return created.id;
 }
@@ -62,7 +62,7 @@ export async function checkout(wsId: string, plan: Exclude<PlanId, "free">, subs
     custom_id: wsId,
     ...(subscriber?.email && !subscriber.email.endsWith(".invalid") ? { subscriber: { email_address: subscriber.email } } : {}),
     application_context: {
-      brand_name: "Allowance",
+      brand_name: "Floorwalker",
       user_action: "SUBSCRIBE_NOW",
       shipping_preference: "NO_SHIPPING",
       return_url: `${base()}/api/billing/return`,
@@ -97,7 +97,7 @@ export async function syncSubscription(wsId: string, subscriptionId: string) {
 export async function cancel(wsId: string, reason: string) {
   const row = workspaceRow(wsId)!;
   if (!row.subscription_id) throw new Error("There's no subscription to cancel.");
-  await call("POST", `/v1/billing/subscriptions/${encodeURIComponent(row.subscription_id)}/cancel`, { reason: reason.slice(0, 120) || "Cancelled in Allowance" });
+  await call("POST", `/v1/billing/subscriptions/${encodeURIComponent(row.subscription_id)}/cancel`, { reason: reason.slice(0, 120) || "Cancelled in Floorwalker" });
   return syncSubscription(wsId, row.subscription_id);
 }
 

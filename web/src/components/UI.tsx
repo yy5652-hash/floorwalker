@@ -22,10 +22,10 @@ export function Brand() {
     <a
       href="/"
       className="inline-flex items-center gap-2 text-xl font-semibold tracking-tight"
-      aria-label="Allowance home"
+      aria-label="Floorwalker home"
     >
       <img src="/favicon.svg" width="28" height="28" alt="" />
-      <span>Allowance</span>
+      <span>Floorwalker</span>
     </a>
   );
 }
@@ -71,7 +71,7 @@ export function EmptyState({
     </Empty>
   );
 }
-export const MCP_COMMAND = isFilm() ? "claude mcp add allowance -- npx tsx server/mcp.ts" : `claude mcp add --transport http allowance ${location.origin}/v1/mcp --header "Authorization: Bearer <key>"`;
+export const MCP_COMMAND = isFilm() ? "claude mcp add floorwalker -- npx tsx server/mcp.ts" : `claude mcp add --transport http floorwalker ${location.origin}/v1/mcp --header "Authorization: Bearer <key>"`;
 export function ConnectAgent({ notify }: { notify: (s: string) => void }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);

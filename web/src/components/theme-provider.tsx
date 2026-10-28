@@ -8,7 +8,7 @@ import {
 
 type Theme = "light" | "dark" | "system";
 type ResolvedTheme = Exclude<Theme, "system">;
-const storageKey = "allowance-theme";
+const storageKey = "floorwalker-theme";
 const isTheme = (value: unknown): value is Theme =>
   value === "light" || value === "dark" || value === "system";
 function readTheme(): Theme {

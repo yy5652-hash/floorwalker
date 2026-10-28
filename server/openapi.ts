@@ -38,9 +38,9 @@ export function buildOpenApi(bodies: { refund: unknown; payout: unknown }) {
   return {
     openapi: "3.1.0",
     info: {
-      title: "Allowance agent API",
+      title: "Floorwalker agent API",
       version: "1.0.0",
-      description: "Call Allowance instead of PayPal. Each money move is checked against the owner's rules and an AI review, then executed in PayPal, held for the owner, or blocked. PayPal sandbox only.",
+      description: "Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you. PayPal sandbox only.",
     },
     servers: [{ url: `${config.baseUrl.replace(/\/$/, "")}/v1` }],
     security: [{ agentKey: [] }],
@@ -79,7 +79,7 @@ export function buildOpenApi(bodies: { refund: unknown; payout: unknown }) {
       "/mcp": { post: { summary: "MCP over Streamable HTTP (stateless) with the same tools and checks", responses: { "200": { description: "MCP response" } } } },
     },
     components: {
-      securitySchemes: { agentKey: { type: "http", scheme: "bearer", description: "An agent key (alw_…) from Developers in Allowance" } },
+      securitySchemes: { agentKey: { type: "http", scheme: "bearer", description: "An agent key (fw_…; existing alw_… keys also work) from Developers in Floorwalker" } },
       schemas: {
         Action,
         Error: { type: "object", properties: { error: { type: "object", properties: { code: { type: "string" }, message: { type: "string" } } } } },

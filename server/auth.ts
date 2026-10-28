@@ -5,7 +5,7 @@ import { anonymous, organization } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
 import { adminAc, defaultStatements, ownerAc } from "better-auth/plugins/organization/access";
 import { randomBytes } from "node:crypto";
-import { config } from "./config.ts";
+import { config, env } from "./config.ts";
 import { inWorkspace } from "./context.ts";
 import { serverSecret } from "./crypto.ts";
 import { limitsFor } from "./billing.ts";
@@ -47,7 +47,7 @@ const DEMO_NAME = "Juniper & Oak Ceramics";
 export function seedInBackground(id: string, seed: (ws: ReturnType<typeof openWorkspace>) => Promise<void>) {
   setSeedStatus(id, "seeding");
   const ws = openWorkspace(id);
-  void inWorkspace(ws, { kind: "system", id: "seed", name: "Allowance" }, () => seed(ws))
+  void inWorkspace(ws, { kind: "system", id: "seed", name: "Floorwalker" }, () => seed(ws))
     .then(() => setSeedStatus(id, "ready"))
     .catch((e: Error) => setSeedStatus(id, `failed: ${e.message.slice(0, 200)}`));
 }
@@ -59,7 +59,7 @@ const ensureAgents = async () => (await import("./demo.ts")).ensureAgents();
 // Seeding a demo shop takes PayPal 10-20 seconds, so a few are kept ready, owned by a placeholder user that
 // can't sign in (no password, no passkey). A demo visitor takes one over; the pool then refills in the background.
 const POOL_USER = "allowance-demo-pool";
-const POOL_SIZE = Number(process.env.ALLOWANCE_DEMO_POOL ?? (config.production ? 2 : 0));
+const POOL_SIZE = Number(env("DEMO_POOL", config.production ? "2" : "0"));
 
 function claimPooledDemo(userId: string): string | null {
   for (let i = 0; i < 3; i++) {
@@ -119,7 +119,7 @@ export function latestWorkspaceOf(userId: string): string | null {
 const origin = config.baseUrl.replace(/\/$/, "");
 
 const options = {
-  appName: "Allowance",
+  appName: "Floorwalker",
   baseURL: origin,
   secret: serverSecret(),
   database: core,
@@ -151,7 +151,7 @@ const options = {
         afterCreateOrganization: async ({ organization }: { organization: { id: string; metadata?: unknown } }) => {
           const meta = typeof organization.metadata === "string" ? JSON.parse(organization.metadata || "{}") : (organization.metadata ?? {});
           registerWorkspace(organization.id, { demo: Boolean((meta as { demo?: boolean }).demo) });
-          if (!(meta as { demo?: boolean }).demo) await inWorkspace(openWorkspace(organization.id), { kind: "system", id: "setup", name: "Allowance" }, ensureAgents);
+          if (!(meta as { demo?: boolean }).demo) await inWorkspace(openWorkspace(organization.id), { kind: "system", id: "setup", name: "Floorwalker" }, ensureAgents);
         },
       },
     }),
@@ -163,7 +163,7 @@ const options = {
         core.prepare("UPDATE member SET userId = ? WHERE userId = ?").run(newUser.user.id, anonymousUser.user.id);
       },
     }),
-    passkey({ rpID: new URL(origin).hostname, rpName: "Allowance", origin }),
+    passkey({ rpID: new URL(origin).hostname, rpName: "Floorwalker", origin }),
   ],
   advanced: { ipAddress: { ipAddressHeaders: ["x-forwarded-for"] } },
   databaseHooks: {

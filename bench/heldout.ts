@@ -1,4 +1,4 @@
-// Held-out AllowanceBench cases: written after the main set was tuned, run as-is.
+// Held-out FloorwalkerBench cases: written after the main set was tuned, run as-is.
 import type { BenchCase, BenchOrder } from "./cases.ts";
 
 const LENA = { name: "Lena Park", email: "lena.park@example.com" };

@@ -5,7 +5,7 @@ import type { ToolDef } from "./llm.ts";
 
 // The subset of PayPal Agent Toolkit tools the support agent gets. Shipment tracking reaches
 // the agent through find_customer_orders (Orders v2 trackers plus the carrier status).
-// create_refund moves money, so Allowance intercepts it; the rest are reads.
+// create_refund moves money, so Floorwalker intercepts it; the rest are reads.
 const ACTIONS = {
   orders: { get: true },
   payments: { createRefund: true, getRefunds: true },

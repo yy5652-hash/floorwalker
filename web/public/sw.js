@@ -35,7 +35,7 @@ self.addEventListener("push", (event) => {
         }))
     : [];
   event.waitUntil(
-    self.registration.showNotification(payload.title || "Allowance", {
+    self.registration.showNotification(payload.title || "Floorwalker", {
       body: payload.body || "You have a workspace update.",
       tag: payload.tag,
       icon: "/icon-192.png",
@@ -99,7 +99,7 @@ self.addEventListener("notificationclick", (event) => {
             : "Declined";
         await self.registration.showNotification(title, {
           body: failed
-            ? result.error || "Open Allowance to continue."
+            ? result.error || "Open Floorwalker to continue."
             : `Request #${id} · ${action === "approve" ? "Your decision was recorded." : "No payment was made."}`,
           icon: "/icon-192.png",
           tag: `decision-${data.workspaceId}-${id}`,
@@ -112,7 +112,7 @@ self.addEventListener("notificationclick", (event) => {
         });
         for (const client of await self.clients.matchAll({ type: "window" }))
           client.postMessage({
-            type: "allowance:refresh",
+            type: "floorwalker:refresh",
             workspaceId: data.workspaceId,
           });
         if (failed) await openPage(url);
@@ -120,7 +120,7 @@ self.addEventListener("notificationclick", (event) => {
         await self.registration.showNotification(
           "Couldn't confirm your decision",
           {
-            body: "Open Allowance to check the current request status before trying again.",
+            body: "Open Floorwalker to check the current request status before trying again.",
             icon: "/icon-192.png",
             data: { url, actions: ["open"] },
           },

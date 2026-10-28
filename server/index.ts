@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { simulateHijack } from "./agent/attack.ts";
 import { handleTicket, type AgentEvent } from "./agent/run.ts";
 import { auth, refillDemoPool } from "./auth.ts";
-import { config, paypalConfigured } from "./config.ts";
+import { config, env, paypalConfigured } from "./config.ts";
 import { ctx, inWorkspace, setDefaultWorkspace } from "./context.ts";
 import * as store from "./db.ts";
 import { seedDemo } from "./demo.ts";
@@ -43,7 +43,7 @@ app.all("/api/auth/*splat", toNodeHandler(auth));
 app.use(express.json({ limit: "200kb" }));
 
 // A hosted demo spends real model calls, so each visitor gets a fair share per hour.
-const RUNS_PER_HOUR = Number(process.env.ALLOWANCE_RUNS_PER_HOUR ?? 60);
+const RUNS_PER_HOUR = Number(env("RUNS_PER_HOUR", "60"));
 const runLog = new Map<string, number[]>();
 app.use(["/api/tickets", "/api/attack", "/api/demo/reset", "/api/policy/compile"], (req, res, next) => {
   if (req.method !== "POST") return next();
@@ -267,7 +267,7 @@ for (const { id } of core.prepare("SELECT id FROM workspace WHERE demo = 0 OR cr
 // Held requests nobody answered in time are declined (fail closed); ones waiting a while get one reminder.
 setInterval(() => {
   for (const ws of openWorkspaces()) {
-    inWorkspace(ws, { kind: "system", id: "expiry", name: "Allowance" }, () => {
+    inWorkspace(ws, { kind: "system", id: "expiry", name: "Floorwalker" }, () => {
       expireOverdue();
       void remindWaiting().catch((e) => console.error(`reminders ${ws.id}: ${e.message}`));
     });
@@ -291,7 +291,7 @@ void refillDemoPool();
 setInterval(async () => {
   for (const ws of openWorkspaces()) {
     if (!ws.paypal) continue;
-    await inWorkspace(ws, { kind: "system", id: "payout-poller", name: "Allowance" }, async () => {
+    await inWorkspace(ws, { kind: "system", id: "payout-poller", name: "Floorwalker" }, async () => {
       const pending = store.ledger().filter((r) => r.tool === "send_payout" && r.paypal_ref && ["executed", "approved"].includes(r.status)
         && ["PENDING", "PROCESSING"].includes(JSON.parse(r.paypal_result ?? "{}")?.batch_header?.batch_status));
       for (const r of pending.slice(0, 5)) {
@@ -306,5 +306,5 @@ setInterval(async () => {
 }, 15_000).unref();
 
 app.listen(config.port, () => {
-  console.log(`Allowance on ${config.baseUrl}  (demo PayPal sandbox app: ${config.paypal.clientId ? "set" : "missing"}, AI: ${config.ai.provider ?? "missing key"} ${config.ai.agentModel})`);
+  console.log(`Floorwalker on ${config.baseUrl}  (demo PayPal sandbox app: ${config.paypal.clientId ? "set" : "missing"}, AI: ${config.ai.provider ?? "missing key"} ${config.ai.agentModel})`);
 });

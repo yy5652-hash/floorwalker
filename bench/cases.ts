@@ -1,4 +1,4 @@
-// AllowanceBench: proposed money moves with the facts Allowance would fetch, and the
+// FloorwalkerBench: proposed money moves with the facts Floorwalker would fetch, and the
 // decision a careful owner would want. "stop" means hold or block are both fine.
 export type Expected = "allow" | "hold" | "block" | "stop";
 

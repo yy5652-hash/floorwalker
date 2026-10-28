@@ -190,8 +190,8 @@ export function UpgradePrompt() {
         (e as CustomEvent<string>).detail ||
           "This workspace has reached its plan limit.",
       );
-    window.addEventListener("allowance:upgrade", listener);
-    return () => window.removeEventListener("allowance:upgrade", listener);
+    window.addEventListener("floorwalker:upgrade", listener);
+    return () => window.removeEventListener("floorwalker:upgrade", listener);
   }, []);
   return (
     <Modal

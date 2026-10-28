@@ -77,9 +77,9 @@ type Delivery = {
 const date = (value: string | null) =>
   value ? new Date(value).toLocaleString() : "—";
 export const mcpCommand = () =>
-  `claude mcp add --transport http allowance ${appOrigin()}/v1/mcp --header "Authorization: Bearer <key>"`;
+  `claude mcp add --transport http floorwalker ${appOrigin()}/v1/mcp --header "Authorization: Bearer <key>"`;
 export const refundCurl = () =>
-  `curl ${appOrigin()}/v1/refunds \\\n  -H "Authorization: Bearer $ALLOWANCE_KEY" \\\n  -H "Content-Type: application/json" \\\n  -H "Idempotency-Key: refund-order-123" \\\n  -d '{"capture_id":"PAYPAL_CAPTURE_ID","amount":12,"reason":"Damaged item","requester_email":"buyer@example.com"}'`;
+  `curl ${appOrigin()}/v1/refunds \\\n  -H "Authorization: Bearer $FLOORWALKER_KEY" \\\n  -H "Content-Type: application/json" \\\n  -H "Idempotency-Key: refund-order-123" \\\n  -d '{"capture_id":"PAYPAL_CAPTURE_ID","amount":12,"reason":"Damaged item","requester_email":"buyer@example.com"}'`;
 export function Quickstart() {
   return (
     <div className="max-w-4xl space-y-7">
@@ -98,7 +98,7 @@ export function Quickstart() {
       <section className="space-y-3">
         <h3>2. Request a payout</h3>
         <Code
-          text={`curl ${appOrigin()}/v1/payouts \\\n  -H "Authorization: Bearer $ALLOWANCE_KEY" \\\n  -H "Content-Type: application/json" \\\n  -H "Idempotency-Key: payout-invoice-456" \\\n  -d '{"email":"payee@example.com","amount":25,"reason":"Invoice 456","requester_email":"owner@example.com"}'`}
+          text={`curl ${appOrigin()}/v1/payouts \\\n  -H "Authorization: Bearer $FLOORWALKER_KEY" \\\n  -H "Content-Type: application/json" \\\n  -H "Idempotency-Key: payout-invoice-456" \\\n  -d '{"email":"payee@example.com","amount":25,"reason":"Invoice 456","requester_email":"owner@example.com"}'`}
         />
       </section>
       <section className="space-y-3">
@@ -108,7 +108,7 @@ export function Quickstart() {
           when retrying the same request.
         </p>
         <Code
-          text={`curl ${appOrigin()}/v1/actions/act_42 \\\n  -H "Authorization: Bearer $ALLOWANCE_KEY"`}
+          text={`curl ${appOrigin()}/v1/actions/act_42 \\\n  -H "Authorization: Bearer $FLOORWALKER_KEY"`}
         />
       </section>
       <section className="space-y-3">
@@ -118,7 +118,7 @@ export function Quickstart() {
           text={JSON.stringify(
             {
               mcpServers: {
-                allowance: {
+                floorwalker: {
                   type: "http",
                   url: `${appOrigin()}/v1/mcp`,
                   headers: { Authorization: "Bearer <key>" },
@@ -365,8 +365,8 @@ function TestConsole() {
   );
   const { busy, run } = useTask();
   const send = async () => {
-    if (!/^alw_[A-Za-z0-9_-]{32}$/.test(key.trim())) {
-      throw new Error("Paste the whole agent key: it starts with alw_ and is 36 characters long.");
+    if (!/^(?:fw_|alw_)[A-Za-z0-9_-]{32}$/.test(key.trim())) {
+      throw new Error("Paste the whole agent key: it starts with fw_ (35 characters) or alw_ (36 characters).");
     }
     const [method, rawPath] = endpoint.split(" ");
     const path =
@@ -424,7 +424,7 @@ function TestConsole() {
               value={key}
               onChange={(e) => setKey(e.target.value)}
               required
-              placeholder="alw_…"
+              placeholder="fw_…"
             />
           </Field>
           <Field label="Endpoint">
@@ -781,7 +781,7 @@ function Webhooks() {
         </p>
         <Code
           text={
-            'import { Webhook } from "standardwebhooks";\n\nconst webhook = new Webhook(process.env.ALLOWANCE_WEBHOOK_SECRET!);\n// rawBody: unchanged request bytes as a UTF-8 string\nconst event = webhook.verify(rawBody, {\n  "webhook-id": request.headers["webhook-id"],\n  "webhook-timestamp": request.headers["webhook-timestamp"],\n  "webhook-signature": request.headers["webhook-signature"],\n});\n// Process event only if verification succeeds.'
+            'import { Webhook } from "standardwebhooks";\n\nconst webhook = new Webhook(process.env.FLOORWALKER_WEBHOOK_SECRET!);\n// rawBody: unchanged request bytes as a UTF-8 string\nconst event = webhook.verify(rawBody, {\n  "webhook-id": request.headers["webhook-id"],\n  "webhook-timestamp": request.headers["webhook-timestamp"],\n  "webhook-signature": request.headers["webhook-signature"],\n});\n// Process event only if verification succeeds.'
           }
         />
       </section>
@@ -819,7 +819,7 @@ function Webhooks() {
               type="url"
               required
               disabled={!!editing}
-              placeholder="https://your-app.com/webhooks/allowance"
+              placeholder="https://your-app.com/webhooks/floorwalker"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
             />

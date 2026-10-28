@@ -8,7 +8,7 @@ import { config } from "./config.ts";
 import { ctx, type Workspace } from "./context.ts";
 import { seal, unseal } from "./crypto.ts";
 import * as store from "./db.ts";
-import { subscribe, type AllowanceEvent } from "./events.ts";
+import { subscribe, type FloorwalkerEvent } from "./events.ts";
 import { core } from "./workspaces.ts";
 
 core.exec(`
@@ -36,7 +36,7 @@ function vapid(): { publicKey: string; privateKey: string } {
   return JSON.parse(readFileSync(file, "utf8"));
 }
 const keys = vapid();
-webpush.setVapidDetails(config.baseUrl.startsWith("https:") ? config.baseUrl : "mailto:push@allowance.localhost", keys.publicKey, keys.privateKey);
+webpush.setVapidDetails(config.baseUrl.startsWith("https:") ? config.baseUrl : "mailto:push@floorwalker.localhost", keys.publicKey, keys.privateKey);
 export const vapidPublicKey = keys.publicKey;
 
 // ---------------------------------------------------------------- subscriptions and preferences
@@ -119,7 +119,7 @@ export async function setSlack(url: string | null, events?: string[]) {
   if (url !== null) {
     const u = new URL(url);
     if (u.protocol !== "https:" || u.hostname !== "hooks.slack.com") throw new Error("Paste a Slack incoming webhook URL (https://hooks.slack.com/services/…).");
-    await postSlack(url, { text: `Allowance is connected. Requests from ${ctx().ws.name} will show up here.` });
+    await postSlack(url, { text: `Floorwalker is connected. Requests from ${ctx().ws.name} will show up here.` });
   }
   store.setSetting("slack_webhook", url ? seal(url, "slack") : null);
   if (events) store.setSetting("slack_events", events.filter((e) => (SLACK_EVENTS as readonly string[]).includes(e)));
@@ -130,7 +130,7 @@ async function postSlack(url: string, body: unknown) {
   if (!res.ok) throw new Error(`Slack said ${res.status} ${await res.text().catch(() => "")}`.trim());
 }
 
-function slackMessage(ws: Workspace, e: AllowanceEvent, a: ActionData, reminder = false) {
+function slackMessage(ws: Workspace, e: FloorwalkerEvent, a: ActionData, reminder = false) {
   const head = {
     "action.held": `${reminder ? "Still waiting" : "Approval needed"}: ${money(a.amount)} ${a.type} to ${a.counterparty ?? "unknown"}`,
     "action.blocked": `Blocked before PayPal: ${money(a.amount)} ${a.type} to ${a.counterparty ?? "unknown"}`,
@@ -143,12 +143,12 @@ function slackMessage(ws: Workspace, e: AllowanceEvent, a: ActionData, reminder 
     blocks: [
       { type: "section", text: { type: "mrkdwn", text: `*${head}*\n${agentName(a.agent_id)} · ${ws.name}${a.review ? `\nAI review: _${a.review.verdict}_ — ${a.review.summary}` : ""}` } },
       ...(flagged ? [{ type: "section", text: { type: "mrkdwn", text: flagged } }] : []),
-      ...(e.type === "action.held" ? [{ type: "actions", elements: [{ type: "button", style: "primary", text: { type: "plain_text", text: "Review in Allowance" }, url: link(ws, a) }] }] : []),
+      ...(e.type === "action.held" ? [{ type: "actions", elements: [{ type: "button", style: "primary", text: { type: "plain_text", text: "Review in Floorwalker" }, url: link(ws, a) }] }] : []),
     ],
   };
 }
 
-async function slack(ws: Workspace, e: AllowanceEvent, reminder = false) {
+async function slack(ws: Workspace, e: FloorwalkerEvent, reminder = false) {
   const sealed = store.setting<string | null>("slack_webhook", null);
   if (!sealed || !slackConfig().events.includes(e.type)) return;
   await postSlack(unseal(sealed, "slack"), slackMessage(ws, e, e.data as ActionData, reminder));

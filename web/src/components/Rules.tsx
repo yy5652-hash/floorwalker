@@ -81,7 +81,7 @@ function PolicyView({ policy, base }: { policy: Policy; base: Policy }) {
           base={base}
         />
         <Limit
-          k="Allowance"
+          k="Budget"
           path="refunds.budget"
           policy={policy}
           base={base}
@@ -124,7 +124,7 @@ function PolicyView({ policy, base }: { policy: Policy; base: Policy }) {
           base={base}
         />
         <Limit
-          k="Allowance"
+          k="Budget"
           path="payouts.budget"
           policy={policy}
           base={base}

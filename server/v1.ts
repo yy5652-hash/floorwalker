@@ -29,7 +29,7 @@ const RefundBody = z.object({
   note: z.string().max(255).optional(),
   reason: z.string().min(1).max(2000),
   ...Requester,
-  requester_email: z.email().describe("Who asked for this refund; Allowance checks it against the buyer on the PayPal order"),
+  requester_email: z.email().describe("Who asked for this refund; Floorwalker checks it against the buyer on the PayPal order"),
 });
 const PayoutBody = z.object({
   email: z.email(),
@@ -60,7 +60,7 @@ const agentId = (res: Response) => (res.locals.key as ApiKey).agent_id;
 v1.use((req: Request, res: Response, next: NextFunction) => {
   const m = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? "");
   const key = m ? verifyKey(m[1]) : undefined;
-  if (!key || !workspaceRow(key.ws_id)) return fail(res, 401, "unauthorized", "Missing or invalid API key. Create one under Developers in Allowance.");
+  if (!key || !workspaceRow(key.ws_id)) return fail(res, 401, "unauthorized", "Missing or invalid API key. Create one under Developers in Floorwalker.");
   if (limited(key)) return fail(res, 429, "rate_limited", "Too many calls; at most 120 a minute per key.");
   res.locals.key = key;
   const actor = { kind: "agent" as const, id: key.agent_id, name: key.agent_id, onBehalfOf: `key ${key.prefix}…`, ip: req.ip };

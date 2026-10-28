@@ -14,7 +14,7 @@ import {
 /** External calls, kept in one object so tests can stand in for PayPal and Claude. */
 export const deps = { getCapture, getOrder, sendPayout, callToolkit, reviewAction };
 
-/** Tools that move money. Every call to one of these goes through Allowance. */
+/** Tools that move money. Every call to one of these goes through Floorwalker. */
 export const GUARDED_TOOLS = new Set(["create_refund", "send_payout"]);
 
 export type GuardEvent = {
@@ -149,17 +149,18 @@ function reviewChecks(review: Review | null, reviewError?: string): Check[] {
 
 function agentMessage(decision: Decision, entry: number, amount: number, checks: Check[], paypalNote = ""): string {
   const reasons = checks.filter((c) => c.outcome !== "pass").map((c) => `${c.label}: ${c.detail}`).join(" ");
-  if (decision === "allow") return `Allowance approved and executed this. ${paypalNote}`.trim();
+  if (decision === "allow") return `Floorwalker approved and executed this. ${paypalNote}`.trim();
   if (decision === "hold") {
-    return `Allowance held this $${amount.toFixed(2)} action for the owner's approval (request #${entry}). ${reasons} Do not retry it or try another way to move this money. Tell the sender a team member is reviewing it and will follow up within one business day.`;
+    return `Floorwalker held this $${amount.toFixed(2)} action for the owner's approval (request #${entry}). ${reasons} Do not retry it or try another way to move this money. Tell the sender a team member is reviewing it and will follow up within one business day.`;
   }
-  return `Allowance blocked this action (request #${entry}). ${reasons} Do not retry it or try another way to move this money. Do not tell the sender which check stopped it; reply politely that a team member will follow up.`;
+  return `Floorwalker blocked this action (request #${entry}). ${reasons} Do not retry it or try another way to move this money. Do not tell the sender which check stopped it; reply politely that a team member will follow up.`;
 }
 
 /**
  * PayPal-Request-Id for a ledger row: stable for the row (a retry can never pay twice) and unique across databases
  * (a fresh install's row #1 must not collide with another install's row #1 on the same PayPal account).
  */
+// Keep the original PayPal idempotency namespace so retries of existing actions cannot pay twice.
 const requestKey = (row: store.LedgerRow) => `allowance-${row.id}-${Date.parse(row.created_at).toString(36)}`;
 
 /** Runs an approved ledger entry against PayPal, with the row's request key for idempotency. */
@@ -285,7 +286,7 @@ export async function guard(tool: string, input: unknown, ctx: GuardContext): Pr
   audit(run.ok ? "action.executed" : "action.failed", `act_${id}`, { paypal_ref: run.ref, error: run.error }, as);
   ctx.emit?.({ ...event, status: run.ok ? "executed" : "failed", paypalRef: run.ref, error: run.error });
   announce(id);
-  return { text: run.ok ? agentMessage("allow", id, amount, checks, run.note) : `The action passed Allowance but PayPal rejected it: ${run.note}`, row: store.ledgerEntry(id)! };
+  return { text: run.ok ? agentMessage("allow", id, amount, checks, run.note) : `The action passed Floorwalker but PayPal rejected it: ${run.note}`, row: store.ledgerEntry(id)! };
 }
 
 export type ApproveOptions = {
@@ -334,7 +335,7 @@ export function expireOverdue(): number {
   const rows = store.overdueRequests();
   for (const r of rows) {
     if (!store.transition(r.id, "awaiting_approval", "declined")) continue;
-    store.updateLedger(r.id, { status: "declined", decidedBy: "Allowance (expired)" });
+    store.updateLedger(r.id, { status: "declined", decidedBy: "Floorwalker (expired)" });
     store.setDeclineReason(r.id, `No one answered within ${approvalTtlHours()} hours, so it was declined automatically.`);
     audit("action.expired", `act_${r.id}`);
     announce(r.id, "action.expired");

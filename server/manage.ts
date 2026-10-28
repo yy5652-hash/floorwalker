@@ -15,6 +15,7 @@ import { verifyPayPalApp } from "./paypal/client.ts";
 import { prefs, pushDevices, removePushSubscription, savePushSubscription, setPrefs, setSlack, SLACK_EVENTS, slackConfig, vapidPublicKey } from "./notify.ts";
 import { createEndpoint, deleteEndpoint, deliveries, endpoint, endpoints, endpointSecret, redeliver, sendTest, updateEndpoint } from "./webhooks.ts";
 import { core, setWorkspacePayPal, workspaceRow } from "./workspaces.ts";
+import { canReceiveWebhooks, ensureWebhook, webhookUrl } from "./watch.ts";
 
 export const manage = Router();
 
@@ -184,6 +185,15 @@ manage.post("/settings/paypal", need({ organization: ["update"] }), handle(async
   const app = await verifyPayPalApp({ clientId: b.client_id, clientSecret: b.client_secret });
   setWorkspacePayPal(wsId(), { clientId: b.client_id, clientSecret: b.client_secret }, JSON.stringify(app));
   audit("paypal.connected", null, { client_id: `${b.client_id.slice(0, 6)}…${b.client_id.slice(-4)}`, app_id: app.appId, payouts: app.payouts });
+  // So Floorwalker hears about refunds and payouts made in this PayPal app without it (see watch.ts).
+  if (canReceiveWebhooks()) {
+    try {
+      store.setSetting("paypal_webhook_id", await ensureWebhook({ clientId: b.client_id, clientSecret: b.client_secret }, webhookUrl(wsId())));
+      store.setSetting("paypal_webhook_error", null);
+    } catch (e: any) {
+      store.setSetting("paypal_webhook_error", e.message);
+    }
+  }
   return { ...settingsView(), paypal: { ...settingsView().paypal, connected: true } };
 }));
 

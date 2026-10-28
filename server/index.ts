@@ -23,6 +23,7 @@ import { getPayoutBatch } from "./paypal/api.ts";
 import { validatePolicy } from "./guard/policy.ts";
 import { simulate } from "./guard/simulate.ts";
 import { learnedChanges, learnedNote, reword, tapsByWeek } from "./guard/learn.ts";
+import { canReceiveWebhooks, demoWorkspaceFor, ensureWebhook, handlePayPalEvent, incidents, openIncidents, resolveIncident, simulateBypass, sweepOrders, verifyPayPalWebhook, webhookUrl } from "./watch.ts";
 
 // Every request names its workspace; nothing falls back to a shared database.
 setDefaultWorkspace(null);
@@ -42,6 +43,25 @@ app.use(helmet({
 // better-auth reads its own request bodies, so it is mounted before the JSON parser.
 app.all("/api/auth/*splat", toNodeHandler(auth));
 app.use(express.json({ limit: "200kb" }));
+
+// PayPal webhooks: verified with PayPal, then matched against the ledger (see watch.ts). Demo workspaces share one app.
+let demoWebhookId: string | null = null;
+app.post("/api/paypal/webhook/:key", async (req, res) => {
+  const key = String(req.params.key);
+  try {
+    const ws = key === "demo" ? demoWorkspaceFor(req.body) : workspaceRow(key) ? openWorkspace(key) : undefined;
+    const creds = key === "demo" ? (config.paypal.clientId ? { clientId: config.paypal.clientId, clientSecret: config.paypal.clientSecret } : null) : ws?.paypal;
+    const hookId = key === "demo" ? demoWebhookId : ws ? inWorkspace(ws, { kind: "system", id: "watch", name: "Floorwalker" }, () => store.setting<string | null>("paypal_webhook_id", null)) : null;
+    if (!creds || !hookId || !(await verifyPayPalWebhook(creds, hookId, req.headers, req.body))) return void res.status(400).json({ error: "Unverified" });
+    // A verified event for a demo shop that no longer exists is acknowledged and dropped.
+    if (!ws) return void res.json({ ok: true, matched: false });
+    const out = inWorkspace(ws, { kind: "system", id: "watch", name: "Floorwalker" }, () => handlePayPalEvent(req.body));
+    res.json({ ok: true, matched: out.matched, incident: out.incident?.id ?? null });
+  } catch (e: any) {
+    console.error(`paypal webhook ${key}: ${e.message}`);
+    res.status(500).json({ error: "Could not process the event" });
+  }
+});
 
 // A hosted demo spends real model calls, so each visitor gets a fair share per hour.
 const RUNS_PER_HOUR = Number(env("RUNS_PER_HOUR", "60"));
@@ -137,6 +157,7 @@ app.get("/api/state", (req, res) => {
     ledger: rows.map(parseRow),
     metrics: metrics(rows),
     agents: agentsWithStats(rows, p.policy),
+    incidents: openIncidents(),
   });
 });
 
@@ -261,6 +282,46 @@ app.post("/api/rules/learned/dismiss", need({ rules: ["update"] }), handle((req)
   return { ok: true };
 }));
 
+// Money that moved in PayPal without Floorwalker.
+app.get("/api/incidents", handle(() => ({
+  incidents: incidents(),
+  watch: {
+    webhook: canReceiveWebhooks() ? (ctx().ws.demo ? Boolean(demoWebhookId) : Boolean(store.setting<string | null>("paypal_webhook_id", null))) : false,
+    webhook_error: store.setting<string | null>("paypal_webhook_error", null),
+    last_sweep: store.setting<unknown>("watch.last_sweep", null),
+    last_event: store.setting<unknown>("watch.last_event", null),
+    freeze: store.setting<boolean>("incident_freeze", true),
+  },
+})));
+
+app.post("/api/incidents/:id/resolve", need({ agents: ["manage"] }), handle((req) => {
+  const resolution = req.body?.resolution === "mine" ? "mine" : "not_mine";
+  return resolveIncident(Number(req.params.id), req.me!.name, resolution);
+}));
+
+app.post("/api/incidents/sweep", need({ agents: ["manage"] }), handle(async () => {
+  if (!paypalConfigured()) throw new HttpError(400, "Connect a PayPal sandbox app in Settings first.");
+  return sweepOrders();
+}));
+
+app.patch("/api/incidents/settings", need({ agents: ["manage"] }), handle((req) => {
+  store.setSetting("incident_freeze", Boolean(req.body?.freeze));
+  audit("settings.updated", "incident_freeze", { freeze: Boolean(req.body?.freeze) });
+  return { freeze: Boolean(req.body?.freeze) };
+}));
+
+/** Demo only: a refund made straight through the PayPal API, skipping Floorwalker, and the sweep that catches it. */
+app.post("/api/demo/bypass", need({ agents: ["manage"] }), handle(async () => {
+  const id = ctx().ws.id;
+  if (busy.has(id)) throw new HttpError(409, "The agent is busy.");
+  busy.add(id);
+  try {
+    return await simulateBypass();
+  } finally {
+    busy.delete(id);
+  }
+}));
+
 /** Reloads the sample shop: fresh paid sandbox orders and the demo inbox. */
 app.post("/api/demo/reset", need({ rules: ["update"] }), async (_req, res) => {
   const id = ctx().ws.id;
@@ -309,6 +370,42 @@ setInterval(() => {
     });
   }
 }, 60_000).unref();
+
+// Watch PayPal for money that moved without Floorwalker: register webhooks where PayPal can reach this server, and sweep
+// the orders of workspaces in use every five minutes (webhooks can be late or missing).
+const watchActor = { kind: "system" as const, id: "watch", name: "Floorwalker" };
+async function registerWebhooks() {
+  if (!canReceiveWebhooks()) return;
+  if (config.paypal.clientId && config.paypal.clientSecret) {
+    try {
+      demoWebhookId = await ensureWebhook({ clientId: config.paypal.clientId, clientSecret: config.paypal.clientSecret }, webhookUrl("demo"));
+    } catch (e: any) {
+      console.error(`demo PayPal webhook: ${e.message}`);
+    }
+  }
+  for (const ws of openWorkspaces()) {
+    if (ws.demo || !ws.paypal) continue;
+    await inWorkspace(ws, watchActor, async () => {
+      try {
+        store.setSetting("paypal_webhook_id", await ensureWebhook(ws.paypal!, webhookUrl(ws.id)));
+        store.setSetting("paypal_webhook_error", null);
+      } catch (e: any) {
+        store.setSetting("paypal_webhook_error", e.message);
+      }
+    });
+  }
+}
+void registerWebhooks();
+setInterval(async () => {
+  const active = Date.now() - 2 * 3_600_000;
+  for (const ws of openWorkspaces()) {
+    if (!ws.paypal) continue;
+    await inWorkspace(ws, watchActor, async () => {
+      if (ws.demo && !store.ledger().some((r) => r.source !== "history" && Date.parse(r.created_at) >= active)) return;
+      await sweepOrders().catch((e) => console.error(`order sweep ${ws.id}: ${e.message}`));
+    });
+  }
+}, 5 * 60_000).unref();
 
 // Demo visitors who never signed up are cleaned up after a week.
 const prune = () => {

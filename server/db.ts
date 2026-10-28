@@ -97,6 +97,21 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS incidents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  paypal_ref TEXT NOT NULL UNIQUE,
+  amount REAL NOT NULL,
+  counterparty TEXT,
+  capture_id TEXT,
+  detail TEXT NOT NULL,
+  detected_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  frozen_agents TEXT,
+  resolved_at TEXT,
+  resolved_by TEXT,
+  resolution TEXT
+);
 `;
 
 // Columns added after the first release; older databases get them here.
@@ -460,5 +475,5 @@ export function paidToPayee(email: string, days: number): { total: number; amoun
 
 /** Clears the sample shop. The audit log stays: it is append-only, and the reset itself is recorded there. */
 export function resetDemo() {
-  db().exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders; DELETE FROM agents; DELETE FROM grants; DELETE FROM settings WHERE key LIKE 'learn.%';");
+  db().exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders; DELETE FROM agents; DELETE FROM grants; DELETE FROM incidents; DELETE FROM settings WHERE key LIKE 'learn.%';");
 }

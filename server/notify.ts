@@ -155,6 +155,16 @@ async function slack(ws: Workspace, e: FloorwalkerEvent, reminder = false) {
 }
 
 subscribe(async (e, ws) => {
+  if (e.type === "incident.opened") {
+    const i = e.data as { id: number; kind: string; amount: number; detail: string; frozen_agents: string | null };
+    const frozen = (JSON.parse(i.frozen_agents ?? "[]") as string[]).length;
+    await pushTo(ws, "push_blocked", {
+      title: `Money moved outside Floorwalker: ${money(i.amount)} ${i.kind}`,
+      body: `${i.detail}${frozen ? ` ${frozen} agent${frozen === 1 ? " was" : "s were"} frozen.` : ""}`,
+      tag: `${ws.id}:incident:${i.id}`, url: `/app?ws=${ws.id}#overview`, actions: ["open"],
+    }).catch(() => {});
+    return;
+  }
   if (!e.type.startsWith("action.")) return;
   const a = e.data as ActionData;
   await Promise.allSettled([

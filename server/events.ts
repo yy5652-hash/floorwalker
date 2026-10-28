@@ -3,7 +3,7 @@ import { ctx, type Workspace } from "./context.ts";
 
 export const EVENT_TYPES = [
   "action.executed", "action.held", "action.blocked", "action.approved", "action.declined", "action.expired", "action.failed",
-  "agent.frozen", "agent.unfrozen", "rules.updated",
+  "agent.frozen", "agent.unfrozen", "rules.updated", "incident.opened", "incident.resolved",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

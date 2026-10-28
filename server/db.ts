@@ -460,5 +460,5 @@ export function paidToPayee(email: string, days: number): { total: number; amoun
 
 /** Clears the sample shop. The audit log stays: it is append-only, and the reset itself is recorded there. */
 export function resetDemo() {
-  db().exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders; DELETE FROM agents; DELETE FROM grants;");
+  db().exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders; DELETE FROM agents; DELETE FROM grants; DELETE FROM settings WHERE key LIKE 'learn.%';");
 }

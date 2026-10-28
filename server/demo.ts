@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { config } from "./config.ts";
 import * as store from "./db.ts";
 import { DEFAULT_POLICY, DEFAULT_POLICY_TEXT, type Policy } from "./guard/policy.ts";
+import { seedHistory } from "./history.ts";
 import { addTracking, createPaidCustomerOrder, type CustomerOrderInput } from "./paypal/api.ts";
 
 type DemoOrder = CustomerOrderInput & { key: string; tracking: { carrier: string; number: string; status: "DELIVERED" | "SHIPPED" } };
@@ -116,12 +117,13 @@ export function demoPolicy(): { text: string; policy: Policy } {
   return { text: DEFAULT_POLICY_TEXT, policy };
 }
 
-/** Wipes the ledger and inbox, creates fresh paid sandbox orders and loads the demo inbox. */
+/** Wipes the ledger and inbox, loads two months of simulated earlier activity, creates fresh paid sandbox orders and loads the demo inbox. */
 export async function seedDemo(log: (s: string) => void = () => {}) {
   store.resetDemo();
   DEMO_AGENTS.forEach(store.upsertAgent);
   const { text, policy } = demoPolicy();
   store.savePolicy(text, policy);
+  seedHistory(policy);
   const run = randomBytes(2).toString("hex").toUpperCase();
   const made: Record<string, { invoice: string }> = {};
   for (const o of ORDERS) {

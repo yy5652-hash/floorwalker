@@ -22,6 +22,7 @@ import { approve, declineRequest, expireOverdue } from "./guard/index.ts";
 import { getPayoutBatch } from "./paypal/api.ts";
 import { validatePolicy } from "./guard/policy.ts";
 import { simulate } from "./guard/simulate.ts";
+import { learnedChanges, learnedNote, reword, tapsByWeek } from "./guard/learn.ts";
 
 // Every request names its workspace; nothing falls back to a shared database.
 setDefaultWorkspace(null);
@@ -223,6 +224,41 @@ app.post("/api/policy", need({ rules: ["update"] }), handle((req) => {
   audit("rules.updated", `rules_v${saved.id}`, { text: saved.text });
   publish("rules.updated", { id: saved.id, object: "rules", text: saved.text, policy: saved.policy });
   return saved;
+}));
+
+/** What Floorwalker learned from the owner's decisions: backtested rule changes, a reviewer note, and taps per week. */
+app.get("/api/rules/learned", handle(async () => {
+  const policy = store.activePolicy().policy;
+  return { changes: learnedChanges(policy), note: await learnedNote(policy), weeks: tapsByWeek(12) };
+}));
+
+app.post("/api/rules/learned/apply", need({ rules: ["update"] }), handle(async (req) => {
+  const active = store.activePolicy();
+  const change = learnedChanges(active.policy).find((c) => c.id === String(req.body?.id));
+  if (!change) throw new HttpError(409, "That change is no longer suggested. Reload to see the current suggestions.");
+  const saved = store.savePolicy(await reword(active.text, change), change.draft);
+  audit("rules.learned_applied", `rules_v${saved.id}`, { change: change.title, taps_saved: change.impact.tapsSaved, rows: change.rows });
+  publish("rules.updated", { id: saved.id, object: "rules", text: saved.text, policy: saved.policy });
+  return saved;
+}));
+
+app.post("/api/rules/learned/note", need({ rules: ["update"] }), handle(async () => {
+  const active = store.activePolicy();
+  const note = await learnedNote(active.policy);
+  if (!note) throw new HttpError(409, "There is no suggested note right now.");
+  const policy = { ...active.policy, notes: [...active.policy.notes, note.note] };
+  const saved = store.savePolicy(`${active.text.trim()}\n${note.note}`, validatePolicy(policy));
+  audit("rules.learned_applied", `rules_v${saved.id}`, { note: note.note, rows: note.rows });
+  publish("rules.updated", { id: saved.id, object: "rules", text: saved.text, policy: saved.policy });
+  return saved;
+}));
+
+app.post("/api/rules/learned/dismiss", need({ rules: ["update"] }), handle((req) => {
+  const id = String(req.body?.id ?? "").slice(0, 300);
+  const dismissed = store.setting<string[]>("learn.dismissed", []);
+  if (id && !dismissed.includes(id)) store.setSetting("learn.dismissed", [...dismissed, id]);
+  audit("rules.learned_dismissed", undefined, { id });
+  return { ok: true };
 }));
 
 /** Reloads the sample shop: fresh paid sandbox orders and the demo inbox. */

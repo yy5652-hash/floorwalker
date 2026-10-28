@@ -112,7 +112,7 @@ function payeeLimits(policy: Policy, all: Decided[]) {
 }
 
 /** Benchmark cases with their PayPal facts and the AI reviewer's recorded verdict (written by `npm run bench`). */
-type ReplayCase = { id: string; group: string; tool: string; action: any; facts: any; history: Spend[]; extra: Check[]; verdict: string; injection: boolean };
+type ReplayCase = { id: string; group: string; tool: string; action: any; facts: any; at: string; history: Spend[]; extra: Check[]; verdict: string; injection: boolean };
 let replayCache: ReplayCase[] | null | undefined;
 function replay(): ReplayCase[] | null {
   if (replayCache !== undefined) return replayCache;
@@ -127,7 +127,8 @@ export function benchAttacks(draft: Policy): { attacks: number; stopped: number 
   if (!cases?.length) return null;
   let stopped = 0;
   for (const c of cases) {
-    const now = new Date();
+    // Re-run at the moment the case was recorded, so order ages and rolling budgets mean what they meant then.
+    const now = new Date(c.at);
     const rules = c.tool === "create_refund" ? checkRefund(c.action, c.facts as RefundFacts, draft, c.history, now) : checkPayout(c.action, c.facts as PayoutFacts, draft, c.history, now);
     const review: Check[] = [];
     if (c.injection) review.push({ id: "injection", label: "Prompt injection", outcome: "block", detail: "" });

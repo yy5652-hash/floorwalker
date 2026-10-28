@@ -113,6 +113,7 @@ type VerdictProps = Omit<GuardEvent, "type" | "counterparty"> & {
   policyId?: number | null;
   approvedAmount?: number | null;
   justification?: string | null;
+  history?: boolean;
 };
 export function Verdict(props: VerdictProps) {
   const amount = props.approvedAmount ?? props.amount;
@@ -128,6 +129,11 @@ export function Verdict(props: VerdictProps) {
           >
             {STATUS_LABEL[props.status]}
           </Badge>
+          {props.history && (
+            <Badge variant="secondary" className="ml-2 text-muted-foreground">
+              Demo history
+            </Badge>
+          )}
           <h3>
             {props.tool === "create_refund" ? "Refund" : "Payout"}{" "}
             {money(amount)} to {personName(props.counterparty)}
@@ -148,7 +154,11 @@ export function Verdict(props: VerdictProps) {
       )}
       <ReviewNote review={props.review} policyId={props.policyId} />
       <Checks checks={props.checks} review={props.review} />
-      {props.paypalRef && (
+      {props.history ? (
+        <p className="border-t pt-3 text-xs text-muted-foreground">
+          Simulated · not sent to PayPal
+        </p>
+      ) : props.paypalRef && (
         <div className="paypal-ref flex flex-wrap items-center gap-2 border-t pt-3 text-xs text-muted-foreground [&>code]:break-all">
           <Check size={14} />
           PayPal sandbox reference <code>{props.paypalRef}</code>
@@ -178,6 +188,7 @@ export function DecisionCard({ entry }: { entry: LedgerEntry }) {
       error={entry.error ?? undefined}
       policyId={entry.policy_id}
       justification={entry.justification}
+      history={entry.source === "history"}
     />
   );
 }

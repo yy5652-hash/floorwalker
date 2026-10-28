@@ -58,7 +58,7 @@ export type LedgerEntry = {
   expires_at?: string | null;
   reminded_at?: string | null;
   idempotency_key?: string | null;
-  source?: "inbox" | "api" | "mcp";
+  source?: "inbox" | "api" | "mcp" | "history";
 };
 export type Budget = { amount: number; period: "day" | "week" | "month" };
 export type Policy = {
@@ -125,6 +125,25 @@ export type PolicyVersion = {
   text: string;
   policy: Policy;
   created_at: string;
+};
+export type LearnedRules = {
+  changes: {
+    id: string;
+    title: string;
+    evidence: string;
+    boundary?: string;
+    rows: number[];
+    draft: Policy;
+    impact: {
+      tapsSaved: number;
+      moreAutoUsd: number;
+      declinedLetThrough: number;
+      tapsPer100: { before: number; after: number };
+      bench: { attacks: number; stopped: number } | null;
+    };
+  }[];
+  note: { note: string; rows: number[] } | null;
+  weeks: { week: string; moves: number; taps: number; per100: number }[];
 };
 export type State = {
   appUrl?: string;

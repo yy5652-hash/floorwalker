@@ -99,6 +99,23 @@ export function setPlan(id: string, plan: WorkspaceRow["plan"], subscriptionId: 
  * Demo visitors who never signed up: after `days` their user, sessions and demo workspace (with its database
  * file) are removed. Accounts that signed up keep everything, including the demo workspace they brought along.
  */
+/** Deletes a workspace: its organization, members, keys, webhooks and database file. */
+export function removeWorkspace(id: string) {
+  handles.get(id)?.close();
+  handles.delete(id);
+  for (const t of ["invitation", "member"]) core.prepare(`DELETE FROM ${t} WHERE organizationId = ?`).run(id);
+  core.prepare("DELETE FROM organization WHERE id = ?").run(id);
+  core.prepare("DELETE FROM workspace WHERE id = ?").run(id);
+  for (const t of ["api_key", "webhook_endpoint", "webhook_delivery", "notify_pref"]) {
+    try {
+      core.prepare(`DELETE FROM ${t} WHERE ws_id = ?`).run(id);
+    } catch {
+      // That feature's table isn't created in this process.
+    }
+  }
+  for (const suffix of ["", "-wal", "-shm"]) rmSync(join(config.dataDir, `${id}.db${suffix}`), { force: true });
+}
+
 export function pruneDemoVisitors(days = 7): number {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
   const users = core.prepare(`SELECT id FROM user WHERE isAnonymous = 1 AND createdAt < ?`).all(cutoff) as { id: string }[];
@@ -107,19 +124,7 @@ export function pruneDemoVisitors(days = 7): number {
     for (const { id } of orgs) {
       const others = core.prepare("SELECT 1 FROM member WHERE organizationId = ? AND userId != ? LIMIT 1").get(id, userId);
       if (others) continue;
-      handles.get(id)?.close();
-      handles.delete(id);
-      for (const t of ["invitation", "member"]) core.prepare(`DELETE FROM ${t} WHERE organizationId = ?`).run(id);
-      core.prepare("DELETE FROM organization WHERE id = ?").run(id);
-      core.prepare("DELETE FROM workspace WHERE id = ?").run(id);
-      for (const t of ["api_key", "webhook_endpoint", "webhook_delivery", "notify_pref"]) {
-        try {
-          core.prepare(`DELETE FROM ${t} WHERE ws_id = ?`).run(id);
-        } catch {
-          // That feature's table isn't created in this process.
-        }
-      }
-      for (const suffix of ["", "-wal", "-shm"]) rmSync(join(config.dataDir, `${id}.db${suffix}`), { force: true });
+      removeWorkspace(id);
     }
     for (const t of ["session", "account", "passkey", "member"]) core.prepare(`DELETE FROM ${t} WHERE userId = ?`).run(userId);
     core.prepare("DELETE FROM user WHERE id = ?").run(userId);

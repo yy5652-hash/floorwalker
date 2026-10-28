@@ -1,4 +1,5 @@
 import { canManage } from "../api";
+import { LearnedRulesPanel } from "./LearnedRules";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Table,
@@ -290,6 +291,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
   const changed = simulation?.rows.filter((r) => r.before !== r.after) ?? [];
   return (
     <div className="flex flex-col gap-6">
+      <LearnedRulesPanel state={state} refresh={refresh} notify={notify} />
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[.85fr_1.15fr]">
         <Card className="min-w-0 gap-0 py-0 shadow-xs [&_textarea]:min-h-[360px] [&_textarea]:text-sm [&_textarea]:leading-7">
           <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">

@@ -1,5 +1,6 @@
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Card,
@@ -88,10 +89,12 @@ function Detail({ entry, close }: { entry: LedgerEntry; close: () => void }) {
             <details className="rounded-lg border p-4 text-muted-foreground">
               <summary className="text-xs">PayPal response · JSON</summary>
               <pre>
-                {entry.paypal_result
-                  ? JSON.stringify(entry.paypal_result, null, 2)
-                  : (entry.error ??
-                    "No PayPal response recorded for this request.")}
+                {entry.source === "history"
+                  ? "Simulated · not sent to PayPal"
+                  : entry.paypal_result
+                    ? JSON.stringify(entry.paypal_result, null, 2)
+                    : (entry.error ??
+                      "No PayPal response recorded for this request.")}
               </pre>
             </details>
           </div>
@@ -160,10 +163,19 @@ export function Ledger({
       {
         field: "status",
         headerName: "Outcome",
-        width: 170,
+        width: 285,
         valueFormatter: (p) => STATUS_LABEL[p.value as LedgerEntry["status"]],
         cellRenderer: (p: ICellRendererParams<LedgerEntry>) =>
-          p.data ? <StatusPill status={p.data.status} /> : null,
+          p.data ? (
+            <div className="flex h-full items-center gap-2">
+              <StatusPill status={p.data.status} />
+              {p.data.source === "history" && (
+                <Badge variant="secondary" className="text-muted-foreground">
+                  Demo history
+                </Badge>
+              )}
+            </div>
+          ) : null,
       },
       {
         headerName: "Why",
@@ -176,8 +188,12 @@ export function Ledger({
       {
         field: "paypal_ref",
         headerName: "PayPal ref",
-        width: 115,
+        width: 255,
         cellClass: "font-mono text-xs",
+        valueGetter: (p) =>
+          p.data?.source === "history"
+            ? "Simulated · not sent to PayPal"
+            : p.data?.paypal_ref,
       },
     ],
     [state.agents],
@@ -213,7 +229,7 @@ export function Ledger({
                   field === "amount" && row
                     ? `${money(amountOf(row))}${row.approved_amount != null ? ` of ${money(row.amount)}` : ""}`
                     : field === "status" && row
-                      ? STATUS_LABEL[row.status]
+                      ? `${STATUS_LABEL[row.status]}${row.source === "history" ? " · Demo history" : ""}`
                       : p.value;
                 const text = String(raw ?? "");
                 return /^[\s]*[=+@\-\t\r\n]/.test(text) ? `'${text}` : text;

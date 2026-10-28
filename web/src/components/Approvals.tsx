@@ -1,4 +1,5 @@
 import { account, isFilm } from "../auth";
+import { LearnedRulesNudge } from "./LearnedRules";
 import { ApiError, api, canApprove, canManage } from "../api";
 import { Modal, Confirm, Resource, useResource } from "./Management";
 import { Textarea } from "@/components/ui/textarea";
@@ -224,9 +225,12 @@ export function ApprovalCard({
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">
             {
-              ({ inbox: "Inbox", api: "API", mcp: "MCP" } as const)[
-                entry.source ?? "inbox"
-              ]
+              ({
+                inbox: "Inbox",
+                api: "API",
+                mcp: "MCP",
+                history: "Demo history",
+              } as const)[entry.source ?? "inbox"]
             }
           </Badge>
           {remaining !== null && (
@@ -537,6 +541,7 @@ export function Approvals(props: PageProps) {
     .slice(0, 5);
   return (
     <div className="flex flex-col gap-6">
+      <LearnedRulesNudge state={props.state} />
       {!isFilm() && <TemporaryAllowances {...props} />}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
         <h2>

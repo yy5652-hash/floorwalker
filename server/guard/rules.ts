@@ -52,8 +52,8 @@ function limitChecks(
   const left = Math.max(0, limits.budget.amount - spent);
   checks.push(
     amount > left
-      ? { id: "budget", label: `${cap(limits.budget.period)}ly allowance`, outcome: "hold", detail: `Only ${money(left)} of the ${money(limits.budget.amount)} ${limits.budget.period}ly allowance is left.` }
-      : { id: "budget", label: `${cap(limits.budget.period)}ly allowance`, outcome: "pass", detail: `${money(left - amount)} of the ${money(limits.budget.amount)} ${limits.budget.period}ly allowance left after this.` },
+      ? { id: "budget", label: `${cap(limits.budget.period)}ly budget`, outcome: "hold", detail: `Only ${money(left)} of the ${money(limits.budget.amount)} ${limits.budget.period}ly budget is left.` }
+      : { id: "budget", label: `${cap(limits.budget.period)}ly budget`, outcome: "pass", detail: `${money(left - amount)} of the ${money(limits.budget.amount)} ${limits.budget.period}ly budget left after this.` },
   );
   return checks;
 }

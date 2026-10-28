@@ -22,7 +22,7 @@ import { approve, declineRequest, expireOverdue } from "./guard/index.ts";
 import { getPayoutBatch } from "./paypal/api.ts";
 import { validatePolicy } from "./guard/policy.ts";
 import { simulate } from "./guard/simulate.ts";
-import { learnedChanges, learnedNote, reword, tapsByWeek } from "./guard/learn.ts";
+import { learnedChanges, learnedNote, reword, tapsByWeek, tapsSummary } from "./guard/learn.ts";
 import { canReceiveWebhooks, demoWorkspaceFor, ensureWebhook, handlePayPalEvent, incidents, openIncidents, resolveIncident, simulateBypass, sweepOrders, verifyPayPalWebhook, webhookUrl } from "./watch.ts";
 
 // Every request names its workspace; nothing falls back to a shared database.
@@ -250,7 +250,7 @@ app.post("/api/policy", need({ rules: ["update"] }), handle((req) => {
 /** What Floorwalker learned from the owner's decisions: backtested rule changes, a reviewer note, and taps per week. */
 app.get("/api/rules/learned", handle(async () => {
   const policy = store.activePolicy().policy;
-  return { changes: learnedChanges(policy), note: await learnedNote(policy), weeks: tapsByWeek(12) };
+  return { changes: learnedChanges(policy), note: await learnedNote(policy), weeks: tapsByWeek(12), summary: tapsSummary() };
 }));
 
 app.post("/api/rules/learned/apply", need({ rules: ["update"] }), handle(async (req) => {

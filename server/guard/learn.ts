@@ -143,6 +143,13 @@ export function tapsPer100(decisions: (Decision | string)[]): number {
   return decisions.length ? Math.round((decisions.filter((d) => d === "hold").length / decisions.length) * 100) : 0;
 }
 
+/** Taps per 100 money moves over the learning window, with the counts behind it. */
+export function tapsSummary(): { per100: number; moves: number; taps: number; days: number } {
+  const since = Date.now() - WINDOW_DAYS * 86_400_000;
+  const rows = store.ledger().filter((r) => (r.kind === "refund" || r.kind === "payout") && Date.parse(r.created_at) >= since);
+  return { per100: tapsPer100(rows.map((r) => r.decision)), moves: rows.length, taps: rows.filter((r) => r.decision === "hold").length, days: WINDOW_DAYS };
+}
+
 /** Taps per 100 money moves, week by week, for the last `weeks` weeks (oldest first). */
 export function tapsByWeek(weeks = 12): { week: string; moves: number; taps: number; per100: number }[] {
   const rows = store.ledger().filter((r) => r.kind === "refund" || r.kind === "payout");

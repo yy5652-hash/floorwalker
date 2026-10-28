@@ -1,0 +1,22 @@
+[Unit]
+Description=Floorwalker: spend control for AI agents on PayPal (sandbox)
+After=network-online.target
+
+[Service]
+User=floorwalker
+WorkingDirectory=/opt/floorwalker/app
+Environment=NODE_ENV=production
+Environment=PORT=18810
+# Passkeys and auth cookies are bound to this origin; PayPal webhooks are registered for it.
+Environment=FLOORWALKER_BASE_URL=https://floorwalker.43-160-214-187.sslip.io
+Environment=PATH=/opt/floorwalker/node/bin:/usr/bin:/bin
+ExecStart=/opt/floorwalker/app/node_modules/.bin/tsx server/index.ts
+Restart=always
+RestartSec=3
+MemoryHigh=450M
+MemoryMax=600M
+CPUQuota=80%
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

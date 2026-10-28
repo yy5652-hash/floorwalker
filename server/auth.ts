@@ -9,7 +9,7 @@ import { config, env } from "./config.ts";
 import { inWorkspace } from "./context.ts";
 import { serverSecret } from "./crypto.ts";
 import { limitsFor } from "./billing.ts";
-import { core, openWorkspace, registerWorkspace, setSeedStatus, workspaceRow } from "./workspaces.ts";
+import { core, openWorkspace, registerWorkspace, removeWorkspace, setSeedStatus, workspaceRow } from "./workspaces.ts";
 
 // ---------------------------------------------------------------- roles
 // Owner: everything, including billing. Admin: everything but billing. Approver: answers spend
@@ -73,11 +73,33 @@ function claimPooledDemo(userId: string): string | null {
   return null;
 }
 
+/**
+ * Ready demo shops left in the pool by an older release (before demo shops had earlier activity to learn from) are
+ * replaced, so every visitor gets the current demo.
+ */
+function retireStalePool() {
+  const ids = core.prepare(`SELECT w.id FROM workspace w JOIN member m ON m.organizationId = w.id WHERE m.userId = ? AND w.seed_status = 'ready'`).all(POOL_USER) as { id: string }[];
+  for (const { id } of ids) {
+    try {
+      const ws = openWorkspace(id);
+      const current = inWorkspace(ws, { kind: "system", id: "pool", name: "Floorwalker" }, () => ws.db.prepare("SELECT 1 FROM ledger WHERE source = 'history' LIMIT 1").get());
+      if (!current) removeWorkspace(id);
+    } catch (e: any) {
+      console.error(`demo pool ${id}: ${e.message}`);
+    }
+  }
+}
+
 let filling = false;
+let retired = false;
 export async function refillDemoPool() {
   if (filling || POOL_SIZE <= 0) return;
   filling = true;
   try {
+    if (!retired) {
+      retired = true;
+      retireStalePool();
+    }
     core.prepare(`INSERT OR IGNORE INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, 'Demo pool', 'pool@demo.allowance.invalid', 0, ?, ?)`)
       .run(POOL_USER, new Date().toISOString(), new Date().toISOString());
     const count = () => (core.prepare(`SELECT COUNT(*) AS n FROM member m JOIN workspace w ON w.id = m.organizationId

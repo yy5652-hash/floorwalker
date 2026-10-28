@@ -1,4 +1,5 @@
 import { canManage } from "../api";
+import { TapsChart } from "../components/TapsChart";
 import { isFilm } from "../auth";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -174,6 +175,7 @@ export function Overview(
           ))}
         </div>
       </Card>
+      <TapsChart state={state} />
       {!state.tickets.length && (state.workspace?.demo || isFilm()) && (
         <Card className="min-w-0 gap-0 py-0 shadow-xs flex flex-wrap items-center gap-4 p-5 [&>div]:flex-1 [&_p]:mt-2 [&_p]:text-muted-foreground">
           <div>
@@ -272,7 +274,9 @@ export function Overview(
                 <strong>{activity(e, state)}</strong>
                 <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground [&>span]:truncate [&>code]:hidden xl:[&>code]:block">
                   <span>{why(e)}</span>
-                  {e.paypal_ref && <code>{e.paypal_ref}</code>}
+                  {e.source === "history" ? (
+                    <span>Simulated · not sent to PayPal</span>
+                  ) : e.paypal_ref && <code>{e.paypal_ref}</code>}
                 </div>
               </div>
               <time dateTime={e.created_at}>{relativeTime(e.created_at)}</time>

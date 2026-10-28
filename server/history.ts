@@ -26,7 +26,7 @@ const PAST: Past[] = [
   { day: 81, kind: "refund", who: "Omar Haddad", amount: 52, note: "Teapot lid chipped in transit.", owner: "approve" },
   { day: 79, kind: "payout", who: "priya", amount: 160, note: "Autumn catalogue photos, invoice PS-0988.", byOwner: true, owner: "approve" },
   { day: 77, kind: "refund", who: "Ivy Chen", amount: 24, note: "One mug of two chipped." },
-  { day: 75, kind: "refund", who: "Ben Walker", amount: 72, note: "Says the vase is a different colour from the photo.", ai: "escalate", owner: "decline", reason: "We already sent him a replacement vase." },
+  { day: 75, kind: "refund", who: "Ben Walker", amount: 72, note: "Says the vase is a different colour from the photo.", ai: "escalate", owner: "decline", reason: "We already sent him a replacement vase, and he sent no photo of the problem." },
   { day: 73, kind: "refund", who: "Sofia Rossi", amount: 44, note: "Dripper cracked on arrival.", owner: "approve" },
   { day: 71, kind: "refund", who: "Mateo Silva", amount: 16, note: "Coaster missing from a set." },
   // A busy week: small refunds use up the $120 weekly budget, so the last ones wait even though they are small.
@@ -108,13 +108,13 @@ export function seedHistory(policy: Policy) {
     ];
     const decision = decide(all);
     const decline = decision === "hold" && p.owner === "decline";
-    const status = decision === "block" ? "blocked" : decline ? "declined" : "executed";
+    const status = decision === "block" ? "blocked" : decline ? "declined" : decision === "hold" ? "approved" : "executed";
     insert.run(
       p.kind === "refund" ? "support" : "ops", tool, p.kind, JSON.stringify(action), p.amount, counterparty, p.note, decision, JSON.stringify(all),
       JSON.stringify({ verdict: ai, summary: all.at(-1)!.detail, cited_rule: "", injection_detected: false }),
       status, at, decision === "hold" ? iso(p.day, 18) : at, decision === "hold" ? OWNER : null, decline ? p.reason ?? null : null,
       JSON.stringify({ rules: facts }), policyId,
     );
-    if (status === "executed") spends.push({ kind: p.kind, amount: p.amount, at, who: counterparty });
+    if (status === "executed" || status === "approved") spends.push({ kind: p.kind, amount: p.amount, at, who: counterparty });
   });
 }

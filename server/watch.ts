@@ -216,7 +216,9 @@ export function demoWorkspaceFor(event: any): Workspace | undefined {
  */
 export async function simulateBypass(): Promise<{ refund: { id: string; amount: number; invoice: string }; incident: Incident | null }> {
   if (!ctx().ws.demo) throw Object.assign(new Error("Only in the demo"), { status: 400 });
-  const order = store.allOrders().find((o) => o.amount >= 30 && !store.ledger().some((r) => r.kind === "refund" && JSON.parse(r.params).captureId === o.capture_id));
+  // An order no refund has touched yet (a blocked or declined attempt never reached PayPal).
+  const refunded = (o: store.OrderRow) => store.ledger().some((r) => r.kind === "refund" && ["executed", "approved", "executing"].includes(r.status) && JSON.parse(r.params).captureId === o.capture_id);
+  const order = store.allOrders().find((o) => o.amount >= 30 && !refunded(o) && !incidents().some((i) => i.capture_id === o.capture_id));
   if (!order) throw Object.assign(new Error("No untouched order left to refund. Reset the demo first."), { status: 409 });
   const amount = 25;
   const refund = await refundCapture(order.capture_id, { currency_code: "USD", value: amount.toFixed(2) }, "Refund", `bypass-${order.capture_id}`);

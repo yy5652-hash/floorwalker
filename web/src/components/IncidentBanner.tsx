@@ -52,7 +52,7 @@ export function IncidentBanner({ state }: { state: State }) {
               {" · "}<time dateTime={newest.created_at} title={new Date(newest.created_at).toLocaleString()}>
                 {relativeTime(newest.created_at)}
               </time>
-              {frozen > 0 && ` · ${frozen} agents frozen`}
+              {frozen > 0 && ` · ${frozen} agent${frozen === 1 ? "" : "s"} frozen`}
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" data-film="incident-mine" disabled={!canManage(state) || resolve.isPending}

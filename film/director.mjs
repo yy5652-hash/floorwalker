@@ -483,9 +483,9 @@ S.learn = async (B, sc) => {
   ring(B, lineAt(sc, 'l2') + 4.9, lineAt(sc, 'l3') - lineAt(sc, 'l2') - 4.9, 'line', { sel: card, text: 'declined a $72' }, '#dc2626');
   ring(B, lineAt(sc, 'l3') + 2.2, 2.6, 'declined', { sel: card, text: 'requests you declined would' }, '#059669');
   ring(B, lineAt(sc, 'l3') + 4.9, lineAt(sc, 'l4') - lineAt(sc, 'l3') - 4.9, 'bench', { sel: card, text: 'Benchmark attacks still stopped' }, '#059669');
-  // The recorded state after the change is in place before the click, so the page's refresh after it shows the new rules.
-  B.do(lineAt(sc, 'l4') + 0.3, () => js(`window.__film.responses.learned = ${JSON.stringify(st.learned)}; window.__film.state = ${JSON.stringify({ ...st.after, appUrl: LIVE })}; true`));
+  // The recorded state after the change goes in right after the click, so the page's refresh shows the new rules.
   click(B, lineAt(sc, 'l4') + 0.6, `${card} [data-film="apply"]`, sc.start);
+  B.do(lineAt(sc, 'l4') + 0.7, () => js(`window.__film.responses.learned = ${JSON.stringify(st.learned)}; window.__film.state = ${JSON.stringify({ ...st.after, appUrl: LIVE })}; true`));
   B.do(lineAt(sc, 'l4') + 1.2, () => js(`__film.release('learnApply')`));
   hit(B, lineAt(sc, 'l4') + 0.8);
   camTo(B, lineAt(sc, 'l4') + 1.6, 0.8, { ...WIDE });
@@ -495,8 +495,11 @@ S.learn = async (B, sc) => {
 // A refund straight through the PayPal API: the Watch page, the incident, and the owner saying it was her.
 S.watch = async (B, sc) => {
   const st = stepOf('bypass'), rs = stepOf('resolve');
-  const quiet = { ...st.incidents, incidents: [], watch: { ...st.incidents.watch, last_event: null } };
-  await prime(st.before, {}, { incidents: quiet, bypass: st.response, resolve: rs.response }, 'watch');
+  // The run was recorded on a local server, which PayPal's webhooks can't reach; the hosted app has them connected.
+  const hosted = (r) => ({ ...r, watch: { ...r.watch, webhook: true, webhook_error: null } });
+  const quiet = hosted({ ...st.incidents, incidents: [], watch: { ...st.incidents.watch, last_event: null } });
+  st.incidents = hosted(st.incidents); rs.incidents = hosted(rs.incidents);
+  await prime(st.before, {}, { incidents: quiet, bypass: st.response, resolve: rs.response, learned: stepOf('learnApply').learned }, 'watch');
   cam = { ...WIDE };
   ring(B, 0.6, lineAt(sc, 'w2') - 0.9, 'status', { sel: '[data-slot="card"]', has: 'PayPal webhooks' }, '#2563eb');
   scrollTo(B, lineAt(sc, 'w2') - 0.4, 0.6, scrollToShow('[data-film="bypass"]'));
@@ -508,8 +511,9 @@ S.watch = async (B, sc) => {
   ring(B, lineAt(sc, 'w3') + 0.6, 2.2, 'row', { sel: '.ag-center-cols-container .ag-row', has: 'Refund' }, '#dc2626');
   B.do(lineAt(sc, 'w3') + 2.9, async () => { await js(`location.hash = 'overview'; true`); });
   ring(B, lineAt(sc, 'w3') + 3.4, 2.4, 'incident', '[data-film="incident"]', '#dc2626');
-  B.do(lineAt(sc, 'w3', true) - 0.2, () => js(`window.__film.responses.incidents = ${JSON.stringify(rs.incidents)}; window.__film.state = ${JSON.stringify({ ...rs.after, appUrl: LIVE })}; true`));
+  // The recorded outcome goes in only after the click: the banner (and its button) leaves with the open incident.
   click(B, lineAt(sc, 'w3', true) + 0.2, '[data-film="incident-mine"]', sc.start);
+  B.do(lineAt(sc, 'w3', true) + 0.3, () => js(`window.__film.responses.incidents = ${JSON.stringify(rs.incidents)}; window.__film.state = ${JSON.stringify({ ...rs.after, appUrl: LIVE })}; true`));
   B.do(lineAt(sc, 'w3', true) + 0.5, () => js(`__film.release('resolve')`));
 };
 

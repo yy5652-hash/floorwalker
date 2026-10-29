@@ -78,7 +78,7 @@ await step('learnApply', async () => {
   const before = await get('/api/rules/learned');
   const change = before.changes.find((c) => c.id.startsWith('refunds.auto_approve_up_to'));
   const r = await post('/api/rules/learned/apply', { id: change.id });
-  return { id: change.id, ms: r.ms, response: r.data, learned: await get('/api/rules/learned') };
+  return { change: change.id, ms: r.ms, response: r.data, learned: await get('/api/rules/learned') };
 });
 
 // A refund made straight through the PayPal API, skipping Floorwalker; the sweep catches it and the owner says it was her.

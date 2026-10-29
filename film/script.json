@@ -156,8 +156,9 @@
    "lines": [
     {
      "id": "l1",
-     "text": "Safe, but Elena was being asked about two of every three money moves.",
-     "gap": 0.0
+     "text": "Safe, but Elena still had to tap on 53 of every 100 money moves.",
+     "gap": 0.0,
+     "spoken": "Safe, but Elena still had to tap on fifty-three of every hundred money moves."
     },
     {
      "id": "l2",

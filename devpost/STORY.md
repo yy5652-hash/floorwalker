@@ -70,7 +70,7 @@ Telling our money from someone else's: a refund arrives by webhook seconds after
 
 ## Accomplishments that we're proud of
 
-- The same safety as a careful model with a third fewer taps, measured on 198 cases.
+- Every attack stopped, with a third fewer owner taps than giving a careful model the rules, measured on 198 cases.
 - Rules and AI review work together: the rules are plain, tested code the model cannot loosen; the reviewer catches what rules cannot see; learned changes are backtested in code.
 - Fail-closed design: if the review is unavailable, nothing runs on its own; if money moves outside Floorwalker, the agents stop.
 

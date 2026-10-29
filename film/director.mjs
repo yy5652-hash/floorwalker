@@ -252,7 +252,7 @@ async function appScene(sc, script) {
 
 // Each app scene loads the app fresh, with that scene's recorded state, streams and responses.
 let initScript = null, takes = 0;
-const LIVE = 'https://allowance.43-160-214-187.sslip.io';
+const LIVE = 'https://floorwalker.43-160-214-187.sslip.io';
 const setInit = async (state, streams = {}, responses = {}) => {
   // The run was recorded against a local server; the pages show the hosted app's address instead.
   if (state) state = { ...state, appUrl: LIVE };
@@ -392,7 +392,7 @@ S.hijack = async (B, sc) => {
   cam = { ...WIDE };
   scrollTo(B, 0.1, 0.5, scrollToShow(film('hijack')));
   click(B, 1.3, film('hijack'), sc.start);
-  const end = lineAt(sc, 'x2', true) - 0.6;
+  const end = lineAt(sc, 'x1', true) - 0.2;
   replay(B, 1.5, end - 1.5, 'ATTACK', st.events.at(-1).t / Math.max(1, end - 1.5), () => setState(st.after));
   follow(B, 1.6, end - 1.6 + 0.4);
 };
@@ -465,6 +465,52 @@ S.overview = async (B, sc) => {
   ring(B, 0.6, 2.2, 'moved', film('metric-moved'), '#059669');
   ring(B, 2.4, 2.0, 'waiting', film('metric-waiting'), '#b45309');
   ring(B, 4.0, sc.end - sc.start - 4.2, 'stopped', film('metric-stopped'), '#dc2626');
+};
+
+// What Floorwalker learned from the owner's decisions: the taps on the Overview, the suggested change on Rules, Apply.
+S.learn = async (B, sc) => {
+  const seen = stepOf('learned'), st = stepOf('learnApply');
+  await prime(seen.before, {}, { learned: seen.response, learnApply: st.response }, 'overview');
+  cam = { ...WIDE };
+  const taps = { sel: '[data-slot="card"]', has: 'How often agents need you' };
+  scrollTo(B, 0.1, 0.6, scrollToShow(taps));
+  ring(B, 0.8, lineAt(sc, 'l2') - 1.1, 'taps', taps, '#b45309');
+  const card = '[data-film="learned-refunds.auto_approve_up_to"]';
+  B.do(lineAt(sc, 'l2') - 0.2, async () => { await js(`location.hash = 'rules'; true`); });
+  scrollTo(B, lineAt(sc, 'l2') + 0.4, 0.6, scrollToShow(card));
+  camTo(B, lineAt(sc, 'l2') + 0.9, 1.0, async () => fit(await rect(card), { pad: 40, minW: 1100, ay: 0.45 }));
+  ring(B, lineAt(sc, 'l2') + 1.6, 3.2, 'evidence', { sel: card, text: 'You approved all' }, '#059669');
+  ring(B, lineAt(sc, 'l2') + 4.9, lineAt(sc, 'l3') - lineAt(sc, 'l2') - 4.9, 'line', { sel: card, text: 'declined a $72' }, '#dc2626');
+  ring(B, lineAt(sc, 'l3') + 2.2, 2.6, 'declined', { sel: card, text: 'requests you declined would' }, '#059669');
+  ring(B, lineAt(sc, 'l3') + 4.9, lineAt(sc, 'l4') - lineAt(sc, 'l3') - 4.9, 'bench', { sel: card, text: 'Benchmark attacks still stopped' }, '#059669');
+  // The recorded state after the change is in place before the click, so the page's refresh after it shows the new rules.
+  B.do(lineAt(sc, 'l4') + 0.3, () => js(`window.__film.responses.learned = ${JSON.stringify(st.learned)}; window.__film.state = ${JSON.stringify({ ...st.after, appUrl: LIVE })}; true`));
+  click(B, lineAt(sc, 'l4') + 0.6, `${card} [data-film="apply"]`, sc.start);
+  B.do(lineAt(sc, 'l4') + 1.2, () => js(`__film.release('learnApply')`));
+  hit(B, lineAt(sc, 'l4') + 0.8);
+  camTo(B, lineAt(sc, 'l4') + 1.6, 0.8, { ...WIDE });
+  scrollTo(B, lineAt(sc, 'l4') + 1.8, 0.9, scrollToShow({ sel: '[data-slot="card"]', has: 'Active rules' }));
+  ring(B, lineAt(sc, 'l4') + 2.8, sc.end - sc.start - lineAt(sc, 'l4') - 3.0, 'new', { sel: 'main', text: '$60.00' }, '#059669');
+};
+// A refund straight through the PayPal API: the Watch page, the incident, and the owner saying it was her.
+S.watch = async (B, sc) => {
+  const st = stepOf('bypass'), rs = stepOf('resolve');
+  const quiet = { ...st.incidents, incidents: [], watch: { ...st.incidents.watch, last_event: null } };
+  await prime(st.before, {}, { incidents: quiet, bypass: st.response, resolve: rs.response }, 'watch');
+  cam = { ...WIDE };
+  ring(B, 0.6, lineAt(sc, 'w2') - 0.9, 'status', { sel: '[data-slot="card"]', has: 'PayPal webhooks' }, '#2563eb');
+  scrollTo(B, lineAt(sc, 'w2') - 0.4, 0.6, scrollToShow('[data-film="bypass"]'));
+  click(B, lineAt(sc, 'w2') + 1.2, '[data-film="bypass"]', sc.start);
+  B.do(lineAt(sc, 'w3') - 0.4, () => js(`window.__film.responses.incidents = ${JSON.stringify(st.incidents)}; window.__film.state = ${JSON.stringify({ ...st.after, appUrl: LIVE })}; true`));
+  B.do(lineAt(sc, 'w3') - 0.2, () => js(`__film.release('bypass')`));
+  hit(B, lineAt(sc, 'w3'));
+  scrollTo(B, lineAt(sc, 'w3') + 0.3, 0.6, 0);
+  ring(B, lineAt(sc, 'w3') + 0.6, 2.2, 'row', { sel: '.ag-center-cols-container .ag-row', has: 'Refund' }, '#dc2626');
+  B.do(lineAt(sc, 'w3') + 2.9, async () => { await js(`location.hash = 'overview'; true`); });
+  ring(B, lineAt(sc, 'w3') + 3.4, 2.4, 'incident', '[data-film="incident"]', '#dc2626');
+  B.do(lineAt(sc, 'w3', true) - 0.2, () => js(`window.__film.responses.incidents = ${JSON.stringify(rs.incidents)}; window.__film.state = ${JSON.stringify({ ...rs.after, appUrl: LIVE })}; true`));
+  click(B, lineAt(sc, 'w3', true) + 0.2, '[data-film="incident-mine"]', sc.start);
+  B.do(lineAt(sc, 'w3', true) + 0.5, () => js(`__film.release('resolve')`));
 };
 
 // ---------------------------------------------------------------- run

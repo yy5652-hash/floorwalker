@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Deploys the current checkout to the demo server (Node 24 lives in /opt/floorwalker/node; nothing system-wide changes
-# except one nginx site and one systemd unit). Usage: deploy/deploy.sh [user@host]
+# except one nginx site and one systemd unit). Usage: [DEPLOY_KEY=~/.ssh/key] deploy/deploy.sh [user@host]
 set -euo pipefail
 HOST=${1:-ubuntu@43.160.214.187}
 NODE=v24.21.0
 DOMAIN=floorwalker.43-160-214-187.sslip.io
+SSH=(ssh ${DEPLOY_KEY:+-i "$DEPLOY_KEY"})
 cd "$(dirname "$0")/.."
 npm run build
-rsync -az --delete --exclude node_modules --exclude .git --exclude data --exclude .env --exclude 'film/work' --exclude 'film/out' --exclude 'film/.venv' --exclude notes --exclude PLAN.md \
+rsync -e "${SSH[*]}" -az --delete --exclude node_modules --exclude .git --exclude data --exclude .env --exclude 'film/work' --exclude 'film/out' --exclude 'film/.venv' --exclude notes --exclude PLAN.md \
   ./ "$HOST:/tmp/floorwalker-src/"
-scp -q .env "$HOST:/tmp/floorwalker.env"
-ssh "$HOST" NODE=$NODE DOMAIN=$DOMAIN 'bash -s' <<'REMOTE'
+scp -q ${DEPLOY_KEY:+-i "$DEPLOY_KEY"} .env "$HOST:/tmp/floorwalker.env"
+"${SSH[@]}" "$HOST" NODE=$NODE DOMAIN=$DOMAIN 'bash -s' <<'REMOTE'
 set -euo pipefail
 id floorwalker >/dev/null 2>&1 || sudo useradd --system --home /opt/floorwalker --shell /usr/sbin/nologin floorwalker
 sudo mkdir -p /opt/floorwalker/app
@@ -37,7 +38,7 @@ if [ ! -e /etc/nginx/sites-enabled/floorwalker ]; then
   sudo nginx -t && sudo systemctl reload nginx
   sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect
 fi
-if [ -e /etc/letsencrypt/live/allowance.43-160-214-187.sslip.io/fullchain.pem ] && [ ! -e /etc/nginx/sites-enabled/allowance-redirect ]; then
+if sudo test -e /etc/letsencrypt/live/allowance.43-160-214-187.sslip.io/fullchain.pem && [ ! -e /etc/nginx/sites-enabled/allowance-redirect ]; then
   sudo install -m 644 deploy/nginx-old-name.conf /etc/nginx/sites-available/allowance-redirect
   sudo ln -s /etc/nginx/sites-available/allowance-redirect /etc/nginx/sites-enabled/allowance-redirect
 fi

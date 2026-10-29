@@ -115,6 +115,7 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
       <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
+          data-film="apply"
           disabled={disabled}
           onClick={() => mutation.mutate(action)}
         >
@@ -176,7 +177,7 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
       ) : (
         <>
           {changes.map((change) => (
-            <Card key={change.id} className="min-w-0 gap-4 p-5 shadow-xs">
+            <Card key={change.id} data-film={`learned-${change.id.split("=")[0]}`} className="min-w-0 gap-4 p-5 shadow-xs">
               <div className="space-y-2">
                 <h3 className="font-semibold">{change.title}</h3>
                 <p className="text-sm">{change.evidence}</p>
@@ -206,8 +207,13 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
                 {change.impact.bench && (
                   <Badge variant="outline" className="text-allow">
                     <Check aria-hidden="true" />
-                    Attacks still stopped: {change.impact.bench.stopped}/
+                    Benchmark attacks still stopped: {change.impact.bench.stopped}/
                     {change.impact.bench.attacks}
+                  </Badge>
+                )}
+                {change.impact.bench?.rulesBefore !== undefined && change.impact.bench.rulesAfter !== undefined && (
+                  <Badge variant="secondary" title="How many of the benchmark attacks the rules catch without the AI review, before and after this change">
+                    Caught by rules alone: {change.impact.bench.rulesBefore} → {change.impact.bench.rulesAfter}
                   </Badge>
                 )}
               </div>

@@ -147,7 +147,7 @@ export type LearnedRules = {
       moreAutoUsd: number;
       declinedLetThrough: number;
       tapsPer100: { before: number; after: number };
-      bench: { attacks: number; stopped: number } | null;
+      bench: { attacks: number; stopped: number; rulesBefore?: number; rulesAfter?: number } | null;
     };
   }[];
   note: { note: string; rows: number[] } | null;

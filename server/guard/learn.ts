@@ -29,7 +29,8 @@ export type LearnedChange = {
     moreAutoUsd: number;
     declinedLetThrough: number;
     tapsPer100: { before: number; after: number };
-    bench: { attacks: number; stopped: number } | null;
+    /** Benchmark attacks stopped with the change, and how many the rules alone stop before and after (defense in depth). */
+    bench: { attacks: number; stopped: number; rulesBefore: number; rulesAfter: number } | null;
   };
 };
 
@@ -122,10 +123,10 @@ function replay(): ReplayCase[] | null {
 }
 
 /** Re-runs the rule engine with a draft policy on every benchmark attack, keeping the reviewer's recorded verdict. */
-export function benchAttacks(draft: Policy): { attacks: number; stopped: number } | null {
+export function benchAttacks(draft: Policy): { attacks: number; stopped: number; rulesStopped: number } | null {
   const cases = replay()?.filter((c) => c.group === "attack");
   if (!cases?.length) return null;
-  let stopped = 0;
+  let stopped = 0, rulesStopped = 0;
   for (const c of cases) {
     // Re-run at the moment the case was recorded, so order ages and rolling budgets mean what they meant then.
     const now = new Date(c.at);
@@ -134,8 +135,9 @@ export function benchAttacks(draft: Policy): { attacks: number; stopped: number 
     if (c.injection) review.push({ id: "injection", label: "Prompt injection", outcome: "block", detail: "" });
     review.push({ id: "ai_review", label: "AI review", outcome: c.verdict === "reject" ? "block" : c.verdict === "escalate" ? "hold" : "pass", detail: "" });
     if (decide([...c.extra, ...rules, ...review]) !== "allow") stopped++;
+    if (decide([...c.extra, ...rules]) !== "allow") rulesStopped++;
   }
-  return { attacks: cases.length, stopped };
+  return { attacks: cases.length, stopped, rulesStopped };
 }
 
 /** Of every 100 money moves, how many needed the owner. */
@@ -164,7 +166,7 @@ export function tapsByWeek(weeks = 12): { week: string; moves: number; taps: num
   });
 }
 
-function measure(draft: Policy): LearnedChange["impact"] {
+function measure(policy: Policy, draft: Policy): LearnedChange["impact"] {
   const sim = simulate(draft);
   const since = Date.now() - WINDOW_DAYS * 86_400_000;
   const byId = new Map(store.ledger().map((r) => [r.id, r]));
@@ -179,8 +181,13 @@ function measure(draft: Policy): LearnedChange["impact"] {
   return {
     tapsSaved, declinedLetThrough, moreAutoUsd: Math.round(moreAutoUsd * 100) / 100,
     tapsPer100: { before: tapsPer100(recent.map((r) => r.before)), after: tapsPer100(recent.map((r) => r.after)) },
-    bench: benchAttacks(draft),
+    bench: bench(policy, draft),
   };
+}
+
+function bench(policy: Policy, draft: Policy): LearnedChange["impact"]["bench"] {
+  const before = benchAttacks(policy), after = benchAttacks(draft);
+  return before && after ? { attacks: after.attacks, stopped: after.stopped, rulesBefore: before.rulesStopped, rulesAfter: after.rulesStopped } : null;
 }
 
 /** Changes the owner's decisions support, each already backtested. Dismissed ones are left out. */
@@ -191,7 +198,7 @@ export function learnedChanges(policy: Policy): LearnedChange[] {
   const push = (c: Omit<LearnedChange, "impact">) => {
     if (dismissed.has(c.id)) return;
     validatePolicy(c.draft);
-    const impact = measure(c.draft);
+    const impact = measure(policy, c.draft);
     // Never offer a change that would have let through something the owner said no to, or that lets a known attack through.
     if (impact.tapsSaved === 0 || impact.declinedLetThrough > 0) return;
     if (impact.bench && impact.bench.stopped < impact.bench.attacks) return;

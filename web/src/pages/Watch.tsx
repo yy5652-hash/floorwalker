@@ -134,7 +134,7 @@ export function Watch({ state }: { state: State }) {
           <p className="text-xs leading-relaxed text-muted-foreground">
             This is what an agent holding your PayPal key could do. Floorwalker can't stop it, but it notices within minutes and freezes your agents.
           </p>
-          <Button className="h-auto min-h-9 w-fit whitespace-normal" variant="outline"
+          <Button className="h-auto min-h-9 w-fit whitespace-normal" variant="outline" data-film="bypass"
             disabled={!manageable || busy || !state.configured.paypal}
             onClick={() => bypass.mutate()}>
             {bypass.isPending && <Loader2 className="animate-spin" />}

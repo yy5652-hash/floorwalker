@@ -38,7 +38,7 @@ export function IncidentBanner({ state }: { state: State }) {
   if (!newest && !showAdvice) return null;
   const frozen = frozenCount(newest?.frozen_agents ?? null);
   return (
-    <Alert variant="destructive" className="border-destructive/40 bg-destructive/5">
+    <Alert variant="destructive" data-film="incident" className="border-destructive/40 bg-destructive/5">
       <ShieldAlert />
       <AlertTitle className="line-clamp-none">Money moved outside Floorwalker</AlertTitle>
       <AlertDescription className="gap-3">
@@ -55,7 +55,7 @@ export function IncidentBanner({ state }: { state: State }) {
               {frozen > 0 && ` · ${frozen} agents frozen`}
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" disabled={!canManage(state) || resolve.isPending}
+              <Button variant="outline" data-film="incident-mine" disabled={!canManage(state) || resolve.isPending}
                 onClick={() => resolve.mutate({ id: newest.id, resolution: "mine" })}>
                 That was me
               </Button>

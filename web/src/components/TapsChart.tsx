@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { AgCharts } from "ag-charts-react";
 import type { AgCartesianChartOptions } from "ag-charts-community";
-import { chartTheme } from "./grid-theme";
+import { chartTheme } from "./chart-theme";
 import { isFilm } from "../auth";
 import { useTheme } from "./theme-provider";
 import { Card } from "@/components/ui/card";
@@ -21,11 +21,12 @@ export function TapsChart({ state }: { state: State }) {
     (sum, change) => sum + change.impact.tapsSaved,
     0,
   );
-  const options = useMemo<AgCartesianChartOptions<Week>>(() => {
+  const options = useMemo<AgCartesianChartOptions<Omit<Week, "per100"> & { per100?: number }>>(() => {
     const dark = resolvedTheme === "dark";
     const foreground = dark ? "#a3a3a3" : "#737373";
     return {
-      data: weeks,
+      // A week without money moves is a gap, not zero taps.
+      data: weeks.map((week) => (week.moves ? week : { ...week, per100: undefined })),
       height: 210,
       theme: chartTheme(dark),
       animation: { enabled: !isFilm() },

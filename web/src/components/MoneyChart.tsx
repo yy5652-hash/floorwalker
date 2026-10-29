@@ -4,7 +4,7 @@ import { AgCharts } from "ag-charts-react";
 import type { AgCartesianChartOptions } from "ag-charts-community";
 import { money, type State } from "../api";
 import { isFilm } from "../auth";
-import { chartTheme } from "./grid-theme";
+import { chartTheme } from "./chart-theme";
 import { useTheme } from "./theme-provider";
 import { Card } from "./ui/card";
 

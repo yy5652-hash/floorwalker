@@ -1,10 +1,9 @@
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 import { CellSelectionModule, ColumnsToolPanelModule, ColumnMenuModule, ExcelExportModule, FiltersToolPanelModule, LicenseManager, MasterDetailModule, RowGroupingModule, SetFilterModule, StatusBarModule } from "ag-grid-enterprise";
-import { AnimationModule, LicenseManager as ChartsLicenseManager } from "ag-charts-enterprise";
-import { BarSeriesModule, CategoryAxisModule, LegendModule, LineSeriesModule, NumberAxisModule, ModuleRegistry as ChartModules, type AgChartTheme } from "ag-charts-community";
-import { isFilm } from "../auth";
+import { LicenseManager as ChartsLicenseManager } from "ag-charts-enterprise";
+export { chartTheme } from "./chart-theme";
 
-// The Enterprise key, when set, is applied where the grids and charts load (they are split out of the main bundle).
+// The Enterprise key, when set, is applied where the grids (and the grid's integrated Enterprise charts) load.
 const agLicenseKey = import.meta.env.VITE_AG_GRID_LICENSE_KEY;
 if (agLicenseKey) {
   LicenseManager.setLicenseKey(agLicenseKey);
@@ -18,17 +17,6 @@ ModuleRegistry.registerModules([
   ColumnsToolPanelModule, FiltersToolPanelModule, ColumnMenuModule, SetFilterModule,
   StatusBarModule, ExcelExportModule,
 ]);
-ChartModules.registerModules([BarSeriesModule, CategoryAxisModule, NumberAxisModule, LineSeriesModule, LegendModule, AnimationModule]);
-export function chartTheme(dark: boolean): AgChartTheme {
-  return {
-    baseTheme: dark ? "ag-default-dark" : "ag-default",
-    params: { fontFamily: "Inter, sans-serif" },
-    overrides: { common: {
-      background: { fill: dark ? "#171717" : "#ffffff" },
-      animation: { enabled: !isFilm() },
-    } },
-  };
-}
 export const lightTheme = themeQuartz.withParams({
   fontFamily: "Inter, sans-serif",
   fontSize: 12,

@@ -1,12 +1,8 @@
 import { useMemo } from "react";
 import { AgCharts } from "ag-charts-react";
-import {
-  CategoryAxisModule,
-  LineSeriesModule,
-  ModuleRegistry,
-  NumberAxisModule,
-  type AgCartesianChartOptions,
-} from "ag-charts-community";
+import type { AgCartesianChartOptions } from "ag-charts-community";
+import { chartTheme } from "./grid-theme";
+import { isFilm } from "../auth";
 import { useTheme } from "./theme-provider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,13 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { type LearnedRules, type State } from "../api";
 import { emptyLearnedRules, useLearnedRules } from "../hooks/use-learned-rules";
 
-// AG Charts 14.2: https://www.ag-grid.com/charts/react/themes/
-// Match the neutral palette and typography of the AG Grid 36 ledger.
-ModuleRegistry.registerModules([
-  CategoryAxisModule,
-  NumberAxisModule,
-  LineSeriesModule,
-]);
 type Week = LearnedRules["weeks"][number];
 
 export function TapsChart({ state }: { state: State }) {
@@ -38,10 +27,8 @@ export function TapsChart({ state }: { state: State }) {
     return {
       data: weeks,
       height: 210,
-      theme: {
-        baseTheme: dark ? "ag-default-dark" : "ag-default",
-        params: { fontFamily: "Inter, sans-serif" },
-      },
+      theme: chartTheme(dark),
+      animation: { enabled: !isFilm() },
       background: { fill: dark ? "#171717" : "#ffffff" },
       padding: { top: 12, right: 12, bottom: 8, left: 0 },
       legend: { enabled: false },

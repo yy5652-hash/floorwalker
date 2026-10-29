@@ -3,7 +3,6 @@ import { canManage } from "./api";
 import { IncidentBanner } from "./components/IncidentBanner";
 import { AuthPage } from "./pages/Auth";
 import { Developers, developerTabs } from "./pages/Developers";
-import { Audit } from "./pages/Audit";
 import { Settings as WorkspaceSettings, settingsTabs } from "./pages/Settings";
 import {
   WorkspaceMenu,
@@ -45,12 +44,10 @@ import { toast } from "sonner";
 import { errorMessage, getState, post, setDirectory } from "./api";
 import { ApprovalCard, Approvals, PhoneApproval } from "./components/Approvals";
 import { Inbox } from "./components/Inbox";
-import { Rules } from "./components/Rules";
 import { Brand, EmptyState } from "./components/UI";
 import { ThemeToggle } from "./components/Theme";
 import { Agents } from "./pages/Agents";
 import { Landing } from "./pages/Landing";
-import { Overview } from "./pages/Overview";
 import { Setup } from "./pages/Setup";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -98,6 +95,10 @@ const Ledger = lazy(() =>
 const Watch = lazy(() =>
   import("./pages/Watch").then((module) => ({ default: module.Watch })),
 );
+// Pages with grids and charts load on demand, so the inbox and approvals open fast.
+const Audit = lazy(() => import("./pages/Audit").then((module) => ({ default: module.Audit })));
+const Rules = lazy(() => import("./components/Rules").then((module) => ({ default: module.Rules })));
+const Overview = lazy(() => import("./pages/Overview").then((module) => ({ default: module.Overview })));
 const pages = [
   {
     id: "overview",
@@ -742,11 +743,13 @@ function Workspace({ mobile }: { mobile: boolean }) {
             </Alert>
           )}
           {page.id === "overview" && (
-            <Overview
-              {...props}
-              reset={() => void reset()}
-              resetting={resetting}
-            />
+            <Suspense fallback={<PageSkeleton />}>
+              <Overview
+                {...props}
+                reset={() => void reset()}
+                resetting={resetting}
+              />
+            </Suspense>
           )}
           <div hidden={page.id !== "inbox"}>
             <Inbox
@@ -759,7 +762,11 @@ function Workspace({ mobile }: { mobile: boolean }) {
           </div>
           {page.id === "approvals" && <Approvals {...props} />}
           {page.id === "agents" && <Agents {...props} />}
-          {page.id === "rules" && <Rules {...props} />}
+          {page.id === "rules" && (
+            <Suspense fallback={<PageSkeleton />}>
+              <Rules {...props} />
+            </Suspense>
+          )}
           {page.id === "watch" && (
             <Suspense fallback={<PageSkeleton />}>
               <Watch key={workspaceId} state={state} />
@@ -789,7 +796,11 @@ function Workspace({ mobile }: { mobile: boolean }) {
               tab={route.split("/")[1]}
             />
           )}
-          {page.id === "audit" && <Audit key={state.workspace?.id} />}
+          {page.id === "audit" && (
+            <Suspense fallback={<PageSkeleton />}>
+              <Audit key={state.workspace?.id} />
+            </Suspense>
+          )}
           {page.id === "settings" && (
             <WorkspaceSettings
               key={state.workspace?.id}

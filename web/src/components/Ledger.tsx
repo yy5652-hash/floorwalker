@@ -1,4 +1,10 @@
-import { lightTheme, darkTheme } from "./grid-theme";
+import { ModuleRegistry } from "ag-grid-community";
+import { IntegratedChartsModule } from "ag-grid-enterprise";
+import { AgChartsEnterpriseModule } from "ag-charts-enterprise";
+import { isFilm } from "../auth";
+import { DecisionTrace } from "./DecisionTrace";
+import { LedgerTotals } from "./LedgerTotals";
+import { chartTheme, lightTheme, darkTheme } from "./grid-theme";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +42,9 @@ import {
 } from "../api";
 import { DecisionCard } from "./Verdict";
 import { StatusPill } from "./UI";
+
+// Load the integrated chart bundle with this lazy-loaded screen.
+ModuleRegistry.registerModules([IntegratedChartsModule.with(AgChartsEnterpriseModule)]);
 
 function Detail({ entry, close }: { entry: LedgerEntry; close: () => void }) {
   return (
@@ -85,49 +94,60 @@ export function Ledger({
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "dark" ? darkTheme : lightTheme;
   const grid = useRef<AgGridReact<LedgerEntry>>(null);
+  const [groupBy, setGroupBy] = useState("");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<number | undefined>(selectedId);
   useEffect(() => setSelected(selectedId), [selectedId]);
   const entry = state.ledger.find((e) => e.id === selected);
   const columns = useMemo<ColDef<LedgerEntry>[]>(
     () => [
-      { field: "id", headerName: "#", width: 55, minWidth: 45 },
+      { field: "id", headerName: "#", width: 100, minWidth: 90, cellRenderer: "agGroupCellRenderer", chartDataType: "excluded" },
       {
         field: "created_at",
         headerName: "Time",
-        width: 85,
+        width: 165,
+        filter: "agDateColumnFilter",
+        cellDataType: "date",
+        filterParams: {
+          comparator: (filterDate: Date, value: Date) => {
+            const day = new Date(value.getFullYear(), value.getMonth(), value.getDate());
+            return day.getTime() - filterDate.getTime();
+          },
+        },
+        valueGetter: (p) => p.data ? new Date(p.data.created_at) : null,
         valueFormatter: (p) =>
-          new Date(p.value).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
+          p.value ? new Date(p.value).toLocaleString() : "",
       },
       {
         field: "agent_id",
         headerName: "Agent",
+        filter: "agSetColumnFilter", enableRowGroup: true, chartDataType: "category",
         width: 125,
         valueGetter: (p) => (p.data ? agentName(state, p.data.agent_id) : ""),
       },
       {
         field: "kind",
-        headerName: "Action",
+        headerName: "Kind",
+        filter: "agSetColumnFilter", enableRowGroup: true,
         width: 80,
-        valueFormatter: (p) => (p.value === "refund" ? "Refund" : "Payout"),
+        valueFormatter: (p) => (p.value ? p.value[0].toUpperCase() + p.value.slice(1) : ""),
       },
       {
         field: "amount",
         headerName: "Amount",
+        aggFunc: "sum", enableValue: true, chartDataType: "series",
+        useValueFormatterForExport: false,
         width: 125,
         valueGetter: (p) => (p.data ? amountOf(p.data) : 0),
         valueFormatter: (p) =>
           p.data
             ? `${money(amountOf(p.data))}${p.data.approved_amount != null && p.data.approved_amount !== p.data.amount ? ` of ${money(p.data.amount)}` : ""}`
-            : "",
-        cellClass: "tabular-nums font-medium",
+            : p.value == null ? "" : money(p.value),
+        cellClass: ["currency", "tabular-nums", "font-medium"],
       },
       {
         field: "counterparty",
-        headerName: "To",
+        headerName: "Who", enableRowGroup: true,
         flex: 1,
         minWidth: 130,
         valueFormatter: (p) => personName(p.value),
@@ -135,6 +155,8 @@ export function Ledger({
       {
         field: "status",
         headerName: "Outcome",
+        filter: "agSetColumnFilter", enableRowGroup: true,
+        filterParams: { valueFormatter: (p: { value: LedgerEntry["status"] }) => STATUS_LABEL[p.value] ?? p.value },
         width: 285,
         valueFormatter: (p) => STATUS_LABEL[p.value as LedgerEntry["status"]],
         cellRenderer: (p: ICellRendererParams<LedgerEntry>) =>
@@ -157,6 +179,15 @@ export function Ledger({
         valueGetter: (p) => (p.data ? why(p.data) : ""),
         tooltipValueGetter: (p) => p.value,
       },
+      { field: "source", headerName: "Source", filter: "agSetColumnFilter", width: 110,
+        valueGetter: (p) => p.data ? p.data.source ?? "inbox" : null },
+      { colId: "requests", headerName: "Count", valueGetter: (p) => p.data ? 1 : null, aggFunc: "sum", width: 85, chartDataType: "excluded" },
+      ...Object.entries(STATUS_LABEL).map(([status, label]): ColDef<LedgerEntry> => ({
+        colId: `chart_${status}`, headerName: label, hide: true, suppressColumnsToolPanel: true,
+        chartDataType: "series", aggFunc: "sum", cellClass: "currency",
+        valueGetter: (p) => p.data ? p.data.status === status ? amountOf(p.data) : 0 : null,
+        valueFormatter: (p) => p.value == null ? "" : money(p.value),
+      })),
       {
         field: "paypal_ref",
         headerName: "PayPal ref",
@@ -189,6 +220,29 @@ export function Ledger({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <label className="flex items-center gap-2 text-xs">
+          Group by
+          <select aria-label="Group ledger by" value={groupBy} className="rounded-md border bg-background p-2"
+            onChange={(e) => { setGroupBy(e.target.value); grid.current?.api.setRowGroupColumns(e.target.value ? [e.target.value] : []); }}>
+            <option value="">None</option><option value="agent_id">Agent</option><option value="status">Outcome</option>
+            <option value="kind">Kind</option><option value="counterparty">Who</option>
+          </select>
+        </label>
+        <Button variant="outline" onClick={() => {
+          const api = grid.current?.api;
+          if (!api) return;
+          // The category is always Agent, regardless of the previous row grouping.
+          api.setRowGroupColumns([]);
+          api.createRangeChart({
+          chartType: "stackedColumn", aggFunc: "sum",
+          cellRange: { columns: ["agent_id", ...Object.keys(STATUS_LABEL).map((status) => `chart_${status}`)] },
+          chartThemeName: resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light",
+          chartThemeOverrides: { common: { title: { enabled: true, text: "Money moves by agent and outcome" }, animation: { enabled: !isFilm() } } },
+          });
+        }}>Chart by agent</Button>
+        <Button variant="outline" onClick={() => grid.current?.api.exportDataAsExcel({ fileName: "floorwalker-ledger.xlsx", sheetName: "Ledger" })}>
+          <Download size={15} />Export Excel
+        </Button>
         <Button
           variant="outline"
           onClick={() =>
@@ -219,19 +273,37 @@ export function Ledger({
           theme={theme}
           columnDefs={columns}
           rowData={state.ledger}
+          animateRows={!isFilm()}
+          masterDetail
+          detailRowAutoHeight
+          detailCellRenderer={({ data }: ICellRendererParams<LedgerEntry>) => data ? <DecisionTrace entry={data} /> : null}
+          groupDefaultExpanded={0}
+          autoGroupColumnDef={{ minWidth: 240, cellRendererParams: { suppressCount: false } }}
+          onColumnRowGroupChanged={(e) => setGroupBy(e.api.getRowGroupColumns()[0]?.getColId() ?? "")}
+          rowSelection={{ mode: "multiRow", enableClickSelection: false, selectAll: "filtered" }}
+          cellSelection
+          enableCharts
+          chartThemes={[resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light"]}
+          customChartThemes={{ "floorwalker-light": chartTheme(false), "floorwalker-dark": chartTheme(true) }}
+          sideBar={{ toolPanels: ["columns", "filters"] }}
+          statusBar={{ statusPanels: [
+            { statusPanel: LedgerTotals, align: "left" },
+            { statusPanel: "agAggregationStatusPanel", statusPanelParams: { aggFuncs: ["sum", "count"] } },
+          ] }}
+          excelStyles={[{ id: "currency", dataType: "Number", numberFormat: { format: '$#,##0.00' } }]}
           defaultColDef={{ sortable: true, resizable: true }}
           quickFilterText={search}
           getRowId={(p) => String(p.data.id)}
           rowHeight={58}
           headerHeight={42}
           onRowClicked={(e) => {
-            if (e.data) {
+            if (e.data && !e.node.group && !(e.event?.target as HTMLElement)?.closest(".ag-group-expanded, .ag-group-contracted, .ag-selection-checkbox, .ag-checkbox")) {
               setSelected(e.data.id);
               location.hash = `ledger/${e.data.id}`;
             }
           }}
           onCellKeyDown={(e) => {
-            if ((e.event as KeyboardEvent)?.key === "Enter" && e.data) {
+            if ((e.event as KeyboardEvent)?.key === "Enter" && e.data && "column" in e && e.column?.getColId() !== "id" && e.column?.getColId() !== "ag-Grid-AutoColumn") {
               setSelected(e.data.id);
               location.hash = `ledger/${e.data.id}`;
             }

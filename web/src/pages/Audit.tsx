@@ -1,4 +1,9 @@
-import { useState } from "react";
+import { AgGridReact } from "ag-grid-react";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { darkTheme, lightTheme } from "../components/grid-theme";
+import { useTheme } from "../components/theme-provider";
+import { isFilm } from "../auth";
+import { useMemo, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Bot, Download, ShieldCheck, User, Cog } from "lucide-react";
 import { api, readJSON, workspaceHeaders } from "../api";
@@ -19,6 +24,7 @@ type AuditRow = {
   detail: string | null;
   ip: string | null;
   hash: string;
+  prev_hash?: string;
 };
 const prefixes = [
   "action.",
@@ -30,8 +36,39 @@ const prefixes = [
   "paypal.",
   "billing.",
   "settings.",
+  "incident.",
+];
+function AuditDetail({ data }: ICellRendererParams<AuditRow>) {
+  if (!data) return null;
+  let detail: unknown = data.detail;
+  try { detail = JSON.parse(data.detail ?? "null"); } catch { /* Preserve the recorded evidence. */ }
+  return <section aria-label={`Audit entry ${data.id} detail`} className="space-y-3 bg-card p-5">
+    <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(detail, null, 2)}</pre>
+    <p className="break-all whitespace-normal font-mono text-xs"><span className="text-muted-foreground">prev_hash → hash</span><br />{data.prev_hash ?? "Not recorded"} → {data.hash}</p>
+  </section>;
+}
+const columns: ColDef<AuditRow>[] = [
+  { field: "at", headerName: "Time", width: 230, cellRenderer: "agGroupCellRenderer", valueFormatter: ({ value }) => new Date(value).toLocaleString() },
+  { field: "id", headerName: "#", width: 80 },
+  { colId: "actor", headerName: "Actor", minWidth: 260, flex: 1,
+    valueGetter: ({ data }) => data ? `${data.actor_kind}: ${data.actor_name || data.actor_id}${data.on_behalf_of ? ` · On behalf of ${data.on_behalf_of}` : ""}` : "",
+    cellRenderer: ({ data }: ICellRendererParams<AuditRow>) => {
+      if (!data) return null;
+      const Icon = { user: User, agent: Bot, system: Cog }[data.actor_kind] ?? User;
+      return <div className="flex h-full items-center gap-2"><Icon className="size-3.5 shrink-0" /><div className="leading-5">
+        <span>{data.actor_kind} · {data.actor_name || data.actor_id}</span>
+        {data.on_behalf_of && <span className="block text-xs text-muted-foreground">On behalf of {data.on_behalf_of}</span>}
+      </div></div>;
+    } },
+  { field: "action", headerName: "Action", width: 210, filter: "agTextColumnFilter",
+    cellRenderer: ({ value }: ICellRendererParams<AuditRow>) => <Badge variant="secondary">{value?.replaceAll(/[._]/g, " ")}</Badge> },
+  { field: "target", headerName: "Target", width: 180, cellClass: "font-mono text-xs" },
+  { field: "ip", headerName: "IP", width: 145, cellClass: "font-mono text-xs" },
+  { field: "hash", headerName: "Hash", width: 150, cellClass: "font-mono text-xs", valueFormatter: ({ value }) => value?.slice(0, 12), tooltipField: "hash", useValueFormatterForExport: false },
 ];
 export function Audit() {
+  const grid = useRef<AgGridReact<AuditRow>>(null);
+  const { resolvedTheme } = useTheme();
   const [prefix, setPrefix] = useState("");
   const [verify, setVerify] = useState<{
     ok: boolean;
@@ -52,6 +89,7 @@ export function Audit() {
     getNextPageParam: (last) =>
       last.length === 50 ? last.at(-1)?.id : undefined,
   });
+  const rows = useMemo(() => query.data?.pages.flat() ?? [], [query.data]);
   async function download() {
     const response = await fetch("/api/audit.csv", {
       credentials: "include",
@@ -93,6 +131,9 @@ export function Audit() {
             <Download />
             Export CSV
           </Button>
+          <Button variant="outline" onClick={() => grid.current?.api.exportDataAsExcel({ fileName: "floorwalker-audit.xlsx", sheetName: "Audit" })}>
+            <Download />Export Excel
+          </Button>
         </div>
       </div>
       {verify && (
@@ -121,75 +162,15 @@ export function Audit() {
       {(
         <Resource query={query}>
           <Card className="overflow-hidden py-0">
-            <div className="overflow-x-auto">
-              <table className="manage-table">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Actor</th>
-                    <th>Action</th>
-                    <th>Target</th>
-                    <th>IP</th>
-                    <th>Detail</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {query.data?.pages.flat().map((row) => {
-                    const Icon =
-                      { user: User, agent: Bot, system: Cog }[row.actor_kind] ||
-                      User;
-                    let detail: unknown = row.detail;
-                    try {
-                      detail = JSON.parse(row.detail || "null");
-                    } catch {
-                      /* Keep original audit evidence. */
-                    }
-                    return (
-                      <tr key={row.id}>
-                        <td className="whitespace-nowrap text-xs">
-                          {new Date(row.at).toLocaleString()}
-                          <span className="block text-muted-foreground">
-                            #{row.id}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="flex items-center gap-2">
-                            <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-                            {row.actor_name || row.actor_id}
-                          </span>
-                          {row.on_behalf_of && (
-                            <span className="mt-1 block text-xs text-muted-foreground">
-                              On behalf of {row.on_behalf_of}
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          <Badge variant="secondary">
-                            {row.action.replaceAll(/[._]/g, " ")}
-                          </Badge>
-                        </td>
-                        <td className="max-w-52 break-all font-mono text-xs">
-                          {row.target ?? "—"}
-                        </td>
-                        <td className="font-mono text-xs">{row.ip ?? "—"}</td>
-                        <td>
-                          <details>
-                            <summary className="cursor-pointer text-xs">
-                              View detail
-                            </summary>
-                            <pre className="mt-2 max-h-64 max-w-sm overflow-auto whitespace-pre-wrap break-all text-xs">
-                              {JSON.stringify(detail, null, 2)}
-                            </pre>
-                            <p className="mt-2 max-w-sm break-all font-mono text-[10px] text-muted-foreground">
-                              Hash: {row.hash}
-                            </p>
-                          </details>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="h-[520px] w-full min-w-0">
+              <AgGridReact<AuditRow> ref={grid} rowData={rows} columnDefs={columns}
+                theme={resolvedTheme === "dark" ? darkTheme : lightTheme}
+                defaultColDef={{ sortable: true, resizable: true, filter: true, cellDataType: false }}
+                getRowId={({ data }) => String(data.id)} rowHeight={60} animateRows={!isFilm()}
+                masterDetail detailRowAutoHeight detailCellRenderer={AuditDetail}
+                onGridReady={({ api }) => api.setFilterModel(prefix ? { action: { filterType: "text", type: "startsWith", filter: prefix } } : null)}
+                onRowDataUpdated={({ api }) => api.setFilterModel(prefix ? { action: { filterType: "text", type: "startsWith", filter: prefix } } : null)}
+                tooltipShowDelay={250} overlayNoRowsTemplate="No matching events" />
             </div>
             {!query.data?.pages[0]?.length && (
               <div className="space-y-2 p-10 text-center">
@@ -214,8 +195,7 @@ export function Audit() {
             </Button>
           )}
           <p className="text-xs text-muted-foreground">
-            CSV exports the latest 500 entries. The table can load older
-            entries.
+            CSV exports the latest 500 entries. Excel exports the loaded, filtered entries. Load more to include older entries.
           </p>
         </Resource>
       )}

@@ -59,6 +59,13 @@ export type LedgerEntry = {
   reminded_at?: string | null;
   idempotency_key?: string | null;
   source?: "inbox" | "api" | "mcp" | "history";
+  facts?: string | {
+    rules?: {
+      capturedAmount?: number; refundedSoFar?: number; capturedAt?: string;
+      buyerEmail?: string; requesterEmail?: string; paidToPayee30d?: number;
+    };
+    review?: unknown;
+  } | null;
 };
 export type Budget = { amount: number; period: "day" | "week" | "month" };
 export type Policy = {

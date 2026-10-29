@@ -208,3 +208,10 @@
     font-size: 16px !important;
   }
 }
+
+/* Keep changed decisions visible in either Quartz colour scheme. */
+.simulation-grid .ag-row.simulation-changed {
+  background-color: color-mix(in srgb, var(--color-hold) 12%, var(--ag-background-color));
+  border-left: 3px solid var(--color-hold);
+}
+.ag-status-bar { flex-wrap: wrap; }

@@ -1,3 +1,4 @@
+import { isFilm } from "../auth";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AgGridReact } from "ag-grid-react";
@@ -115,6 +116,7 @@ export function Watch({ state }: { state: State }) {
               <div className="h-[440px] w-full min-w-0">
                 <AgGridReact<Incident>
                   theme={resolvedTheme === "dark" ? darkTheme : lightTheme}
+                  animateRows={!isFilm()}
                   columnDefs={columns} defaultColDef={defaultColDef}
                   rowData={query.data?.incidents ?? []}
                   getRowId={({ data }) => String(data.id)} rowHeight={58} headerHeight={42}

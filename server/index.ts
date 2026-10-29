@@ -250,7 +250,9 @@ app.post("/api/policy", need({ rules: ["update"] }), handle((req) => {
 /** What Floorwalker learned from the owner's decisions: backtested rule changes, a reviewer note, and taps per week. */
 app.get("/api/rules/learned", handle(async () => {
   const policy = store.activePolicy().policy;
-  return { changes: learnedChanges(policy), note: await learnedNote(policy), weeks: tapsByWeek(12), summary: tapsSummary() };
+  // The note needs the model; don't hold the page for it. It keeps going and is cached for the next request.
+  const note = await Promise.race([learnedNote(policy), new Promise<null>((r) => setTimeout(() => r(null), 1200))]);
+  return { changes: learnedChanges(policy), note, weeks: tapsByWeek(12), summary: tapsSummary() };
 }));
 
 app.post("/api/rules/learned/apply", need({ rules: ["update"] }), handle(async (req) => {

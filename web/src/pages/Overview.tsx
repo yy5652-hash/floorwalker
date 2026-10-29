@@ -1,3 +1,4 @@
+import { MoneyChart } from "../components/MoneyChart";
 import { canManage } from "../api";
 import { TapsChart } from "../components/TapsChart";
 import { isFilm } from "../auth";
@@ -175,7 +176,10 @@ export function Overview(
           ))}
         </div>
       </Card>
-      <TapsChart state={state} />
+      <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+        <TapsChart state={state} />
+        <MoneyChart state={state} />
+      </div>
       {!state.tickets.length && (state.workspace?.demo || isFilm()) && (
         <Card className="min-w-0 gap-0 py-0 shadow-xs flex flex-wrap items-center gap-4 p-5 [&>div]:flex-1 [&_p]:mt-2 [&_p]:text-muted-foreground">
           <div>

@@ -6,6 +6,8 @@
 //   POST /api/ledger/:id/approve    -> held until __film.release('approve'), then the recorded response
 //   POST /api/policy/compile        -> held until __film.release('compile'), then the recorded response
 //   POST /api/policy/simulate       -> held until __film.release('simulate'), then the recorded response
+//   POST /api/rules/learned/apply, /api/demo/bypass, /api/incidents/:id/resolve
+//                                   -> held until __film.release('learnApply' | 'bypass' | 'resolve'), then the recorded response
 //   POST /api/agents/:id/freeze     -> ok at once (the director swaps in the recorded state after the click)
 //   GET  /api/policy/versions       -> the active version from the current state
 //   GET  /api/keys, /api/audit, …   -> the recorded responses in __film.responses (keys, audit, auditVerify), or
@@ -27,6 +29,8 @@
     if (method === 'GET') {
       const reads = {
         '/api/keys': () => F.responses.keys ?? [],
+        '/api/rules/learned': () => F.responses.learned ?? { changes: [], note: null, weeks: [] },
+        '/api/incidents': () => F.responses.incidents ?? { incidents: [], watch: { webhook: true, webhook_error: null, last_sweep: null, last_event: null, freeze: true } },
         '/api/audit': () => F.responses.audit ?? [],
         '/api/audit/verify': () => F.responses.auditVerify ?? { ok: true, entries: (F.responses.audit ?? []).length },
         '/api/webhooks': () => [],
@@ -48,7 +52,8 @@
       const stream = new ReadableStream({ start(ctl) { F.open[key] = { ctl, events, sent: 0, enc: new TextEncoder() }; } });
       return Promise.resolve(new Response(stream, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } }));
     }
-    const hold = url.pathname.match(/\/approve$/) ? 'approve' : url.pathname === '/api/policy/compile' ? 'compile' : url.pathname === '/api/policy/simulate' ? 'simulate' : null;
+    const hold = url.pathname.match(/\/approve$/) ? 'approve' : url.pathname === '/api/policy/compile' ? 'compile' : url.pathname === '/api/policy/simulate' ? 'simulate'
+      : url.pathname === '/api/rules/learned/apply' ? 'learnApply' : url.pathname === '/api/demo/bypass' ? 'bypass' : /^\/api\/incidents\/\d+\/resolve$/.test(url.pathname) ? 'resolve' : null;
     if (method === 'POST' && hold) return new Promise(resolve => { F.waiting[hold] = () => resolve(json(F.responses[hold])); });
     return Promise.reject(new Error(`film: unexpected request ${method} ${url.pathname}`));
   };

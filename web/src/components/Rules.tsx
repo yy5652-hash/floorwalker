@@ -1,14 +1,8 @@
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { canManage } from "../api";
 import { LearnedRulesPanel } from "./LearnedRules";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "@/components/ui/table";
+import { SimulationGrid } from "./SimulationGrid";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -16,7 +10,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertTriangle,
-  ArrowRight,
   CircleHelp,
   History,
   Lightbulb,
@@ -24,7 +17,6 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
-  DECISION_LABEL,
   errorMessage,
   getVersions,
   money,
@@ -493,50 +485,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
               Uses the facts and AI review recorded at the time. No money is
               moved.
             </p>
-            {changed.length ? (
-              <div className="max-w-full overflow-x-auto">
-                <Table className="simulation-table text-xs [&_td]:whitespace-normal [&_td]:min-w-24">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Who</TableHead>
-                      <TableHead>Before → After</TableHead>
-                      <TableHead>Why</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {changed.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="tabular-nums">
-                          {money(r.amount)}
-                        </TableCell>
-                        <TableCell>{r.counterparty ?? "Buyer"}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              className={`max-w-full whitespace-normal border-transparent text-[11px]   tone-${r.before}`}
-                              variant="secondary"
-                            >
-                              {DECISION_LABEL[r.before]}
-                            </Badge>
-                            <ArrowRight size={13} />
-                            <Badge
-                              className={`max-w-full whitespace-normal border-transparent text-[11px]   tone-${r.after}`}
-                              variant="secondary"
-                            >
-                              {DECISION_LABEL[r.after]}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>{r.why}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <p>No decisions would change under these rules.</p>
-            )}
+            <SimulationGrid simulation={simulation} />
           </CardContent>
         </Card>
       )}

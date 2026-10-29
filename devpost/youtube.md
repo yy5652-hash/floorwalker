@@ -5,7 +5,7 @@
 - Audience: not made for kids.
 
 **Title**
-Floorwalker: every refund an AI agent makes in PayPal, checked, with fewer taps every week (PayPal AI Hackathon)
+Floorwalker: every AI agent refund in PayPal checked, fewer taps every week | PayPal AI Hackathon
 
 **Description**
 Every refund checked. Fewer taps every week.

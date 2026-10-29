@@ -1,5 +1,6 @@
 import { isFilm } from "./auth";
 import { canManage } from "./api";
+import { IncidentBanner } from "./components/IncidentBanner";
 import { AuthPage } from "./pages/Auth";
 import { Developers, developerTabs } from "./pages/Developers";
 import { Audit } from "./pages/Audit";
@@ -21,6 +22,7 @@ import {
   FileClock,
   Inbox as InboxIcon,
   LayoutDashboard,
+  Radar,
   RefreshCw,
   Search,
   Settings,
@@ -93,6 +95,9 @@ import {
 const Ledger = lazy(() =>
   import("./components/Ledger").then((module) => ({ default: module.Ledger })),
 );
+const Watch = lazy(() =>
+  import("./pages/Watch").then((module) => ({ default: module.Watch })),
+);
 const pages = [
   {
     id: "overview",
@@ -134,6 +139,12 @@ const pages = [
     subtitle: "Every request, every check, every outcome. All in one place.",
   },
   {
+    id: "watch",
+    label: "Watch",
+    icon: Radar,
+    subtitle: "Floorwalker only protects money that goes through it, so it also watches PayPal for money that didn't.",
+  },
+  {
     id: "setup",
     label: "Setup",
     icon: Settings2,
@@ -163,10 +174,10 @@ function Navigation({ active, waiting }: { active: string; waiting: number }) {
   const { setOpenMobile } = useSidebar();
   return (
     <SidebarMenu>
-      {pages.map(({ id, label, icon: Icon }, index) => (
+      {pages.map(({ id, label, icon: Icon }) => (
         <SidebarMenuItem
           key={id}
-          className={index === 7 ? "mt-5 border-t pt-5" : ""}
+          className={id === "developers" ? "mt-5 border-t pt-5" : ""}
         >
           <SidebarMenuButton
             asChild
@@ -531,6 +542,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
             </p>
           </div>
           {feedback}
+          <IncidentBanner key={workspaceId} state={state} />
           {phoneEntries.length ? (
             [...phoneEntries]
               .sort(
@@ -689,7 +701,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
                   ? "YOUR MONEY, IN GOOD HANDS"
                   : (state.workspace?.name ?? "JUNIPER & OAK CERAMICS")}
               </p>
-              <h1>{page.label}</h1>
+              <h1>{page.id === "watch" ? "PayPal watch" : page.label}</h1>
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {page.subtitle}
               </p>
@@ -711,6 +723,9 @@ function Workspace({ mobile }: { mobile: boolean }) {
             )}
           </header>
           {feedback}
+          {["overview", "inbox", "approvals", "agents", "watch"].includes(page.id) && (
+            <IncidentBanner key={workspaceId} state={state} />
+          )}
           {state.workspace?.seedStatus?.startsWith("failed:") && (
             <Alert variant="destructive">
               <AlertTitle>Demo setup needs attention</AlertTitle>
@@ -745,6 +760,11 @@ function Workspace({ mobile }: { mobile: boolean }) {
           {page.id === "approvals" && <Approvals {...props} />}
           {page.id === "agents" && <Agents {...props} />}
           {page.id === "rules" && <Rules {...props} />}
+          {page.id === "watch" && (
+            <Suspense fallback={<PageSkeleton />}>
+              <Watch key={workspaceId} state={state} />
+            </Suspense>
+          )}
           {page.id === "ledger" && (
             <Suspense fallback={<PageSkeleton />}>
               <Ledger

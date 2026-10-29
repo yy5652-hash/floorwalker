@@ -127,6 +127,7 @@ export type PolicyVersion = {
   created_at: string;
 };
 export type LearnedRules = {
+  summary?: { per100: number; moves: number; taps: number; days: number };
   changes: {
     id: string;
     title: string;
@@ -145,7 +146,37 @@ export type LearnedRules = {
   note: { note: string; rows: number[] } | null;
   weeks: { week: string; moves: number; taps: number; per100: number }[];
 };
+export type Incident = {
+  id: number;
+  kind: "refund" | "payout";
+  paypal_ref: string;
+  amount: number;
+  counterparty: string | null;
+  capture_id: string | null;
+  detail: string;
+  detected_by: "webhook" | "order sweep";
+  created_at: string;
+  frozen_agents: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution: "mine" | "not_mine" | null;
+};
+export type IncidentsResponse = {
+  incidents: Incident[];
+  watch: {
+    webhook: boolean;
+    webhook_error: string | null;
+    last_sweep: { at: string; orders: number; refunds: number } | null;
+    last_event: { at: string; type: string } | null;
+    freeze: boolean;
+  };
+};
+export type BypassResult = {
+  refund: { id: string; amount: number; invoice: string };
+  incident: Incident | null;
+};
 export type State = {
+  incidents: Incident[];
   appUrl?: string;
   me?: {
     userId: string;

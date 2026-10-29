@@ -391,6 +391,16 @@ export function Inbox({
             agent.
           </p>
         </div>
+        {state.workspace?.demo && (
+          <div className="space-y-3 border-t bg-muted/30 p-4">
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              What if an agent skips Floorwalker? Refund straight through PayPal and watch Floorwalker catch it.
+            </p>
+            <Button asChild variant="outline" className="w-full">
+              <a href="/app#watch">Open Watch</a>
+            </Button>
+          </div>
+        )}
       </Card>
       <Card className="min-w-0 gap-0 py-0 shadow-xs inbox-detail">
         {selected === "ATTACK" ? (

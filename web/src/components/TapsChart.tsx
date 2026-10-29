@@ -25,7 +25,7 @@ type Week = LearnedRules["weeks"][number];
 
 export function TapsChart({ state }: { state: State }) {
   const query = useLearnedRules(state);
-  const { weeks, changes } = query.data ?? emptyLearnedRules;
+  const { weeks, changes, summary } = query.data ?? emptyLearnedRules;
   const { resolvedTheme } = useTheme();
   const latest = weeks.findLast((week) => week.moves > 0);
   const tapsSaved = changes.reduce(
@@ -106,14 +106,15 @@ export function TapsChart({ state }: { state: State }) {
         <>
           <div>
             <div className="text-3xl font-semibold tracking-tight tabular-nums">
-              {latest?.per100 ?? "—"}
+              {summary?.per100 ?? latest?.per100 ?? "—"}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               taps per 100 money moves
+              {summary && `, last ${summary.days} days`}
             </p>
           </div>
           {weeks.length > 0 && <AgCharts options={options} />}
-          {!latest && (
+          {(summary ? summary.moves === 0 : !latest) && (
             <p className="text-xs text-muted-foreground">No money moves yet.</p>
           )}
           {changes.length > 0 && (

@@ -14,6 +14,8 @@ export function useLearnedRules(state: State) {
     queryKey: [
       "learned-rules",
       state.workspace?.id ?? state.me?.workspaceId ?? null,
+      state.policy?.id,
+      state.ledger.length,
     ],
     queryFn: async ({ signal }) => {
       try {

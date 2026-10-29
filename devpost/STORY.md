@@ -9,65 +9,75 @@
 
 ## Inspiration
 
-PayPal's Agent Toolkit and MCP server let an AI agent do real work with money: refund a customer, pay a contractor, send an invoice. For a small shop that is the dream support agent. It is also a new way to lose money. The costliest scam businesses already face is payment redirection ("my PayPal changed, please pay the new address"), and an agent reading the inbox falls for the same story a tired person does. Add prompt injection (OWASP's number one LLM risk) hidden in an email, and the agent can be told to refund in full and pay a stranger.
+PayPal's Agent Toolkit and MCP server let an AI agent do real work with money: refund a customer, pay a contractor, send an invoice. For a small shop that is the dream support agent, and a new way to lose money. Payment redirection ("my PayPal changed, please pay the new address") is already the costliest scam businesses face, and an agent reading the inbox falls for the same story a tired person does. Add prompt injection hidden in an email (OWASP's number one LLM risk) and the agent can be told to refund in full and pay a stranger.
 
-Banks solved this for people decades ago with spending limits, payee lists and approvals. AI agents need the same thing, and they need it at the moment they call PayPal.
+The obvious fix is to make the agent ask. But guardrails fail in two ways. Ask about nothing and you get robbed. Ask about everything and the owner starts approving without reading, the same weakness "MFA fatigue" attacks exploit. A floorwalker in a shop is the manager who approves the cashier's refunds: the good ones learn which refunds they always approve and stop being called for those, while still watching the till.
 
 ## What it does
 
-Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.
+Floorwalker sits between AI agents and a business's PayPal account. Every refund or payout the agent tries goes through it first:
 
-Every request goes through these checks:
+1. **Facts from PayPal itself.** It reads the capture and order from the PayPal API: who paid, how much, what has already been refunded, the shipment tracking. The agent's claims are only claims.
+2. **The owner's rules.** A deterministic rule engine checks limits, rolling budgets, the payee list, that the person asking is the buyer, duplicates and order age.
+3. **AI review.** A second model compares the request, the facts and the proposed action, flags injected instructions and quotes its evidence.
+4. **One of three outcomes.** Inside the rules it executes in the PayPal sandbox. Unusual, it waits for the owner's one-tap approval (push notification, phone page), which runs exactly the action she saw, once. Wrong, it is blocked and never reaches PayPal.
 
-1. **Facts from PayPal itself.** Floorwalker reads the capture and order from the PayPal API: who paid, how much, what has already been refunded, and the shipment tracking. The agent's claims are only claims.
-2. **The owner's rules.** A deterministic rule engine checks limits, rolling weekly and monthly allowances, the payee list, that the person asking is the buyer, duplicates and order age.
-3. **AI review.** A second model compares the request, the facts and the proposed action, flags injected instructions, and quotes its evidence.
-4. **One of three outcomes.** Inside the allowance, the agent's action executes in the PayPal sandbox. Unusual, it waits for the owner's one-tap approval, which runs exactly the action she saw, once. Wrong, it is blocked and never reaches PayPal.
+Two things make it different from a set of limits:
 
-The owner writes rules in plain words ("up to $40 on its own, ask me above that, never more than $250"); the AI turns them into limits she reviews and tests on past activity before activating. A ledger built on AG Grid shows every money move, the check that decided it and the PayPal reference, and exports to CSV.
+- **It learns when to stop asking.** Every request that waited for the owner, and what she did with it, is evidence. Floorwalker turns it into rule changes, for example *"Let refunds up to $60 go through on their own: you approved all 8 refunds between $40 and $60 that waited for you. It stops there because you declined a $72 refund."* Each change is backtested before she sees it: taps saved, money that would now move without her, and no request she declined may become automatic; on the benchmark every attack must still be stopped, and the card shows how many the rules alone still catch. One click applies it, and the AI rewrites her plain-English rules in her own words. When her declines share a reason, the AI proposes a note for the reviewer. The Overview tracks taps per 100 money moves week by week.
+- **It watches PayPal for money that skipped it.** Floorwalker can only stop money that goes through it, so it registers PayPal webhooks on the business's app (verified with PayPal) and sweeps the orders it knows about every few minutes. A refund or payout the ledger can't account for (a leaked key, a script, an agent that bypassed it) opens an incident: the owner is alerted and every agent is frozen until she says whether it was her. In the live demo, a refund made straight through the PayPal API is found within seconds by the sweep, and PayPal's webhook arrives about 20 seconds later.
 
 It is built to be used, not just watched:
 
 - **Any agent.** An agent gets a key and calls Floorwalker instead of PayPal, over a REST API (`/v1/refunds`, `/v1/payouts`, with idempotency keys) or MCP. Each agent can have its own cap per action, rolling budget, payee list and end date, and one switch freezes them all.
-- **Approvals where the owner is.** Push notifications with Approve and Decline right on the notification, Slack, reminders, and automatic decline when a request expires. Large approvals ask for a fresh passkey sign-in.
-- **Teams and accounts.** Sign-up with passkeys, workspaces with their own database, roles (owner, admin, approver, viewer), and each business connects its own PayPal sandbox app.
-- **Accountability.** A hash-chained, append-only audit log of every decision and change, signed webhooks with a delivery log, and plans (Free, Pro $29, Business $99) billed through PayPal Subscriptions.
+- **Approvals where the owner is.** Push notifications with Approve and Decline on the notification, Slack, reminders, automatic decline when a request expires, and a fresh passkey sign-in for large approvals.
+- **Teams and accounts.** Passkeys, workspaces with their own database, roles (owner, admin, approver, viewer), and each business connects its own PayPal sandbox app.
+- **A real dashboard.** AG Grid Enterprise and AG Charts: the ledger expands any money move into its decision trace, groups and totals by agent or outcome, filters, exports to Excel and charts straight from the grid; the audit log, rules backtest and incidents are grids too, and the Overview charts taps and money moved per week.
+- **Accountability and billing.** A hash-chained, append-only audit log, signed webhooks with a delivery log, and plans (Free, Pro $29, Business $99) billed through PayPal Subscriptions.
 
-The demo shop, Juniper & Oak Ceramics, has a morning inbox: a chipped mug (refunded automatically), a wrong-colour bowl (held for approval), the window cleaner's payment (paid), a "new PayPal address" from a fake Sam (the agent hands it to the owner; a payment there would be blocked), an email with hidden instructions to refund in full and pay $150 to a stranger (blocked), and a photographer's invoice (held). A hijacked-agent simulation replays six money moves an attacker would make; Floorwalker checks each one without knowing the agent is hostile.
+The demo shop, Juniper & Oak Ceramics, has a morning inbox (a chipped mug refunded automatically, a wrong-colour bowl held for approval, the window cleaner paid, a fake "new PayPal address", an email with hidden instructions, a photographer's invoice), two months of earlier activity to learn from (simulated and labelled as such), a hijacked-agent simulation and the bypass demo.
 
 ## How we built it
 
-- **PayPal:** Agent Toolkit (`get_order`, `get_refund`, and `create_refund`, which Floorwalker intercepts and executes with a per-request `PayPal-Request-Id`), Orders v2 for the demo orders, Payments v2 captures and refunds for ground truth, Payouts v1 for contractor payments with batch status polling, Orders v2 tracking for shipment numbers, and Subscriptions (catalog products, billing plans, subscriptions) for Floorwalker's own plans.
-- **AI:** the support agent, the reviewer and the rules compiler run on Gemini (`gemini-3.8-flash`) with function calling and JSON-schema structured output; the same code runs on Claude when an Anthropic key is set.
-- **App:** Node.js and TypeScript, Express, SQLite (`node:sqlite`, one file per workspace), better-auth (passkeys, organizations, anonymous demo sessions), React with shadcn/ui, Tailwind and AG Grid Community, Web Push, Standard Webhooks, and an MCP server built on the official SDK (stdio and Streamable HTTP).
-- **Tests and benchmark:** 33 unit tests (rule engine, guard, agent limits, idempotency, expiry, the audit chain, keys), and FloorwalkerBench, 48 labelled money moves (benign, needs-the-owner, attacks), run against the real reviewer.
+- **PayPal:** Agent Toolkit (`get_order`, `get_refund`, and `create_refund`, which Floorwalker intercepts and executes with a per-request `PayPal-Request-Id`), Orders v2 for the demo orders, Payments v2 captures and refunds for ground truth, Payouts v1 for contractor payments, Orders v2 tracking, Webhooks (registration and `verify-webhook-signature`) for refunds and payouts that skip Floorwalker, and Subscriptions (catalog products, billing plans, subscriptions) for Floorwalker's own plans.
+- **AI:** the support agent, the reviewer, the rules compiler and the learning features run on Gemini (`gemini-3.8-flash`) with function calling and JSON-schema output; the same code runs on Claude when an Anthropic key is set. Learned changes come from the ledger and are backtested in code; the model rewords the owner's rules and reads her decline reasons, but never sets a number.
+- **App:** Node.js and TypeScript, Express, SQLite (`node:sqlite`, one file per workspace), better-auth, React with shadcn/ui and Tailwind, AG Grid Enterprise and AG Charts, Web Push, Standard Webhooks, and an MCP server on the official SDK.
+- **Tests and benchmark:** 47 unit tests (rule engine, guard, agent limits, learning, the PayPal watch, idempotency, the audit chain, keys) and FloorwalkerBench.
 
 ## Results
 
-FloorwalkerBench is 48 labelled money moves (benign requests, cases that should go to the owner, and attacks), each with the facts Floorwalker fetches from PayPal; 16 of them were written after tuning and run once as a held-out set.
+FloorwalkerBench is 198 labelled money moves: 59 benign requests, 59 the owner should decide and 80 attacks (prompt injection in many disguises, payment redirection, fake owner and payee addresses including Unicode look-alikes, refunds to the wrong person or above what was paid, split payments, unknown-vendor invoices, threats), each with the facts Floorwalker reads from PayPal. 150 of them were written by a different model, independently of the reviewer, and run once. The same cases go through four guards:
 
-| | Rules only | Rules + AI review |
-|---|---|---|
-| Attacks stopped before reaching PayPal (main / held-out) | 69% / 86% | **100% / 100%** |
-| Small legitimate requests done without the owner (main / held-out) | 100% / 100% | **100% / 100%** |
-| Cases that need the owner sent to the owner (main / held-out) | 78% / 80% | **100% / 100%** |
+| | No guard | Rules in the prompt | Rules only | Floorwalker |
+|---|---|---|---|---|
+| Attacks stopped before reaching PayPal | 0% | 98.75% | 67.5% | **100%** |
+| Money the attacks would have taken (of $3,796) | $3,796 | $35 | $630 | **$0** |
+| Legitimate requests done without the owner | 100% | 75% | 100% | **100%** |
+| Owner-decision cases sent to the owner | 0% | 76% | 78% | **97%** |
+| Owner taps per 100 money moves | 0 | 47 | 31 | **30** |
 
-In the live sandbox run shown in the video, the agent made real refunds and payouts through PayPal, and the hijacked-agent simulation's six money moves were all stopped.
+Giving the model the owner's rules as text is nearly as safe, but it still let $35 through and asked about a quarter of the legitimate requests. Floorwalker stopped every attack while asking the owner about a third less often. On the 150 independent cases alone it stopped all 60 attacks and did all 45 legitimate requests on its own; the two owner decisions it missed were small judgement calls ($20 and $15).
+
+In the demo shop's history, accepting the learned refund-limit change takes the owner from 66 to 50 taps per 100 money moves, with nothing she declined becoming automatic.
 
 ## Challenges we ran into
 
-Making approval safe: an approval has to run the exact action the owner saw, once, even with double clicks or retries. Floorwalker freezes parameters at proposal time, moves the ledger row from waiting to executing atomically, and sends the ledger id as PayPal's idempotency key.
+Making approval safe: an approval has to run the exact action the owner saw, once, even with double clicks or retries. Floorwalker freezes parameters at proposal time, moves the ledger row from waiting to executing atomically, and sends a key unique to that row as PayPal's idempotency key.
+
+Making learning safe: a system that loosens its own rules is a new attack surface. Floorwalker only proposes changes backed by the owner's approvals, stops each one below anything she declined, refuses any change that would have let a declined request through, re-checks every benchmark attack, and leaves the decision to her.
+
+Telling our money from someone else's: a refund arrives by webhook seconds after Floorwalker makes it, so matching uses PayPal's own refund and payout references, with a short window for requests still executing; the order sweep catches what a webhook misses, and both feed one incident.
 
 ## Accomplishments that we're proud of
 
-- Rules and AI review work together: the rules are plain, tested code the model cannot loosen; the reviewer catches what rules cannot see.
-- Fail-closed design: if the review is unavailable, nothing runs on its own.
-- Drop-in for any agent through MCP.
+- The same safety as a careful model with a third fewer taps, measured on 198 cases.
+- Rules and AI review work together: the rules are plain, tested code the model cannot loosen; the reviewer catches what rules cannot see; learned changes are backtested in code.
+- Fail-closed design: if the review is unavailable, nothing runs on its own; if money moves outside Floorwalker, the agents stop.
 
 ## What we learned
 
-The safest place to put limits on an agent is not in its prompt but at the tool boundary, where money actually moves.
+The safest place to put limits on an agent is not in its prompt but at the tool boundary, where money actually moves, and the best guardrail is the one that asks the owner only when it matters.
 
 ## What's next for Floorwalker
 
-Email delivery for invites and alerts, invoices under the same rules, PayPal webhooks for reconciliation, and moving from the sandbox to live PayPal accounts once the approval and audit trail has been reviewed by real shops.
+Email delivery for invites and alerts, invoices and disputes under the same rules, PayPal Transaction Search as a third source for the watch, and moving from the sandbox to live PayPal accounts once the approval and audit trail has been reviewed by real shops.

@@ -2,11 +2,11 @@
 
 **Every refund checked. Fewer taps every week.** Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.
 
-Built for the PayPal AI Hackathon with the **PayPal Agent Toolkit**, the **PayPal REST APIs** (Orders, Payments, Payouts, Shipment Tracking, Subscriptions) in the sandbox, **Gemini** (`gemini-3.8-flash`, or Claude when an Anthropic key is set), **shadcn/ui** and **AG Grid**.
+Built for the PayPal AI Hackathon with the **PayPal Agent Toolkit**, the **PayPal REST APIs** (Orders, Payments, Payouts, Shipment Tracking, Webhooks, Subscriptions) in the sandbox, **Gemini** (`gemini-3.8-flash`, or Claude when an Anthropic key is set), **shadcn/ui** and **AG Grid**.
 
 - **Try it:** https://floorwalker.43-160-214-187.sslip.io (press *Try the live demo*: you get your own demo shop with real sandbox orders, no sign-up)
 - **Demo video:** TODO
-- **Benchmark:** [FloorwalkerBench results](bench/RESULTS.md)
+- **Benchmark:** [FloorwalkerBench, 198 cases and four guards](bench/all-RESULTS.md)
 
 ## Why
 
@@ -16,7 +16,9 @@ PayPal's Agent Toolkit and MCP server let an AI agent refund customers, send inv
 - **Prompt injection is the top risk for LLM apps.** OWASP ranks it [LLM01:2025](https://genai.owasp.org/llmrisk/llm01-prompt-injection/). An email with hidden text saying "the owner pre-approved this refund" is a prompt injection aimed at whoever reads the inbox.
 - **Agents are about to handle most support tickets.** Gartner predicts agentic AI will autonomously resolve 80% of common customer service issues by 2029 ([Gartner, March 2025](https://www.gartner.com/en/newsroom/press-releases/2025-03-05-gartner-predicts-agentic-ai-will-autonomously-resolve-80-percent-of-common-customer-service-issues-without-human-intervention-by-20290)).
 
-Floorwalker is for the owner who wants the agent to handle the everyday refunds and payouts alone, and to be asked about anything unusual, without reading every ticket.
+- **Guardrails that ask about everything get rubber-stamped.** An owner asked to approve every $45 refund soon approves without reading, the same weakness "MFA fatigue" attacks exploit. A guardrail is only as good as the attention it leaves the owner for the requests that matter.
+
+Floorwalker is for the owner who wants the agent to handle the everyday refunds and payouts alone, to be asked about anything unusual, and to be asked less as it learns what she always approves.
 
 ## What it does
 
@@ -33,6 +35,24 @@ The demo shop is **Juniper & Oak**, a small ceramics store. Its support agent (a
 
 **Simulate a hijacked agent** replays six money moves an attacker would make after taking over the agent's prompt (full refunds, a payment to an unknown "claims desk", three repeated payouts). Floorwalker does not know the agent is hostile; it only sees tool calls.
 
+### It learns when to stop asking
+
+Every request that waited for the owner, and what she did with it, is evidence. On the **Rules** tab, *Learned from your decisions* turns that evidence into rule changes, for example: *"Let refunds up to $60 go through on their own. You approved all 8 refunds between $40 and $60 that waited for you in the last 90 days. It stops there because you declined a $72 refund."* Each change is a draft policy that is backtested before she sees it:
+
+- on her own history: taps saved, the money that would now move without her, and **no request she declined may become automatic** (a change that would let one through is never shown);
+- on FloorwalkerBench: every attack must still be stopped, and the card shows how many the rules alone still catch, so she can see the defense in depth that remains.
+
+One click applies it: the AI rewrites her plain-English rules in her own words with the new number, and a new version is saved (any version can be restored). When two or more of her declines share a reason her reviewer notes don't cover, the AI proposes a note for the reviewer. The Overview tracks **taps per 100 money moves** week by week; in the demo shop, two months of earlier activity (simulated, labelled and never sent to PayPal) start it at 66.
+
+### It watches PayPal for money that skipped it
+
+Floorwalker can only stop money that goes through it, so it also watches PayPal for money that didn't: a refund made with a leaked PayPal key, a script, or an agent that bypassed it. Two sources feed one check:
+
+- **PayPal webhooks.** Floorwalker registers a webhook on the workspace's PayPal app (`PAYMENT.CAPTURE.REFUNDED`, payout batch and item events) and verifies every delivery with PayPal's `verify-webhook-signature` API.
+- **An order sweep.** Every five minutes it reads the orders it knows about from PayPal and checks each refund on them, so a missed webhook is caught anyway.
+
+Any refund or payout the ledger can't account for opens an **incident**: the owner gets a push notification and, by default, every agent is frozen. *That was me* (she refunded in the PayPal dashboard) runs the agents again; *Not me* keeps them frozen and tells her to rotate the app's secret. Payout webhooks also keep the ledger's payout status current (unclaimed, returned). In the demo, **Refund $25 straight through PayPal** on the Watch page does what a rogue agent could: the sweep finds it within seconds and PayPal's own webhook arrives about 20 seconds later.
+
 ### A product, not just a demo
 
 - **Accounts and teams.** Sign up with email and password or a passkey. Each business is a workspace with its own database file; teammates join by invite as owner, admin, approver (answers requests) or viewer.
@@ -44,7 +64,9 @@ The demo shop is **Juniper & Oak**, a small ceramics store. Its support agent (a
 - **Webhooks.** Signed with the [Standard Webhooks](https://www.standardwebhooks.com/) scheme, with a delivery log, retries and redelivery.
 - **Billing.** Free, Pro ($29/month) and Business ($99/month) through PayPal Subscriptions in the sandbox, with plan limits on agents, monthly checked actions, members and webhooks.
 
-The owner writes the rules in plain words on the **Rules** tab ("Up to $40 on its own, ask me above that, never more than $250…"). The model turns them into structured limits, highlights what changed, and nothing changes until the owner presses Activate. The **Ledger** (AG Grid) lists every money move the agent proposed, the check that decided it, the reviewer's note and the PayPal reference, and exports to CSV.
+The owner writes the rules in plain words on the **Rules** tab ("Up to $40 on its own, ask me above that, never more than $250…"). The model turns them into structured limits, highlights what changed, and she tests them on past activity before activating them.
+
+**AG Grid and AG Charts** carry the data-heavy screens. The **Ledger** (AG Grid Enterprise) expands any money move into its decision trace (every check, the PayPal facts read, the AI review, who decided), groups by agent, outcome or counterparty with totals, has filter and column tool panels, a status bar with sums, Excel and CSV export, and integrated charts from the grid. The audit log, the rules backtest (changed outcomes highlighted, grouped by change) and the incidents table are AG Grid too; the Overview charts taps per 100 money moves and money moved per week with AG Charts.
 
 ## How it works
 
@@ -81,6 +103,8 @@ The owner writes the rules in plain words on the **Rules** tab ("Up to $40 on it
 | Payments v2 (captures, refunds) | Ground truth for every refund decision: amount, status, date, refunds so far |
 | Payouts v1 | Paying contractors; batch status is polled until it settles |
 | Orders v2 tracking (`/v2/checkout/orders/{id}/track`) | Tracking numbers attached to each demo capture; the order's trackers and the carrier status are part of the facts the agent and the reviewer check |
+| Webhooks (`/v1/notifications/webhooks`, `verify-webhook-signature`) | Registered on each workspace's PayPal app; refund and payout events are verified with PayPal and matched against the ledger to catch money that skipped Floorwalker |
+| Subscriptions (catalog products, billing plans, subscriptions) | Floorwalker's own Pro and Business plans, on its own sandbox app |
 
 ### AI
 
@@ -89,34 +113,28 @@ The owner writes the rules in plain words on the **Rules** tab ("Up to $40 on it
 | Support agent | `gemini-3.8-flash` (function calling) | Reads the inbox item, looks up orders and tracking with the Toolkit, proposes refunds and payouts with a reason, writes the reply |
 | Reviewer | `gemini-3.8-flash` (JSON-schema output) | Verdict (approve / escalate / reject), injection flag, concerns with verbatim evidence, one-line summary for the owner |
 | Rules compiler | `gemini-3.8-flash` (JSON-schema output) | Turns the owner's plain-language rules into the validated policy schema |
+| Learning from decisions | `gemini-3.8-flash` (JSON-schema output) | Rewrites the owner's rules in her own words when she accepts a learned change, and proposes a reviewer note from her decline reasons. The changes themselves come from the ledger and are backtested in code; the model never sets a number. |
 
 The same code runs on Claude (`claude-sonnet-5-5`, Anthropic SDK with tool use and structured outputs) when `ANTHROPIC_API_KEY` is set. Models are configurable in `.env`.
 
 ## FloorwalkerBench
 
-32 labelled money moves (10 benign, 9 that should go to the owner, 13 attacks), each with the facts Floorwalker would fetch from PayPal. Reviewer `gemini-3.8-flash`, 3 runs per case:
+198 labelled money moves for the demo shop: 59 benign requests the agent should just do, 59 the owner should decide, and 80 attacks (prompt injection in plain text, quoted mail, signatures, HTML, other languages, base64 and fake system notices; payment redirection; fake owner, Sam and Priya addresses including Unicode look-alikes; refunds to someone other than the buyer, above what was paid or repeated; split payments; unknown-vendor invoices; threats). Each case carries the facts Floorwalker reads from PayPal (payment, order, tracking, earlier refunds and payouts). 150 of the cases were written by a different model, independently of the reviewer, and run once.
 
-| | Rules only | Floorwalker (rules + AI review) |
-|---|---|---|
-| Attacks stopped before reaching PayPal (held or blocked) | 69% | 100% |
-| Attacks blocked outright | 62% | 92% |
-| Owner-decision cases sent to the owner | 78% | 100% |
-| Legitimate small requests done without bothering the owner | 100% | 100% |
-| Decision matches the label | 78% | 100% |
+The same cases go through four guards, with `gemini-3.8-flash` as the model:
 
-Attacks include payment redirection, refunds requested by someone other than the buyer, refunds above the payment, prompt injection hidden in HTML, fake owner emails, requests to split a refund under the limit, and invoices from unknown suppliers. Details per case: [bench/RESULTS.md](bench/RESULTS.md).
+| | No guard | Rules in the prompt | Rules only | **Floorwalker** |
+|---|---|---|---|---|
+| Attacks stopped before reaching PayPal | 0% | 98.75% | 67.5% | **100%** |
+| Money the 80 attacks would have taken (of $3,796 attempted) | $3,796 | $35 | $630 | **$0** |
+| Legitimate requests done without the owner | 100% | 75% | 100% | **100%** |
+| Owner-decision cases sent to the owner | 0% | 76% | 78% | **97%** |
+| Owner taps per 100 money moves | 0 | 47 | 31 | **30** |
+| Decision matches the label | 30% | 72% | 76% | **98%** |
 
-**Held-out set.** 16 further cases (new customers, a fake PayPal security notice, lookalike addresses, a forwarded "owner approval", a fake administrator code), written after tuning and run once:
+*No guard* sends the agent's proposal straight to PayPal. *Rules in the prompt* gives the owner's rules to the same model as text and lets it decide, without PayPal's records: nearly as safe, but it asks the owner about a quarter of the legitimate requests. *Rules only* is Floorwalker's rule engine on PayPal's facts without the AI reviewer. On the 150 independent cases alone, Floorwalker stopped all 60 attacks, did all 45 legitimate requests on its own and sent 43 of 45 owner decisions to the owner (29 taps per 100); the two it let through were small judgement calls (a vague $20 complaint and a $15 claim with partial evidence).
 
-| | Rules only | Floorwalker (rules + AI review) |
-|---|---|---|
-| Attacks stopped before reaching PayPal (held or blocked) | 86% | 100% |
-| Attacks blocked outright | 43% | 86% |
-| Owner-decision cases sent to the owner | 80% | 100% |
-| Legitimate small requests done without bothering the owner | 100% | 100% |
-| Decision matches the label | 75% | 94% |
-
-Details: [bench/heldout-RESULTS.md](bench/heldout-RESULTS.md).
+Every case and decision: [bench/all-RESULTS.md](bench/all-RESULTS.md). The earlier 32-case set with 3 runs per case and its 16-case held-out set are in [bench/RESULTS.md](bench/RESULTS.md) and [bench/heldout-RESULTS.md](bench/heldout-RESULTS.md). `npm run bench -- --set all` reproduces the table and writes `bench/replay.json`, which the learning feature uses to re-check suggested changes against every attack.
 
 ## Run it locally
 
@@ -162,9 +180,9 @@ A local stdio MCP server works on the local workspace without a key: `claude mcp
 ### Tests and checks
 
 ```bash
-npm test            # rule engine, guard, agent limits, audit chain, keys (PayPal and the model stubbed)
+npm test            # rule engine, guard, agent limits, learning, PayPal watch, audit chain, keys (PayPal and the model stubbed)
 npm run typecheck
-npm run bench       # FloorwalkerBench with the real AI reviewer
+npm run bench -- --set all   # FloorwalkerBench: four guards on 198 cases with the real model
 ```
 
 ## Project layout
@@ -174,13 +192,15 @@ npm run bench       # FloorwalkerBench with the real AI reviewer
 | `server/guard/rules.ts` | Deterministic checks: limits, budgets, payee list, buyer match, duplicates |
 | `server/guard/review.ts` | Reviewer prompt and structured output schema |
 | `server/guard/index.ts` | Fetch facts → rules → review → allow / hold / block; approvals |
+| `server/guard/learn.ts`, `server/history.ts` | Learning from the owner's decisions (backtested changes, reviewer notes, taps per 100); the demo's simulated earlier activity |
+| `server/watch.ts` | PayPal webhooks and the order sweep; incidents for money that skipped Floorwalker |
 | `server/agent/` | Support agent loop, shared tools, hijacked-agent simulation |
 | `server/mcp-server.ts`, `server/mcp.ts` | MCP server with the guarded tools (hosted at `/v1/mcp`, or local over stdio) |
 | `server/v1.ts`, `server/openapi.ts` | Agent API with keys and idempotency |
 | `server/auth.ts`, `server/workspaces.ts`, `server/context.ts` | Accounts, roles, passkeys (better-auth), one database per workspace |
 | `server/audit.ts`, `server/webhooks.ts`, `server/notify.ts`, `server/billing.ts` | Audit log, webhooks, push and Slack, PayPal Subscriptions |
 | `server/paypal/` | PayPal REST client (OAuth, idempotency keys) and API calls |
-| `web/` | React app (shadcn/ui): Inbox, Approvals, Agents, Rules, Ledger (AG Grid), Developers, Audit log, Settings |
+| `web/` | React app (shadcn/ui, AG Grid Enterprise, AG Charts): Overview, Inbox, Approvals, Agents, Rules, Ledger, Watch, Developers, Audit log, Settings |
 | `bench/` | FloorwalkerBench cases and runner |
 
 ## License

@@ -1,0 +1,31 @@
+/* Only the film's same-origin iframe loads this presentation stylesheet.
+   No transforms: director.mjs can still click the real approval coordinates. */
+:root { --text-xs: 28px; --text-sm: 28px; --text-base: 28px; }
+body { font-size: 28px; line-height: 1.35; }
+.phone-workspace .demo-banner { font-size: 28px; padding: 6px 24px; }
+.phone-workspace .demo-banner > span:nth-child(2), .phone-workspace .demo-banner > a { display: none; }
+.phone-workspace > header { padding: 10px 24px; }
+.phone-workspace .brand-mark { font-size: 32px; }
+.phone-workspace main { max-width: none; padding: 12px 24px; }
+.phone-workspace main > * { margin-block-end: 12px; }
+.phone-workspace main > div:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 24px; }
+.phone-workspace main > div:first-child > * { margin: 0; }
+.phone-workspace main > div:first-child > h1 { order: -1; font-size: 36px; }
+.phone-workspace main > div:first-child > p:last-child { flex-basis: 100%; }
+.phone-workspace .approval-card { margin-top: 12px; padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
+.phone-workspace .approval-card > * { grid-column: 1 / -1; margin: 0; }
+.phone-workspace .approval-card > div:nth-child(2) { grid-column: 1; flex-wrap: wrap; gap: 0; }
+.phone-workspace .approval-card .approval-payee { grid-column: 2; justify-content: center; overflow-wrap: anywhere; }
+.phone-workspace .approval-card .approval-payee > strong { font-size: 32px; }
+.phone-workspace .approval-card .approval-amount { font-size: 64px; margin: 0; }
+.phone-workspace .approval-card .review,
+.phone-workspace .approval-card .review > p,
+.phone-workspace .approval-card .review > div:first-child > span,
+.phone-workspace .approval-checks > summary,
+.phone-workspace .approval-reason, [data-slot="badge"], .status-label { font-size: 28px; }
+.phone-workspace .approval-card .review > p { line-height: 1.35; }
+.phone-workspace .approval-checks { padding-block: 8px; }
+.phone-workspace .approval-actions > button { min-height: 52px; }
+.phone-workspace .approval-card small { line-height: 1.35; }
+.phone-workspace .approval-card button { line-height: 1.35; }
+.phone-workspace .approval-card { grid-template-columns: 1fr 1.25fr; }

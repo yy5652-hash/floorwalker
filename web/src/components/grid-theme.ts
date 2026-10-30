@@ -21,7 +21,7 @@ ModuleRegistry.registerModules([
 export const lightTheme = themeQuartz.withParams({
   fontFamily: '"Manrope Variable", sans-serif',
   fontSize: 15,
-  headerFontSize: 12,
+  headerFontSize: 14,
   headerFontWeight: 500,
   backgroundColor: "var(--card)",
   foregroundColor: "var(--foreground)",

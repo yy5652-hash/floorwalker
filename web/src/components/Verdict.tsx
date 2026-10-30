@@ -82,7 +82,7 @@ export function ReviewNote({
       <div className="flex flex-wrap items-center gap-2 [&>strong]:text-xs">
         <Sparkles size={15} />
         <strong>{title}</strong>
-        <span className="ml-auto text-[10px] font-medium uppercase tracking-wider opacity-70">
+        <span className="ml-auto text-xs font-medium uppercase tracking-wider">
           AI review
         </span>
       </div>
@@ -92,7 +92,7 @@ export function ReviewNote({
         <div className="cited-rule border-t border-current/15 pt-3 text-xs leading-relaxed">
           Rule: “{review.cited_rule}”{" "}
           {policyId != null && (
-            <span className="ml-1 inline-block rounded border border-current/20 px-1 text-[10px]">
+            <span className="ml-1 inline-block rounded border border-current/20 px-1 text-xs">
               policy v{policyId}
             </span>
           )}
@@ -128,7 +128,7 @@ export function Verdict(props: VerdictProps) {
       <div className="flex flex-wrap items-start justify-between gap-3 [&_h3]:mt-2 [&_h3]:text-foreground">
         <div>
           <Badge
-            className={`max-w-full whitespace-normal border-transparent text-[11px]   tone-${statusTone(props.status)}`}
+            className={`max-w-full whitespace-normal border-transparent text-xs   tone-${statusTone(props.status)}`}
             variant="secondary"
           >
             {STATUS_LABEL[props.status]}

@@ -340,7 +340,7 @@ export function Inbox({
                 variant="ghost"
                 type="button"
               >
-                <span className="flex items-center gap-2 text-xs [&>time]:ml-auto [&>time]:text-[10px]">
+                <span className="flex items-center gap-2 text-xs [&>time]:ml-auto [&>time]:text-xs">
                   {t.channel === "task" ? (
                     <FileText size={15} />
                   ) : (
@@ -350,7 +350,7 @@ export function Inbox({
                   <time>{relativeTime(t.received_at)}</time>
                 </span>
                 <span className="block text-sm font-medium">{t.subject}</span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {t.channel === "email"
                     ? "Support agent"
                     : "Back-office agent"}
@@ -360,7 +360,7 @@ export function Inbox({
                     <StatusPill status={last.status} />
                   ) : (
                     <Badge
-                      className="max-w-full whitespace-normal border-transparent text-[11px] bg-muted text-muted-foreground"
+                      className="max-w-full whitespace-normal border-transparent text-xs bg-muted text-muted-foreground"
                       variant="secondary"
                     >
                       {t.status === "handled" ? "Handled" : "New request"}
@@ -408,7 +408,7 @@ export function Inbox({
             <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
               <h2>Hijacked Support agent · simulation</h2>
               <Badge
-                className="max-w-full whitespace-normal border-transparent text-[11px] tone-block"
+                className="max-w-full whitespace-normal border-transparent text-xs tone-block"
                 variant="secondary"
               >
                 Simulation

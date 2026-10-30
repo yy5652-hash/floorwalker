@@ -1,5 +1,5 @@
 @font-face { font-family: 'Manrope Variable'; font-style: normal; font-weight: 200 800; font-display: swap; src: url('/fonts/manrope-latin-variable.woff2') format('woff2'); }
-:root { --ink: #182b29; --muted: #576b65; --paper: #f3f6f5; --white: #fff; --line: #dce5e1; --brand: #006b5e; --brand-dark: #00584d; --mint: #b1e3d1; --allow: #006b5e; --hold: #8a530a; --block: #b43242; --block-bg: #fbeef0; }
+:root { --ink: #182b29; --muted: #40564e; --paper: #f3f6f5; --white: #fff; --line: #dce5e1; --brand: #006b5e; --brand-dark: #00584d; --mint: #b1e3d1; --allow: #006b5e; --hold: #8a530a; --block: #b43242; --block-bg: #fbeef0; }
 html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--paper); font-family: 'Manrope Variable', sans-serif; color: var(--ink); font-variant-numeric: tabular-nums; }
 * { box-sizing: border-box; }
 .stage { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -8,7 +8,7 @@ html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; backgro
 .logo svg { width: 140px; height: 140px; }
 .tag { font-size: 44px; color: var(--muted); margin-top: 28px; font-weight: 450; letter-spacing: -.025em; }
 .chips { display: flex; gap: 0; margin-top: 60px; }
-.chip { font-size: 26px; font-weight: 500; padding: 12px 26px; background: transparent; color: var(--muted); border-right: 1px solid var(--line); }
+.chip { font-size: 28px; font-weight: 500; padding: 12px 26px; background: transparent; color: var(--muted); border-right: 1px solid var(--line); }
 .chip:last-child { border-right: 0; }
 .flow { display: flex; align-items: center; gap: 30px; margin-top: 80px; font-size: 32px; font-weight: 500; }
 .box { padding: 22px 34px; border-radius: 8px; background: var(--white); border: 1px solid var(--line); }

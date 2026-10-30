@@ -644,7 +644,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
                 {resetting ? "Creating orders…" : "Reset demo"}
               </Button>
             )}
-            <p className="text-center text-[10px] text-muted-foreground">
+            <p className="text-center text-xs text-muted-foreground">
               {demo
                 ? "Demo workspace · sandbox money"
                 : `${state.workspace?.plan ?? "Free"} plan · sandbox money`}
@@ -675,7 +675,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
           >
             <Search className="size-3" />
             Search
-            <kbd className="text-[10px] text-muted-foreground">⌘K / Ctrl K</kbd>
+            <kbd className="text-xs text-muted-foreground">⌘K / Ctrl K</kbd>
           </Button>
           <Button
             variant="ghost"
@@ -799,7 +799,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
             />
           )}
         </main>
-        <footer className="flex items-center justify-center gap-2 px-4 py-6 text-[11px] text-muted-foreground">
+        <footer className="flex items-center justify-center gap-2 px-4 py-6 text-xs text-muted-foreground">
           <ShieldCheck className="size-3" />
           Every refund checked. Fewer taps every week.
         </footer>

@@ -54,7 +54,7 @@ export function PhoneApproval({ workspaceId }: { workspaceId?: string }) {
   }, [url]);
   return (
     <a
-      className="flex items-center gap-3 rounded-xl border bg-card p-2 pr-4 shadow-xs [&_strong]:flex [&_strong]:items-center [&_strong]:gap-1 [&_strong]:text-xs [&_span]:my-1 [&_span]:block [&_span]:text-xs [&_span]:text-muted-foreground [&_small]:block [&_small]:max-w-48 [&_small]:break-all [&_small]:text-[10px] [&_small]:text-muted-foreground [&_img]:rounded-lg min-w-0"
+      className="flex items-center gap-3 rounded-xl border bg-card p-2 pr-4 shadow-xs [&_strong]:flex [&_strong]:items-center [&_strong]:gap-1 [&_strong]:text-xs [&_span]:my-1 [&_span]:block [&_span]:text-xs [&_span]:text-muted-foreground [&_small]:block [&_small]:max-w-48 [&_small]:break-all [&_small]:text-xs [&_small]:text-muted-foreground [&_img]:rounded-lg min-w-0"
       href={url}
       target="_blank"
       rel="noreferrer"
@@ -219,7 +219,7 @@ export function ApprovalCard({
         <time dateTime={entry.created_at}>
           {relativeTime(entry.created_at)}
         </time>
-        <span className="font-mono text-[10px] text-muted-foreground">
+        <span className="font-mono text-xs text-muted-foreground">
           #{entry.id}
         </span>
       </div>
@@ -254,7 +254,7 @@ export function ApprovalCard({
           </div>
         </div>
         <Badge
-          className="max-w-full whitespace-normal border-transparent text-[11px] tone-hold"
+          className="max-w-full whitespace-normal border-transparent text-xs tone-hold"
           variant="secondary"
         >
           <span className="inline-block size-1.5 shrink-0 rounded-full bg-current" />

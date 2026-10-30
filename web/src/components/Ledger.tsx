@@ -319,7 +319,7 @@ export function Ledger({
           tooltipShowDelay={250}
         />
       </div>
-      <div className="flex flex-wrap justify-between gap-2 border-t px-5 py-3 text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap justify-between gap-2 border-t px-5 py-3 text-xs text-muted-foreground">
         <span>Every action checked before it reaches PayPal.</span>
         <span>Powered by AG Grid</span>
       </div>

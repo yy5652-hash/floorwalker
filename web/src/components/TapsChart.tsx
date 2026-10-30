@@ -53,11 +53,11 @@ export function TapsChart({ state }: { state: State }) {
         },
       ],
       axes: {
-        x: { type: "category", label: { color: foreground, fontSize: 11, autoRotate: false, rotation: 0, minSpacing: 24, formatter: ({ value }) => String(value).slice(5) } },
+        x: { type: "category", label: { color: foreground, fontSize: 14, autoRotate: false, rotation: 0, minSpacing: 24, formatter: ({ value }) => String(value).slice(5) } },
         y: {
           type: "number",
           min: 0,
-          label: { color: foreground, fontSize: 10 },
+          label: { color: foreground, fontSize: 14 },
           gridLine: { style: [{ stroke: chartColor("--border") }] },
         },
       },

@@ -22,10 +22,10 @@ export function chartTheme(dark: boolean): AgChartTheme {
     },
     overrides: { common: {
       background: { fill: chartColor("--background") },
-      legend: { item: { label: { fontSize: 12, color: foreground }, marker: { size: 7 } } },
+      legend: { item: { label: { fontSize: 14, color: foreground }, marker: { size: 7 } } },
       axes: {
-        category: { line: { enabled: false }, tick: { enabled: false }, label: { autoRotate: false, rotation: 0, fontSize: 11, color: foreground, minSpacing: 24 } },
-        number: { line: { enabled: false }, tick: { enabled: false }, label: { fontSize: 11, color: foreground }, gridLine: { style: [{ stroke: chartColor("--border"), lineDash: [3, 5] }] } },
+        category: { line: { enabled: false }, tick: { enabled: false }, label: { autoRotate: false, rotation: 0, fontSize: 14, color: foreground, minSpacing: 24 } },
+        number: { line: { enabled: false }, tick: { enabled: false }, label: { fontSize: 14, color: foreground }, gridLine: { style: [{ stroke: chartColor("--border"), lineDash: [3, 5] }] } },
       },
     } },
   };

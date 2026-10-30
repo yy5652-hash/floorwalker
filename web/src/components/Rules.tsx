@@ -49,7 +49,7 @@ function Limit({
     <div
       className={`limit min-w-0 space-y-1 rounded-lg border p-3   ${changed ? "changed" : ""}`}
     >
-      <div className="text-[10px] text-muted-foreground">{k}</div>
+      <div className="text-xs text-muted-foreground">{k}</div>
       <div className="text-sm font-medium">{fmt(v)}</div>
     </div>
   );
@@ -508,7 +508,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
         )}
         {versions.map((v) => (
           <div
-            className="flex flex-wrap items-center gap-3 border-b px-5 py-4 last:border-0 [&>div]:min-w-0 [&>div]:flex-1 [&_p]:line-clamp-2 [&_p]:text-xs [&_time]:text-[10px]"
+            className="flex flex-wrap items-center gap-3 border-b px-5 py-4 last:border-0 [&>div]:min-w-0 [&>div]:flex-1 [&_p]:line-clamp-2 [&_p]:text-xs [&_time]:text-xs"
             key={v.id}
           >
             <span className="rounded-md border bg-muted px-2 py-1 font-mono text-xs">
@@ -520,7 +520,7 @@ export function Rules({ state, refresh, notify }: PageProps) {
             </div>
             {v.id === state.policy.id ? (
               <Badge
-                className="max-w-full whitespace-normal border-transparent text-[11px] tone-allow"
+                className="max-w-full whitespace-normal border-transparent text-xs tone-allow"
                 variant="secondary"
               >
                 Active

@@ -29,8 +29,8 @@ export function MoneyChart({ state }: { state: State }) {
       tooltip: { renderer: ({ datum }) => ({ title: `Week of ${datum.week} (UTC)`, data: [{ label: yName, value: money(datum[yKey]) }] }) },
     })),
     axes: {
-      x: { type: "category", label: { autoRotate: false, rotation: 0, fontSize: 11, minSpacing: 20, formatter: ({ value }) => String(value).slice(5) } },
-      y: { type: "number", min: 0, label: { fontSize: 11, formatter: ({ value }) => `$${value.toLocaleString()}` } },
+      x: { type: "category", label: { autoRotate: false, rotation: 0, fontSize: 14, minSpacing: 20, formatter: ({ value }) => String(value).slice(5) } },
+      y: { type: "number", min: 0, label: { fontSize: 14, formatter: ({ value }) => `$${value.toLocaleString()}` } },
     },
   }), [data, resolvedTheme]);
   return <Card className="min-w-0 gap-3 p-5 shadow-xs">

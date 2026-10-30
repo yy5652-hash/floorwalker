@@ -63,7 +63,7 @@ function LegacySetup({
         <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
           <h2>A little setup. A lot of peace of mind.</h2>
           <Badge
-            className="max-w-full whitespace-normal border-transparent text-[11px] bg-muted text-muted-foreground"
+            className="max-w-full whitespace-normal border-transparent text-xs bg-muted text-muted-foreground"
             variant="secondary"
           >
             {items.filter((i) => i.ready).length} / {items.length} ready

@@ -40,10 +40,10 @@ export function Landing() {
         <figure className="product-window">
           <div className="product-caption"><span><span className="live-dot" /> Your money, in view.</span><span>Juniper &amp; Oak · demo shop</span></div>
           <picture className="product-desktop">
-            <img className="preview-light" src="/product-overview.webp" width="1440" height="880" alt="Floorwalker overview showing money moved, requests waiting for the owner, and weekly activity from the recorded demo." fetchPriority="high" />
-            <img className="preview-dark" src="/product-overview-dark.webp" width="1440" height="880" alt="Floorwalker overview in dark mode, from the recorded demo." />
+            <img className="preview-light" src="/product-overview.png" width="1920" height="640" alt="Recorded demo: $1,294 moved, $86 waiting for the owner, $187 stopped before PayPal, and 34 decisions." fetchPriority="high" />
+            <img className="preview-dark" src="/product-overview-dark.png" width="1920" height="640" alt="Recorded demo in dark mode: $1,294 moved, $86 waiting, $187 stopped, and 34 decisions." />
           </picture>
-          <img className="product-phone" src="/product-approval.webp" width="358" height="588" alt="A real demo refund request for $86 to Daniel Okafor, with checks and approval actions." />
+          <img className="product-phone" src="/product-approval.png" width="636" height="1250" alt="A real demo refund request for $86 to Daniel Okafor, with checks and approval actions." />
           <figcaption>Recorded demo · earlier activity is simulated, not sent to PayPal.</figcaption>
         </figure>
       </section>

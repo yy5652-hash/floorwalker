@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { AgCharts } from "ag-charts-react";
 import type { AgCartesianChartOptions } from "ag-charts-community";
-import { chartTheme } from "./chart-theme";
+import { chartTheme, chartColor } from "./chart-theme";
 import { isFilm } from "../auth";
 import { useTheme } from "./theme-provider";
 import { Card } from "@/components/ui/card";
@@ -23,14 +23,14 @@ export function TapsChart({ state }: { state: State }) {
   );
   const options = useMemo<AgCartesianChartOptions<Omit<Week, "per100"> & { per100?: number }>>(() => {
     const dark = resolvedTheme === "dark";
-    const foreground = dark ? "#a3a3a3" : "#737373";
+    const foreground = chartColor("--muted-foreground");
     return {
       // A week without money moves is a gap, not zero taps.
       data: weeks.map((week) => (week.moves ? week : { ...week, per100: undefined })),
       height: 210,
       theme: chartTheme(dark),
       animation: { enabled: !isFilm() },
-      background: { fill: dark ? "#171717" : "#ffffff" },
+      background: { fill: chartColor("--background") },
       padding: { top: 12, right: 12, bottom: 8, left: 0 },
       legend: { enabled: false },
       series: [
@@ -39,9 +39,9 @@ export function TapsChart({ state }: { state: State }) {
           xKey: "week",
           yKey: "per100",
           yName: "Taps per 100 money moves",
-          stroke: dark ? "#d4d4d4" : "#525252",
+          stroke: chartColor("--primary"),
           strokeWidth: 2,
-          marker: { size: 5, fill: dark ? "#d4d4d4" : "#525252" },
+          marker: { size: 5, fill: chartColor("--primary") },
           tooltip: {
             renderer: ({ datum }) => ({
               title: datum.week,
@@ -53,12 +53,12 @@ export function TapsChart({ state }: { state: State }) {
         },
       ],
       axes: {
-        x: { type: "category", label: { color: foreground, fontSize: 10 } },
+        x: { type: "category", label: { color: foreground, fontSize: 11, autoRotate: false, rotation: 0, minSpacing: 24, formatter: ({ value }) => String(value).slice(5) } },
         y: {
           type: "number",
           min: 0,
           label: { color: foreground, fontSize: 10 },
-          gridLine: { style: [{ stroke: dark ? "#353535" : "#e5e5e5" }] },
+          gridLine: { style: [{ stroke: chartColor("--border") }] },
         },
       },
     };
@@ -93,7 +93,7 @@ export function TapsChart({ state }: { state: State }) {
       ) : (
         <>
           <div>
-            <div className="text-3xl font-semibold tracking-tight tabular-nums">
+            <div className="chart-number">
               {summary?.per100 ?? latest?.per100 ?? "—"}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">

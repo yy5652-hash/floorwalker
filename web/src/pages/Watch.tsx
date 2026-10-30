@@ -64,7 +64,7 @@ export function Watch({ state }: { state: State }) {
   const manageable = canManage(state);
   const watch = query.data?.watch;
   return (
-    <div className="space-y-6">
+    <div className="watch-page space-y-6">
       <Resource query={query}>
         {watch && (
           <>
@@ -113,13 +113,13 @@ export function Watch({ state }: { state: State }) {
             </Card>
             <Card className="mt-6 min-w-0 gap-0 overflow-hidden py-0">
               <CardHeader className="p-5"><CardTitle>Incidents</CardTitle></CardHeader>
-              <div className="h-[440px] w-full min-w-0">
+              <div className="h-[300px] w-full min-w-0">
                 <AgGridReact<Incident>
                   theme={resolvedTheme === "dark" ? darkTheme : lightTheme}
                   animateRows={!isFilm()}
                   columnDefs={columns} defaultColDef={defaultColDef}
                   rowData={query.data?.incidents ?? []}
-                  getRowId={({ data }) => String(data.id)} rowHeight={58} headerHeight={42}
+                  getRowId={({ data }) => String(data.id)} rowHeight={64} headerHeight={48}
                   overlayNoRowsTemplate="Nothing has moved outside Floorwalker."
                   tooltipShowDelay={250}
                 />

@@ -60,13 +60,13 @@ export function AuthPage({
         <Brand />
         <ThemeToggle />
       </header>
-      <main className="mx-auto grid max-w-5xl gap-12 px-5 py-10 md:grid-cols-2 md:items-center md:py-20">
+      <main className="auth-layout mx-auto grid max-w-6xl gap-12 px-5 py-10 md:grid-cols-2 md:items-center md:py-20">
         <div className="space-y-5">
-          <Badge variant="outline">YOUR MONEY. YOUR BOUNDARIES.</Badge>
+          <p className="text-sm">Your shop. Your say.</p>
           <h1 className="text-4xl leading-tight tracking-tight">
-            A little trust.
+            More time for your shop.
             <br />
-            <span className="text-allow">Room to do good work.</span>
+            <span className="text-allow">Every refund checked.</span>
           </h1>
           <p className="max-w-sm text-sm leading-7 text-muted-foreground">
             Give your agents clear limits, review the exceptions and keep a
@@ -160,7 +160,7 @@ export function AuthPage({
           ) : (
             <>
               {signup && session.data?.user.isAnonymous && (
-                <p className="rounded-lg bg-emerald-500/10 p-3 text-sm text-allow">
+                <p className="rounded-lg bg-allow/10 p-3 text-sm text-allow">
                   Your demo workspace comes with you.
                 </p>
               )}

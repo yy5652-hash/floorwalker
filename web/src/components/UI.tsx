@@ -21,7 +21,7 @@ export function Brand() {
   return (
     <a
       href="/"
-      className="inline-flex items-center gap-2 text-xl font-semibold tracking-tight"
+      className="brand-mark"
       aria-label="Floorwalker home"
     >
       <img src="/favicon.svg" width="28" height="28" alt="" />
@@ -43,13 +43,7 @@ export function OutcomeIcon({ status }: { status: LedgerEntry["status"] }) {
 }
 export function StatusPill({ status }: { status: LedgerEntry["status"] }) {
   return (
-    <Badge
-      variant="secondary"
-      className={`max-w-full gap-1.5 whitespace-normal border-transparent text-[11px] tone-${statusTone(status)}`}
-    >
-      <span className="size-1.5 shrink-0 rounded-full bg-current" />
-      {STATUS_LABEL[status]}
-    </Badge>
+    <span className={`status-label tone-${statusTone(status)}`}>{STATUS_LABEL[status]}</span>
   );
 }
 export function EmptyState({
@@ -114,4 +108,9 @@ export function ConnectAgent({ notify }: { notify: (s: string) => void }) {
       </div>
     </div>
   );
+}
+
+export function Money({ value }: { value: string }) {
+  const match = value.match(/^(.*)(\.\d{2})$/);
+  return <span className="money">{match ? <>{match[1]}<span className="money-cents">{match[2]}</span></> : value}</span>;
 }

@@ -26,18 +26,18 @@ import {
   plural,
 } from "../api";
 import { ApprovalCard } from "../components/Approvals";
-import { EmptyState, OutcomeIcon } from "../components/UI";
+import { EmptyState, OutcomeIcon, Money } from "../components/UI";
 import { AgentCard } from "./Agents";
 const outcomes: {
   key: keyof Metrics["funnel"];
   label: string;
   color: string;
 }[] = [
-  { key: "auto", label: "Auto-approved", color: "#059669" },
-  { key: "approved", label: "Approved by you", color: "#10B981" },
-  { key: "declined", label: "Declined", color: "#FB7185" },
-  { key: "waiting", label: "Waiting", color: "#FBBF24" },
-  { key: "blocked", label: "Blocked", color: "#DC2626" },
+  { key: "auto", label: "Auto-approved", color: "var(--chart-1)" },
+  { key: "approved", label: "Approved by you", color: "var(--chart-2)" },
+  { key: "declined", label: "Declined", color: "var(--chart-5)" },
+  { key: "waiting", label: "Waiting", color: "var(--chart-3)" },
+  { key: "blocked", label: "Blocked", color: "var(--chart-4)" },
 ];
 function activity(e: LedgerEntry, state: State) {
   const name = agentName(state, e.agent_id),
@@ -107,21 +107,21 @@ export function Overview(
   ];
   return (
     <div className="flex flex-col gap-6 overview">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="overview-metrics">
         {metrics.map(({ key, label, value, sub, icon: Icon, tone }) => (
           <Card
             className="min-w-0 gap-0 py-0 shadow-xs p-5"
             key={key}
             data-film={`metric-${key}`}
           >
-            <div className="flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
+            <div className="metric-label flex items-center justify-between gap-3">
               <span>{label}</span>
               <Icon size={17} className={`text-${tone}`} />
             </div>
             <div
-              className={`my-3 text-3xl font-semibold tracking-tight tabular-nums   ${key === "waiting" && m.waitingCount ? "text-hold" : ""}`}
+              className="metric-value"
             >
-              {value}
+              <Money value={value} />
             </div>
             {key === "waiting" ? (
               <a
@@ -139,7 +139,7 @@ export function Overview(
           </Card>
         ))}
       </div>
-      <Card className="min-w-0 gap-0 py-0 shadow-xs p-5">
+      <Card className="overview-funnel min-w-0 gap-0">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
           <h2>Every request, accounted for</h2>
           <span className="text-xs leading-relaxed text-muted-foreground">
@@ -176,7 +176,7 @@ export function Overview(
           ))}
         </div>
       </Card>
-      <div className="grid min-w-0 gap-5 xl:grid-cols-2">
+      <div className="overview-charts grid min-w-0 gap-7 xl:grid-cols-2">
         <TapsChart state={state} />
         <MoneyChart state={state} />
       </div>
@@ -207,6 +207,7 @@ export function Overview(
           </a>
         </Card>
       )}
+      <div className="overview-workbench">
       <section>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
           <h2>
@@ -223,7 +224,7 @@ export function Overview(
           </a>
         </div>
         {waiting.length ? (
-          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid grid-cols-1 items-start gap-4">
             {waiting.slice(0, 3).map((entry) => (
               <ApprovalCard key={entry.id} {...props} entry={entry} compact />
             ))}
@@ -250,12 +251,13 @@ export function Overview(
             Manage agents <ArrowRight size={14} />
           </a>
         </div>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4">
           {state.agents.map((agent) => (
             <AgentCard key={agent.id} {...props} agent={agent} compact />
           ))}
         </div>
       </section>
+      </div>
       <Card className="min-w-0 gap-0 py-0 shadow-xs activity-card">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
           <h2>Recent activity</h2>

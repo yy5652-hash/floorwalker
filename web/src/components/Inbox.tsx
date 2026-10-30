@@ -320,7 +320,7 @@ export function Inbox({
       </Card>
     );
   return (
-    <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+    <div className="inbox-layout">
       <Card className="min-w-0 gap-0 overflow-hidden py-0 shadow-xs">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
           <h2>All messages</h2>
@@ -428,7 +428,7 @@ export function Inbox({
           ticket && (
             <>
               <div className="space-y-3 border-b p-5 [&>h2]:text-xl [&>h2]:tracking-tight [&>p]:text-sm [&_p>span]:block [&_p>span]:break-all [&_p>span]:text-xs [&_p>span]:text-muted-foreground">
-                <div className="block text-[10px] font-medium tracking-widest text-muted-foreground">
+                <div className="block text-xs text-muted-foreground">
                   {ticket.channel === "email"
                     ? "Customer email"
                     : "Owner's to-do"}

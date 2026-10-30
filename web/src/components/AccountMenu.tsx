@@ -210,9 +210,9 @@ export function UpgradePrompt() {
   );
 }
 export function DemoBanner({ state }: { state: State }) {
-  return state.me?.anonymous && !isFilm() ? (
-    <div className="border-b bg-emerald-500/10 px-4 py-2 text-center text-xs leading-5">
-      This is a demo workspace.{" "}
+  return state.me?.anonymous || isFilm() ? (
+    <div className="demo-banner">
+      <span>Explore Floorwalker <span aria-hidden="true">·</span> PayPal sandbox</span><span>Demo history is simulated. <span className="hidden sm:inline">No real money moves.</span></span>
       <a href="/signup" className="font-semibold underline underline-offset-4">
         Create an account to keep it.
       </a>

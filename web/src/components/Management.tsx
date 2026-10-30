@@ -281,7 +281,7 @@ export function PageTabs({
   return (
     <nav
       aria-label={`${base} sections`}
-      className="flex max-w-full gap-1 overflow-x-auto border-b pb-2"
+      className="page-tabs flex max-w-full gap-1 overflow-x-auto border-b pb-2"
     >
       {tabs.map(([id, label]) => (
         <Button

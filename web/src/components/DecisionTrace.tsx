@@ -22,9 +22,9 @@ export function DecisionTrace({ entry }: { entry: LedgerEntry }) {
     <div className="grid gap-5 lg:grid-cols-2">
       <div className="space-y-3">
         <ul className="space-y-2">
-          {entry.checks.map((check) => <li key={check.id} className="rounded-md border p-2">
+          {entry.checks.map((check) => <li key={check.id} className="border-b py-3">
             <div className="flex items-center justify-between gap-2"><strong className="text-xs">{check.label}</strong>
-              <Badge variant="secondary" className={`tone-${check.outcome === "pass" ? "allow" : check.outcome}`}>{check.outcome}</Badge></div>
+              <Badge variant="secondary" className={`status-label tone-${check.outcome === "pass" ? "allow" : check.outcome}`}>{check.outcome}</Badge></div>
             <p className="mt-1 break-words text-xs text-muted-foreground">{check.detail}</p>
           </li>)}
         </ul>

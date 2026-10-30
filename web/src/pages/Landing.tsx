@@ -1,310 +1,94 @@
+import { ArrowRight, Check, ExternalLink } from "lucide-react";
 import { DemoButton } from "./Auth";
-import { PlanCards } from "./Settings";
+import { publicPlans } from "./Settings";
 import { Code } from "../components/Management";
 import { mcpCommand, refundCurl } from "./Developers";
-import {
-  Bot,
-  Check,
-  Clock3,
-  ExternalLink,
-  ShieldCheck,
-  ShieldX,
-  SlidersHorizontal,
-  Smartphone,
-  Sparkles,
-} from "lucide-react";
-import { Brand } from "../components/UI";
+import { Brand, Money } from "../components/UI";
 import { ThemeToggle } from "../components/Theme";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 const github = "https://github.com/yy5652-hash/floorwalker";
+const benchmark = [
+  ["No guard", "$3,796", "0", "100%"],
+  ["Rules in the prompt", "$35", "47", "75%"],
+  ["Rules only", "$630", "31", "100%"],
+  ["Floorwalker", "$0", "30", "100%"],
+];
 export function Landing() {
-  return (
-    <div className="min-h-svh bg-background">
-      <header className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-6 sm:px-8">
-        <Brand />
-        <nav className="flex items-center gap-2" aria-label="Main navigation">
-          <Button variant="ghost" asChild className="hidden sm:inline-flex">
-            <a href={github} target="_blank" rel="noreferrer">
-              GitHub
-              <ExternalLink />
-            </a>
-          </Button>
-          <ThemeToggle />
-          <Button asChild size="sm" variant="ghost">
-            <a href="/signin">Sign in</a>
-          </Button>
-          <Button asChild size="sm">
-            <a href="/signup">Create account</a>
-          </Button>
-        </nav>
-      </header>
-      <main className="mx-auto max-w-6xl px-5 sm:px-8">
-        <section className="grid items-center gap-12 py-12 md:py-20 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
-          <div className="space-y-7">
-            <Badge
-              variant="outline"
-              className="gap-2 px-3 py-1.5 text-xs font-normal"
-            >
-              <ShieldCheck className="size-3.5 text-allow" />A little trust.
-              Clear boundaries.
-            </Badge>
-            <h1 className="text-5xl leading-[1.08] font-medium tracking-[-.045em] sm:text-6xl">
-              Every refund checked.
-              <br />
-              <span className="text-allow">Fewer taps every week.</span>
-            </h1>
-            <p className="max-w-xl text-base leading-8 text-muted-foreground">
-              Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <DemoButton size="lg" />
-              <Button size="lg" variant="outline" asChild>
-                <a href="#how-it-works">How it works</a>
-              </Button>
-            </div>
-            <p className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Check className="size-4 text-allow" />
-              Your rules. Every payment. Before PayPal.
-            </p>
-          </div>
-          <div
-            className="rounded-2xl border bg-muted/40 p-5 sm:p-7"
-            aria-label="How Floorwalker routes a payment request"
-          >
-            <div className="mb-6 flex items-center justify-between">
-              <span className="text-[10px] font-medium tracking-[.18em] text-muted-foreground">
-                THE FLOORWALKER CHECKPOINT
-              </span>
-              <ShieldCheck className="size-5 text-muted-foreground" />
-            </div>
-            <div className="space-y-4">
-              {[
-                {
-                  icon: Check,
-                  tone: "allow",
-                  title: "Within your allowance",
-                  description: "Approved automatically",
-                  note: "Your agent keeps things moving.",
-                },
-                {
-                  icon: Clock3,
-                  tone: "hold",
-                  title: "Needs your judgment",
-                  description: "Waiting for your approval",
-                  note: "Review the checks. Make the call.",
-                },
-                {
-                  icon: ShieldX,
-                  tone: "block",
-                  title: "Outside your boundaries",
-                  description: "Blocked before PayPal",
-                  note: "Your rules have the final word.",
-                },
-              ].map(({ icon: Icon, tone, title, description, note }) => (
-                <Card key={tone} className="gap-0 py-0 shadow-xs">
-                  <CardContent className="flex items-start gap-4 p-5">
-                    <span
-                      className={`grid size-10 shrink-0 place-items-center rounded-xl tone-${tone}`}
-                    >
-                      <Icon className="size-5" />
-                    </span>
-                    <div className="space-y-1.5">
-                      <h2 className="text-sm">{title}</h2>
-                      <p className="text-xs font-medium">{description}</p>
-                      <p className="text-xs text-muted-foreground">{note}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            <p className="mt-6 text-center text-[11px] text-muted-foreground">
-              One checkpoint. Three clear outcomes.
-            </p>
-          </div>
-        </section>
-        <Separator />
-        <section id="how-it-works" className="scroll-mt-8 py-16 md:py-24">
-          <div className="mb-10 space-y-4 text-center">
-            <p className="text-[10px] font-medium tracking-[.18em] text-muted-foreground">
-              HOW IT WORKS
-            </p>
-            <h2 className="text-3xl font-medium tracking-tight sm:text-4xl">
-              Let your agents work.
-              <br />
-              Keep your money on your terms.
-            </h2>
-            <p className="text-muted-foreground">
-              One checkpoint between an agent's idea and a payment.
-            </p>
-          </div>
-          <div className="grid items-stretch gap-4 md:grid-cols-3">
-            {[
-              {
-                icon: Bot,
-                title: "Agent",
-                description: "Proposes a refund or payout",
-                step: "01",
-              },
-              {
-                icon: SlidersHorizontal,
-                title: "Floorwalker",
-                description: "Rules · PayPal facts · AI review",
-                step: "02",
-              },
-              {
-                icon: ShieldCheck,
-                title: "PayPal",
-                description: "Only the approved action runs",
-                step: "03",
-              },
-            ].map(({ icon: Icon, title, description, step }) => (
-              <Card
-                key={step}
-                className={
-                  step === "02"
-                    ? "border-emerald-600/30 bg-emerald-500/5 shadow-none"
-                    : "shadow-none"
-                }
-              >
-                <CardHeader>
-                  <div className="mb-5 flex items-center justify-between">
-                    <Icon className="size-6 text-muted-foreground" />
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {step}
-                    </span>
-                  </div>
-                  <CardTitle className="text-lg">{title}</CardTitle>
-                  <CardDescription>{description}</CardDescription>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
-        </section>
-        <section className="grid gap-5 md:grid-cols-3">
-          {[
-            {
-              icon: SlidersHorizontal,
-              title: "Limits, allowances and payee lists",
-              text: "Set clear boundaries in plain English. Give every agent just enough room to do its job.",
-            },
-            {
-              icon: Smartphone,
-              title: "One-tap approvals, even from your phone",
-              text: "See who gets paid, why, and what the checks found. Approve, lower the amount, or decline.",
-            },
-            {
-              icon: Sparkles,
-              title: "An AI reviewer that cites your rules",
-              text: "Get a recommendation grounded in your policy and PayPal facts, with the reason right beside it.",
-            },
-          ].map(({ icon: Icon, title, text }) => (
-            <Card key={title} className="border-0 bg-transparent shadow-none">
-              <CardHeader className="px-0">
-                <Icon className="mb-4 size-5 text-muted-foreground" />
-                <CardTitle className="leading-relaxed">{title}</CardTitle>
-                <CardDescription className="mt-2 leading-7">
-                  {text}
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          ))}
-        </section>
-        <section id="developers" className="min-w-0 space-y-6 border-t py-16">
-          <div className="max-w-xl space-y-3">
-            <p className="text-[10px] font-medium tracking-[.18em] text-muted-foreground">
-              BUILT FOR YOUR AGENTS
-            </p>
-            <h2 className="text-3xl tracking-tight">
-              A small integration.
-              <br />
-              Clear boundaries from day one.
-            </h2>
-            <p className="text-sm leading-7 text-muted-foreground">
-              Send refunds and payouts through a scoped agent key, or connect
-              your MCP client over HTTP. Follow every request through the same
-              approval workflow.
-            </p>
-          </div>
-          <Code text={refundCurl()} />
-          <h3>Or connect Claude Code</h3>
-          <Code text={mcpCommand()} />
-          <Button asChild variant="outline">
-            <a href="/v1/openapi.json">
-              Read the OpenAPI specification
-              <ExternalLink />
-            </a>
-          </Button>
-        </section>
-        <section id="pricing" className="space-y-8 border-t py-16">
-          <div className="space-y-3 text-center">
-            <p className="text-[10px] font-medium tracking-[.18em] text-muted-foreground">
-              A PLAN FOR YOUR WORKSPACE
-            </p>
-            <h2 className="text-3xl tracking-tight">
-              Start small. Make room as you grow.
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Monthly plans in USD. PayPal sandbox only.
-            </p>
-          </div>
-          <PlanCards />
-        </section>
-        <div className="my-12 space-y-5 border-y py-8">
-          <p className="text-center text-[10px] tracking-widest text-muted-foreground">
-            BUILT WITH
-          </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {[
-              "PayPal Agent Toolkit",
-              "PayPal Orders, Payments & Payouts (sandbox)",
-              "Gemini",
-              "AG Grid",
-              "MCP",
-            ].map((name) => (
-              <Badge
-                key={name}
-                variant="outline"
-                className="text-xs font-normal"
-              >
-                {name}
-              </Badge>
-            ))}
+  return <div className="landing">
+    <header className="site-nav">
+      <Brand />
+      <nav aria-label="Main navigation">
+        <a className="desktop-link" href="#how-it-works">How it works</a>
+        <a className="desktop-link" href="#benchmark">Benchmark</a>
+        <a className="desktop-link" href="#pricing">Pricing</a>
+        <ThemeToggle />
+        <a href="/signin">Sign in</a>
+        <Button asChild className="desktop-link"><a href="/signup">Get started <ArrowRight /></a></Button>
+      </nav>
+    </header>
+    <main>
+      <section className="site-hero">
+        <div className="hero-copy">
+          <h1>Every refund checked.<br /> <span>Fewer taps every week.</span></h1>
+          <div className="hero-intro">
+            <p>AI agents can now move money in PayPal. Give them a shop manager who checks every move—and learns when to stop asking you.</p>
+            <DemoButton size="lg" />
+            <p className="hero-disclosure">PayPal sandbox. No real money.</p>
           </div>
         </div>
-        <section className="flex flex-col items-center gap-6 py-10 text-center">
-          <h2 className="text-3xl font-medium tracking-tight">
-            Give your agents room to help.
-          </h2>
-          <div className="flex flex-wrap justify-center gap-3">
-            <DemoButton size="lg" />
-            <Button size="lg" variant="outline" asChild>
-              <a href="/signup">Create account</a>
-            </Button>
+        <figure className="product-window">
+          <div className="product-caption"><span><span className="live-dot" /> Your money, in view.</span><span>Juniper &amp; Oak · demo shop</span></div>
+          <picture className="product-desktop">
+            <img className="preview-light" src="/product-overview.webp" width="1440" height="880" alt="Floorwalker overview showing money moved, requests waiting for the owner, and weekly activity from the recorded demo." fetchPriority="high" />
+            <img className="preview-dark" src="/product-overview-dark.webp" width="1440" height="880" alt="Floorwalker overview in dark mode, from the recorded demo." />
+          </picture>
+          <img className="product-phone" src="/product-approval.webp" width="390" height="844" alt="A real demo refund request for $86 to Daniel Okafor, with checks and approval actions." />
+          <figcaption>Recorded demo · earlier activity is simulated, not sent to PayPal.</figcaption>
+        </figure>
+      </section>
+      <section id="how-it-works" className="guard-story site-section">
+        <div><p className="section-index">01 / A better boundary</p><h2>Trust the work.<br /> Check the money.</h2></div>
+        <div className="guard-explanation">
+          <div className="failure-pair">
+            <div><h3>Ask about everything.</h3><p>The owner starts rubber-stamping.</p></div>
+            <div><h3>Ask about nothing.</h3><p>One malicious email can take the money.</p></div>
           </div>
-        </section>
-      </main>
-      <footer className="mx-auto mt-12 flex max-w-6xl flex-wrap items-center justify-between gap-5 border-t px-5 py-8 text-xs text-muted-foreground sm:px-8">
-        <Brand />
-        <span>Every refund checked. Fewer taps every week.</span>
-        <a
-          href={github}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-2 hover:text-foreground"
-        >
-          View on GitHub
-          <ExternalLink className="size-3" />
-        </a>
-      </footer>
-    </div>
-  );
+          <p className="guard-answer">Floorwalker checks every refund and payout against <strong>PayPal’s records, your rules and an AI review.</strong> Only the approved action runs.</p>
+          <div className="outcome-key"><span className="status-label tone-allow">Done</span><span className="status-label tone-hold">Waiting for you</span><span className="status-label tone-block">Blocked</span></div>
+        </div>
+      </section>
+      <section className="learning-story site-section">
+        <div className="learning-copy"><p className="section-index">02 / Less asking. Same boundaries.</p><h2>Your decisions<br /> make it smarter.</h2><p>Keep approving the same kind of refund? Floorwalker suggests a rule change, tests it on your history, and leaves the final say to you.</p><a href="/app#rules">See the reasoning <ArrowRight size={16} /></a></div>
+        <div className="learning-proof"><span>From the recorded demo</span><div className="learning-figure">53 <span>→</span> 42</div><p>owner taps per 100 money moves</p><div className="learning-boundary"><Check size={16} /><span>Your declines still define the boundary.</span></div></div>
+      </section>
+      <section className="watch-story site-section">
+        <p className="section-index">03 / Even when an agent goes around you</p>
+        <h2>Watching the door<br /> money left through.</h2>
+        <p>Floorwalker watches PayPal for money that skipped its checks. It flags the move and can freeze your agents while you decide what happened.</p>
+        <a href="/app#watch">Explore PayPal watch <ArrowRight size={16} /></a>
+      </section>
+      <section id="benchmark" className="benchmark-section site-section">
+        <div className="section-heading"><div><p className="section-index">Tested, not taken on trust</p><h2>What got through?</h2></div><p>198 labelled cases. 80 attacks attempting $3,796.<br /> 150 cases written by a different model, independently of the reviewer.</p></div>
+        <div className="benchmark-scroll" tabIndex={0} aria-label="Benchmark comparison">
+          <table className="benchmark-table"><thead><tr><th scope="col">Approach</th><th scope="col">Money taken</th><th scope="col">Owner taps<br /> <small>per 100 moves</small></th><th scope="col">Legitimate requests<br /> <small>done without the owner</small></th></tr></thead><tbody>
+            {benchmark.map(([name, loss, taps, legitimate]) => <tr key={name} className={name === "Floorwalker" ? "benchmark-winner" : ""}><th scope="row">{name}</th><td>{loss}</td><td>{taps}</td><td>{legitimate}</td></tr>)}
+          </tbody></table>
+        </div>
+        <p className="benchmark-note">FloorwalkerBench · controlled evaluation, not a guarantee of future results. <a href={`${github}/tree/main/bench`} target="_blank" rel="noreferrer">Inspect the benchmark <ExternalLink size={12} /></a></p>
+      </section>
+      <section id="developers" className="developer-story site-section">
+        <div><h2>Your agent.<br /> Our checkpoint.</h2><p>Bring your own agent over REST or MCP. Refunds and payouts follow the same rules and approval flow.</p><a href="/v1/openapi.json">OpenAPI specification <ArrowRight size={16} /></a></div>
+        <div className="integration-code"><div className="integration-label">Connect over MCP</div><Code text={mcpCommand()} /><details><summary>Or send a refund with REST</summary><Code text={refundCurl()} /></details></div>
+      </section>
+      <section id="pricing" className="pricing-section site-section">
+        <div className="section-heading"><h2>A little help.<br /> Room to grow.</h2><p>Monthly plans in USD.<br /> PayPal sandbox only.</p></div>
+        <div className="pricing-plans">{publicPlans.map(plan => <article key={plan.id} className={plan.id === "pro" ? "plan featured-plan" : "plan"}>
+          <div><h3>{plan.name}</h3><div className="plan-price"><Money value={`$${plan.price}`} /><small>/ month</small></div></div>
+          <p>{plan.agents === null ? "Unlimited" : plan.agents} agents · {plan.actionsPerMonth?.toLocaleString()} actions<br /> {plan.members === null ? "Unlimited" : plan.members} team members · {plan.webhooks === null ? "Unlimited" : plan.webhooks} webhooks</p>
+          <Button asChild variant={plan.id === "pro" ? "default" : "outline"}><a href="/signup">Get started <ArrowRight /></a></Button>
+        </article>)}</div>
+      </section>
+    </main>
+    <footer className="site-footer"><Brand /><p>Every refund checked. Fewer taps every week.</p><a href={github} target="_blank" rel="noreferrer">GitHub <ExternalLink size={14} /></a></footer>
+  </div>;
 }

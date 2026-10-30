@@ -106,7 +106,7 @@ function LegacySetup({
         ))}
       </Card>
       <Card className="min-w-0 gap-0 py-0 shadow-xs space-y-4 p-5">
-        <span className="block text-[10px] font-medium tracking-widest text-muted-foreground">
+        <span className="block text-xs font-medium text-muted-foreground">
           Connect your own agent over MCP
         </span>
         <ConnectAgent notify={notify} />

@@ -1,16 +1,16 @@
 <!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
 <style>
-  body { background: radial-gradient(1200px 700px at 70% 40%, #e9eef8 0%, #f5f7fa 60%); }
+  body { background: var(--paper); }
   .side { position: absolute; left: 190px; top: 330px; width: 640px; }
   .side h1 { font-size: 64px; letter-spacing: -0.03em; margin: 0 0 22px; line-height: 1.05; }
-  .side p { font-size: 30px; color: #475569; margin: 0; line-height: 1.45; }
+  .side p { font-size: 30px; color: var(--muted); margin: 0; line-height: 1.45; }
   .side .chip { display: inline-flex; gap: 10px; align-items: center; margin-top: 34px; font-size: 24px; font-weight: 600; color: #059669; background: #ecfdf5; padding: 10px 20px; border-radius: 999px; }
   .phone { position: absolute; left: 1060px; top: 38px; width: 430px; height: 1004px; border-radius: 64px; background: #0f172a; box-shadow: 0 40px 90px rgba(15, 23, 42, .28), inset 0 0 0 3px #334155; }
   .screen { position: absolute; left: 20px; top: 20px; width: 390px; height: 964px; border-radius: 46px; overflow: hidden; background: #f7f8fa; }
   .screen iframe { width: 390px; height: 964px; border: 0; display: block; }
   .notch { position: absolute; left: 50%; top: 30px; width: 120px; height: 32px; margin-left: -60px; border-radius: 20px; background: #0f172a; z-index: 3; }
   /* The push notification as the phone shows it (Approve and Decline are the notification's own actions). */
-  .note { position: absolute; left: 32px; top: 74px; width: 366px; z-index: 2; border-radius: 26px; background: rgba(248, 250, 252, .94); backdrop-filter: blur(18px);
+  .note { position: absolute; left: 32px; top: 74px; width: 366px; z-index: 2; border-radius: 26px; background: var(--white);
     box-shadow: 0 18px 50px rgba(15, 23, 42, .28), 0 0 0 1px rgba(15, 23, 42, .06); font-family: inherit; opacity: 0; }
   .note .top { display: flex; align-items: center; gap: 10px; padding: 16px 18px 6px; font-size: 14px; color: #64748b; letter-spacing: .02em; }
   .note .top img { width: 26px; height: 26px; border-radius: 7px; }
@@ -19,9 +19,10 @@
   .note .title { padding: 0 18px; font-size: 19px; font-weight: 650; color: #0f172a; }
   .note .body { padding: 4px 18px 14px; font-size: 16px; line-height: 1.35; color: #334155; }
   .note .actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(15, 23, 42, .08); }
-  .note .actions div { padding: 14px 0; text-align: center; font-size: 17px; font-weight: 600; color: #2563eb; }
-  .note .actions div + div { border-left: 1px solid rgba(15, 23, 42, .08); color: #475569; }
+  .note .actions div { padding: 14px 0; text-align: center; font-size: 17px; font-weight: 600; color: var(--brand); }
+  .note .actions div + div { border-left: 1px solid rgba(15, 23, 42, .08); color: var(--muted); }
   .scrim { position: absolute; inset: 0; z-index: 1; background: rgba(15, 23, 42, .18); opacity: 0; pointer-events: none; }
+.side h1 { font-weight: 550; font-size: 72px; } .side .chip { border-radius: 0; background: transparent; padding: 20px 0 0; border: 0; color: var(--brand); border-top: 1px solid var(--line); } .notch { top: 23px; height: 22px; width: 100px; margin-left: -50px; } .screen iframe { margin-top: 28px; height: 936px; } .note { left: 12px; }
 </style></head><body>
 <div class="side fade" id="a">
   <h1>Approve from your phone</h1>
@@ -51,9 +52,9 @@
     document.getElementById('note-body').textContent = NOTE.body;
     const inP = ease(clamp((t - 0.4) / 0.5)), outP = ease(clamp((t - NOTE_OUT) / 0.45));
     const note = document.getElementById('note');
-    note.style.opacity = inP * (1 - outP);
+    note.style.opacity = NOTE.title ? inP * (1 - outP) : 0;
     note.style.transform = `translateY(${-60 * (1 - inP) - 80 * outP}px) scale(${1 - 0.04 * outP})`;
-    document.getElementById('scrim').style.opacity = inP * (1 - outP);
+    document.getElementById('scrim').style.opacity = NOTE.title ? inP * (1 - outP) : 0;
   };
   window.ready = true;
 </script></body></html>

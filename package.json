@@ -21,6 +21,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.2.0",
     "@better-auth/passkey": "1.7.14",
+    "@fontsource-variable/manrope": "5.3.0",
     "@google/genai": "2.28.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@paypal/agent-toolkit": "^1.11.0",

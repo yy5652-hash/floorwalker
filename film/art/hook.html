@@ -1,20 +1,21 @@
 <!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
 <style>
   h1 { font-size: 64px; margin: 0 0 18px; letter-spacing: -0.025em; }
-  .sub { font-size: 32px; color: #6b7890; margin-bottom: 64px; }
+  .sub { font-size: 32px; color: var(--muted); margin-bottom: 64px; }
   .cols { display: grid; grid-template-columns: repeat(2, 720px); gap: 56px; }
-  .col { position: relative; background: #fff; border-radius: 30px; padding: 40px 44px 46px; box-shadow: 0 6px 28px rgba(18,35,63,.08); height: 520px; overflow: hidden; }
+  .col { position: relative; background: #fff; border-radius: 12px; padding: 40px 44px 46px; border: 1px solid var(--line); height: 600px; overflow: hidden; }
   .col h2 { margin: 0 0 6px; font-size: 38px; letter-spacing: -0.01em; }
-  .col p { margin: 0 0 26px; font-size: 26px; color: #6b7890; }
-  .note { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-radius: 16px; background: #f5f7fa; margin-bottom: 12px; font-size: 25px; color: #3b4a63; }
-  .note b { color: #12233f; }
-  .note span { font-weight: 700; color: #2563eb; }
-  .mail { background: #f5f7fa; border-radius: 18px; padding: 24px 26px; font-size: 25px; line-height: 1.45; color: #3b4a63; }
-  .mail .hid { display: block; margin-top: 12px; padding: 12px 16px; border-radius: 10px; background: #fff1f2; color: #be123c; font-weight: 600; }
-  .pay { margin-top: 22px; display: flex; align-items: center; gap: 16px; font-size: 30px; font-weight: 700; color: #be123c; }
+  .col p { margin: 0 0 26px; font-size: 26px; color: var(--muted); }
+  .note { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-radius: 16px; background: var(--paper); margin-bottom: 12px; font-size: 25px; color: var(--muted); }
+  .note b { color: var(--ink); }
+  .note span { font-weight: 700; color: var(--brand); }
+  .mail { background: var(--paper); border-radius: 18px; padding: 24px 26px; font-size: 25px; line-height: 1.45; color: var(--muted); }
+  .mail .hid { display: block; margin-top: 12px; padding: 12px 16px; border-radius: 10px; background: var(--block-bg); color: var(--block); font-weight: 600; }
+  .pay { margin-top: 22px; display: flex; align-items: center; gap: 16px; font-size: 30px; font-weight: 700; color: var(--block); }
   .stamp { position: absolute; right: 34px; bottom: 34px; padding: 14px 30px; border: 6px solid currentColor; border-radius: 16px; font-size: 46px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; transform: rotate(-9deg) scale(1.4); opacity: 0; }
-  .stamp.rub { color: #b45309; }
-  .stamp.rob { color: #be123c; }
+  .stamp.rub { color: var(--hold); }
+  .stamp.rob { color: var(--block); }
+h1 { font-weight: 550; } .note, .mail { border-radius: 8px; } .stamp { font-size: 36px; border-width: 3px; border-radius: 8px; background: var(--white); bottom: 55px; letter-spacing: 0; } .col h2 { font-weight: 550; }
 </style></head><body>
 <div class="stage">
   <h1 class="fade" id="a">AI agents can now move money in PayPal.</h1>

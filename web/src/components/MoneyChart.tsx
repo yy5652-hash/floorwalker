@@ -4,15 +4,15 @@ import { AgCharts } from "ag-charts-react";
 import type { AgCartesianChartOptions } from "ag-charts-community";
 import { money, type State } from "../api";
 import { isFilm } from "../auth";
-import { chartTheme } from "./chart-theme";
+import { chartTheme, chartColor } from "./chart-theme";
 import { useTheme } from "./theme-provider";
 import { Card } from "./ui/card";
 
 const series = [
-  ["executed", "Done automatically", "#059669"],
-  ["approved", "Approved by you", "#6366f1"],
-  ["declined", "Declined", "#d97706"],
-  ["blocked", "Blocked", "#e11d48"],
+  ["executed", "Done automatically", "--chart-1"],
+  ["approved", "Approved by you", "--chart-2"],
+  ["declined", "Declined", "--chart-5"],
+  ["blocked", "Blocked", "--chart-4"],
 ] as const;
 export function MoneyChart({ state }: { state: State }) {
   const { resolvedTheme } = useTheme();
@@ -25,12 +25,12 @@ export function MoneyChart({ state }: { state: State }) {
     animation: { enabled: !isFilm() },
     legend: { enabled: true, position: "bottom" },
     series: series.map(([yKey, yName, fill]) => ({
-      type: "bar", direction: "vertical", stacked: true, xKey: "week", yKey, yName, fill,
+      type: "bar", direction: "vertical", stacked: true, xKey: "week", yKey, yName, fill: chartColor(fill),
       tooltip: { renderer: ({ datum }) => ({ title: `Week of ${datum.week} (UTC)`, data: [{ label: yName, value: money(datum[yKey]) }] }) },
     })),
     axes: {
-      x: { type: "category", label: { fontSize: 10, formatter: ({ value }) => String(value).slice(5) } },
-      y: { type: "number", min: 0, label: { fontSize: 10, formatter: ({ value }) => money(value) } },
+      x: { type: "category", label: { autoRotate: false, rotation: 0, fontSize: 11, minSpacing: 20, formatter: ({ value }) => String(value).slice(5) } },
+      y: { type: "number", min: 0, label: { fontSize: 11, formatter: ({ value }) => `$${value.toLocaleString()}` } },
     },
   }), [data, resolvedTheme]);
   return <Card className="min-w-0 gap-3 p-5 shadow-xs">

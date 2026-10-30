@@ -1,3 +1,4 @@
+import { Money } from "./UI";
 import { account, isFilm } from "../auth";
 import { LearnedRulesNudge } from "./LearnedRules";
 import { ApiError, api, canApprove, canManage } from "../api";
@@ -25,6 +26,7 @@ import {
   money,
   personName,
   relativeTime,
+  why,
   type LedgerEntry,
   type PageProps,
 } from "../api";
@@ -244,11 +246,11 @@ export function ApprovalCard({
       )}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <span className="block text-[10px] font-medium tracking-widest text-muted-foreground">
+          <span className="block text-xs text-muted-foreground">
             {entry.kind === "refund" ? "Refund request" : "Payout request"}
           </span>
-          <div className="mt-1 text-4xl font-semibold tracking-tight tabular-nums">
-            {money(entry.amount)}
+          <div className="approval-amount">
+            <Money value={money(entry.amount)} />
           </div>
         </div>
         <Badge
@@ -261,7 +263,7 @@ export function ApprovalCard({
             : "Decision recorded"}
         </Badge>
       </div>
-      <div className="flex flex-col gap-1 [&>span]:text-xs [&>span]:text-muted-foreground [&>strong]:font-medium">
+      <div className="approval-payee flex flex-col gap-1 [&>span]:text-xs [&>span]:text-muted-foreground">
         <span>{entry.kind === "refund" ? "Refund to" : "Pay to"}</span>
         <strong>{personName(entry.counterparty)}</strong>
         {entry.counterparty &&
@@ -271,23 +273,16 @@ export function ApprovalCard({
             </small>
           )}
       </div>
-      {entry.justification && (
-        <blockquote className="my-3 border-l-2 pl-3 text-sm leading-relaxed text-muted-foreground">
-          “{entry.justification}”
-        </blockquote>
-      )}
-      {compact ? (
-        <details className="rounded-lg border p-3 [&>summary]:text-xs [&>summary]:text-muted-foreground [&>div]:mt-3">
-          <summary>Review recommendation &amp; checks</summary>
+      <p className="approval-reason">{why(entry)}</p>
+      <ReviewNote review={entry.review} policyId={entry.policy_id} condensed />
+      <details className="approval-checks">
+        <summary>Review checks &amp; rule</summary>
+        <div>
+          {entry.justification && <blockquote className="mb-4">“{entry.justification}”</blockquote>}
           <ReviewNote review={entry.review} policyId={entry.policy_id} />
           <Checks checks={entry.checks} review={entry.review} />
-        </details>
-      ) : (
-        <>
-          <ReviewNote review={entry.review} policyId={entry.policy_id} />
-          <Checks checks={entry.checks} review={entry.review} />
-        </>
-      )}
+        </div>
+      </details>
       {result ? (
         <div className="space-y-3 rounded-lg border p-3">
           <StatusPill status={result.status} />
@@ -354,7 +349,7 @@ export function ApprovalCard({
               An owner, admin or approver can decide this request.
             </p>
           )}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 [&>button]:h-auto [&>button]:min-h-10 [&>button]:whitespace-normal">
+          <div className="approval-actions">
             <Button
               data-film="approve"
               disabled={

@@ -85,7 +85,7 @@ export function AgentCard({
   }
   return (
     <Card
-      className={`min-w-0 gap-0 py-0 shadow-xs   space-y-5 p-5   ${compact ? "compact" : ""}`}
+      className={`min-w-0 gap-0 py-0 shadow-xs   agent-card space-y-5 p-5   ${compact ? "compact" : ""}`}
       data-film={`agent-${agent.id}`}
     >
       <div className="flex flex-wrap items-center gap-3 [&>div]:min-w-0 [&>div]:flex-1 [&_p]:mt-1 [&_p]:text-xs [&_p]:leading-relaxed [&_p]:text-muted-foreground">
@@ -124,12 +124,12 @@ export function AgentCard({
         </Button>
       </div>
       {frozen && (
-        <div className="frozen-banner rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs font-medium text-hold">
+        <div className="frozen-banner rounded-lg border border-hold/20 bg-hold/10 px-3 py-2 text-xs font-medium text-hold">
           Frozen — can't move money
         </div>
       )}
       {!compact && (
-        <div className="permissions flex flex-wrap gap-3 [&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span]:rounded-md [&>span]:border [&>span]:px-2 [&>span]:py-1 [&>span]:text-xs [&>span]:text-muted-foreground">
+        <div className="permissions flex flex-wrap gap-5 [&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span]:text-xs [&>span]:text-muted-foreground">
           <span>
             Refunds{" "}
             <span className="sr-only">
@@ -180,7 +180,7 @@ export function AgentCard({
           <Progress
             value={percent}
             aria-label={`${agent.name} allowance used`}
-            className={`h-2 ${percent >= 100 ? "[&>div]:bg-destructive" : "[&>div]:bg-emerald-600 dark:[&>div]:bg-emerald-400"}`}
+            className={`h-2 ${percent >= 100 ? "[&>div]:bg-destructive" : "[&>div]:bg-allow"}`}
           />
         </div>
       ) : (

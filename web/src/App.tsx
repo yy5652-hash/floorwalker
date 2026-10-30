@@ -523,7 +523,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
   );
   if (mobile)
     return (
-      <div className="min-h-svh">
+      <div className="min-h-svh phone-workspace">
         <DemoBanner state={state} />
         <header className="flex items-center justify-between border-b bg-card px-4 py-4">
           <Brand />
@@ -534,7 +534,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
         </header>
         <main className="mx-auto max-w-lg space-y-6 px-4 py-8">
           <div className="space-y-3">
-            <p className="text-xs font-medium tracking-widest text-muted-foreground">
+            <p className="text-xs font-medium text-muted-foreground">
               {state.workspace?.name ?? "JUNIPER & OAK CERAMICS"}
             </p>
             <h1>Your call.</h1>
@@ -590,7 +590,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
         <SidebarHeader className="px-4 py-6 group-data-[collapsible=icon]:px-2">
           <a
             href="/"
-            className="flex items-center gap-2 text-xl font-semibold tracking-tight"
+            className="brand-mark"
             aria-label="Floorwalker home"
           >
             <img src="/favicon.svg" width="28" height="28" alt="" />
@@ -611,10 +611,10 @@ function Workspace({ mobile }: { mobile: boolean }) {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="p-3">
-          <div className="space-y-3 rounded-lg border bg-card p-3 text-xs group-data-[collapsible=icon]:hidden">
+          <details className="environment-menu space-y-3 group-data-[collapsible=icon]:hidden"><summary>Environment &amp; demo</summary>
             <p className="flex items-center gap-2">
               <span
-                className={`size-1.5 rounded-full ${state.configured.paypal ? "bg-emerald-500" : "bg-muted-foreground"}`}
+                className={`size-1.5 rounded-full ${state.configured.paypal ? "bg-allow" : "bg-muted-foreground"}`}
               />
               PayPal sandbox ·{" "}
               {state.configured.paypal ? "connected" : "disconnected"}
@@ -649,12 +649,12 @@ function Workspace({ mobile }: { mobile: boolean }) {
                 ? "Demo workspace · sandbox money"
                 : `${state.workspace?.plan ?? "Free"} plan · sandbox money`}
             </p>
-          </div>
+          </details>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
       <SidebarInset className="min-w-0 bg-background">
-        <header className="sticky top-0 z-20 flex h-16 min-w-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur md:gap-4 md:px-8">
+        <header className="sticky top-0 z-20 flex h-16 min-w-0 items-center gap-2 border-b bg-background px-4 md:gap-4 md:px-8">
           <SidebarTrigger />
           <Separator orientation="vertical" className="!h-5" />
           <Breadcrumb className="hidden md:block">
@@ -696,12 +696,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
           className="mx-auto w-full max-w-[1440px] flex-1 space-y-7 p-4 outline-none sm:p-6 lg:p-8"
         >
           <header className="flex flex-wrap items-start justify-between gap-5">
-            <div className="max-w-2xl space-y-2">
-              <p className="text-[10px] font-medium tracking-[.18em] text-muted-foreground">
-                {page.id === "overview"
-                  ? "YOUR MONEY, IN GOOD HANDS"
-                  : (state.workspace?.name ?? "JUNIPER & OAK CERAMICS")}
-              </p>
+            <div className="page-intro">
               <h1>{page.id === "watch" ? "PayPal watch" : page.label}</h1>
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {page.subtitle}
@@ -716,12 +711,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
                   <ArrowRight />
                 </a>
               </Button>
-            ) : (
-              <Badge variant="outline" className="gap-1.5 py-1.5">
-                <ShieldCheck className="size-3 text-allow" />
-                Governed by your rules
-              </Badge>
-            )}
+            ) : null}
           </header>
           {feedback}
           {["overview", "inbox", "approvals", "agents", "watch"].includes(page.id) && (

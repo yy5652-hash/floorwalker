@@ -791,7 +791,7 @@ export function PlanCards({
       {plans.map((plan) => (
         <Card
           key={plan.id}
-          className={`relative gap-5 p-6 ${plan.id === "pro" ? "border-emerald-600/40 bg-emerald-500/[.03]" : ""}`}
+          className={`relative gap-5 p-6 ${plan.id === "pro" ? "border-primary/40 bg-muted" : ""}`}
         >
           <div className="flex items-center justify-between">
             <h3>{plan.name}</h3>

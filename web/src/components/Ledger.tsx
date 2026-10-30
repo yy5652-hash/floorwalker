@@ -101,11 +101,11 @@ export function Ledger({
   const entry = state.ledger.find((e) => e.id === selected);
   const columns = useMemo<ColDef<LedgerEntry>[]>(
     () => [
-      { field: "id", headerName: "#", width: 100, minWidth: 90, cellRenderer: "agGroupCellRenderer", chartDataType: "excluded" },
+      { field: "id", headerName: "#", width: 80, minWidth: 80, cellRenderer: "agGroupCellRenderer", chartDataType: "excluded" },
       {
         field: "created_at",
         headerName: "Time",
-        width: 165,
+        width: 170,
         filter: "agDateColumnFilter",
         cellDataType: "date",
         filterParams: {
@@ -116,20 +116,20 @@ export function Ledger({
         },
         valueGetter: (p) => p.data ? new Date(p.data.created_at) : null,
         valueFormatter: (p) =>
-          p.value ? new Date(p.value).toLocaleString() : "",
+          p.value ? new Date(p.value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "",
       },
       {
         field: "agent_id",
         headerName: "Agent",
         filter: "agSetColumnFilter", enableRowGroup: true, chartDataType: "category",
-        width: 125,
+        width: 140,
         valueGetter: (p) => (p.data ? agentName(state, p.data.agent_id) : ""),
       },
       {
         field: "kind",
         headerName: "Kind",
         filter: "agSetColumnFilter", enableRowGroup: true,
-        width: 80,
+        width: 100,
         valueFormatter: (p) => (p.value ? p.value[0].toUpperCase() + p.value.slice(1) : ""),
       },
       {
@@ -157,7 +157,7 @@ export function Ledger({
         headerName: "Outcome",
         filter: "agSetColumnFilter", enableRowGroup: true,
         filterParams: { valueFormatter: (p: { value: LedgerEntry["status"] }) => STATUS_LABEL[p.value] ?? p.value },
-        width: 285,
+        width: 185,
         valueFormatter: (p) => STATUS_LABEL[p.value as LedgerEntry["status"]],
         cellRenderer: (p: ICellRendererParams<LedgerEntry>) =>
           p.data ? (
@@ -173,15 +173,15 @@ export function Ledger({
       },
       {
         headerName: "Why",
-        colId: "why",
+        colId: "why", hide: true,
         flex: 1.3,
         minWidth: 120,
         valueGetter: (p) => (p.data ? why(p.data) : ""),
         tooltipValueGetter: (p) => p.value,
       },
-      { field: "source", headerName: "Source", filter: "agSetColumnFilter", width: 110,
+      { field: "source", headerName: "Source", hide: true, filter: "agSetColumnFilter", width: 110,
         valueGetter: (p) => p.data ? p.data.source ?? "inbox" : null },
-      { colId: "requests", headerName: "Count", valueGetter: (p) => p.data ? 1 : null, aggFunc: "sum", width: 85, chartDataType: "excluded" },
+      { colId: "requests", headerName: "Count", hide: true, valueGetter: (p) => p.data ? 1 : null, aggFunc: "sum", width: 85, chartDataType: "excluded" },
       ...Object.entries(STATUS_LABEL).map(([status, label]): ColDef<LedgerEntry> => ({
         colId: `chart_${status}`, headerName: label, hide: true, suppressColumnsToolPanel: true,
         chartDataType: "series", aggFunc: "sum", cellClass: "currency",
@@ -190,7 +190,7 @@ export function Ledger({
       })),
       {
         field: "paypal_ref",
-        headerName: "PayPal ref",
+        headerName: "PayPal ref", hide: true,
         width: 255,
         cellClass: "font-mono text-xs",
         valueGetter: (p) =>
@@ -203,7 +203,7 @@ export function Ledger({
   );
   return (
     <Card className="min-w-0 gap-0 overflow-hidden py-0 shadow-xs">
-      <CardHeader className="flex flex-wrap items-center gap-4 p-5">
+      <CardHeader className="ledger-toolbar">
         <div className="mr-auto space-y-2">
           <CardTitle>All money moves</CardTitle>
           <CardDescription>
@@ -231,6 +231,13 @@ export function Ledger({
         <Button variant="outline" onClick={() => {
           const api = grid.current?.api;
           if (!api) return;
+          const visible = api.isSideBarVisible();
+          api.setSideBarVisible(!visible);
+          if (!visible) api.openToolPanel("columns");
+        }}>Columns &amp; filters</Button>
+        <Button variant="outline" onClick={() => {
+          const api = grid.current?.api;
+          if (!api) return;
           // The category is always Agent, regardless of the previous row grouping.
           api.setRowGroupColumns([]);
           api.createRangeChart({
@@ -239,9 +246,9 @@ export function Ledger({
           chartThemeName: resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light",
           chartThemeOverrides: { common: { title: { enabled: true, text: "Money moves by agent and outcome" }, animation: { enabled: !isFilm() } } },
           });
-        }}>Chart by agent</Button>
+        }}>Chart</Button>
         <Button variant="outline" onClick={() => grid.current?.api.exportDataAsExcel({ fileName: "floorwalker-ledger.xlsx", sheetName: "Ledger" })}>
-          <Download size={15} />Export Excel
+          <Download size={15} />Excel
         </Button>
         <Button
           variant="outline"
@@ -264,7 +271,7 @@ export function Ledger({
           }
         >
           <Download size={15} />
-          Export CSV
+          CSV
         </Button>
       </CardHeader>
       <div className="h-[520px] min-w-0 w-full">
@@ -285,7 +292,7 @@ export function Ledger({
           enableCharts
           chartThemes={[resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light"]}
           customChartThemes={{ "floorwalker-light": chartTheme(false), "floorwalker-dark": chartTheme(true) }}
-          sideBar={{ toolPanels: ["columns", "filters"] }}
+          sideBar={{ toolPanels: ["columns", "filters"], hiddenByDefault: true }}
           statusBar={{ statusPanels: [
             { statusPanel: LedgerTotals, align: "left" },
             { statusPanel: "agAggregationStatusPanel", statusPanelParams: { aggFuncs: ["sum", "count"] } },
@@ -294,8 +301,8 @@ export function Ledger({
           defaultColDef={{ sortable: true, resizable: true }}
           quickFilterText={search}
           getRowId={(p) => String(p.data.id)}
-          rowHeight={58}
-          headerHeight={42}
+          rowHeight={64}
+          headerHeight={48}
           onRowClicked={(e) => {
             if (e.data && !e.node.group && !(e.event?.target as HTMLElement)?.closest(".ag-group-expanded, .ag-group-contracted, .ag-selection-checkbox, .ag-checkbox")) {
               setSelected(e.data.id);

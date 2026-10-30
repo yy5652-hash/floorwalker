@@ -55,9 +55,11 @@ export function Checks({
 export function ReviewNote({
   review,
   policyId,
+  condensed = false,
 }: {
   review: Review | null;
   policyId?: number | null;
+  condensed?: boolean;
 }) {
   if (!review)
     return (
@@ -84,6 +86,7 @@ export function ReviewNote({
           AI review
         </span>
       </div>
+      {!condensed && <>
       <p>{review.summary}</p>
       {review.cited_rule && (
         <div className="cited-rule border-t border-current/15 pt-3 text-xs leading-relaxed">
@@ -105,6 +108,7 @@ export function ReviewNote({
           )}
         </div>
       )}
+      </>}
     </div>
   );
 }

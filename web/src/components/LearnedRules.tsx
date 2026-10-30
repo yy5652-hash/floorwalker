@@ -177,7 +177,7 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
       ) : (
         <>
           {changes.map((change) => (
-            <Card key={change.id} data-film={`learned-${change.id.split("=")[0]}`} className="min-w-0 gap-4 p-5 shadow-xs">
+            <Card key={change.id} data-film={`learned-${change.id.split("=")[0]}`} className="learned-card">
               <div className="space-y-2">
                 <h3 className="font-semibold">{change.title}</h3>
                 <p className="text-sm">{change.evidence}</p>
@@ -188,34 +188,16 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2 [&>[data-slot=badge]]:whitespace-normal">
-                <Badge variant="secondary">
-                  Saves {change.impact.tapsSaved} taps
-                </Badge>
-                <Badge variant="secondary">
-                  Taps per 100: {change.impact.tapsPer100.before} →{" "}
-                  {change.impact.tapsPer100.after}
-                </Badge>
-                <Badge variant="secondary">
-                  {money(change.impact.moreAutoUsd)} more done without you
-                </Badge>
-                <Badge variant="outline" className="text-allow">
-                  <Check aria-hidden="true" />
-                  {change.impact.declinedLetThrough} requests you declined would
-                  go through
-                </Badge>
-                {change.impact.bench && (
-                  <Badge variant="outline" className="text-allow">
-                    <Check aria-hidden="true" />
-                    Benchmark attacks still stopped: {change.impact.bench.stopped}/
-                    {change.impact.bench.attacks}
-                  </Badge>
-                )}
-                {change.impact.bench?.rulesBefore !== undefined && change.impact.bench.rulesAfter !== undefined && (
-                  <Badge variant="secondary" title="How many of the benchmark attacks the rules catch without the AI review, before and after this change">
-                    Caught by rules alone: {change.impact.bench.rulesBefore} → {change.impact.bench.rulesAfter}
-                  </Badge>
-                )}
+              <div className="learned-story">
+                <p>Taps per 100 money moves</p>
+                <div className="learned-number">{change.impact.tapsPer100.before} <span>→</span> {change.impact.tapsPer100.after}</div>
+                <p>Saves {change.impact.tapsSaved} taps</p>
+                <p className="mt-3">{money(change.impact.moreAutoUsd)} more done without you</p>
+              </div>
+              <div className="learned-evidence">
+                <p><Check size={15} className="text-allow" />{change.impact.declinedLetThrough} requests you declined would go through</p>
+                {change.impact.bench && <p><Check size={15} className="text-allow" />Benchmark attacks still stopped: {change.impact.bench.stopped}/{change.impact.bench.attacks}</p>}
+                {change.impact.bench?.rulesBefore !== undefined && change.impact.bench.rulesAfter !== undefined && <p title="Benchmark attacks caught without AI review">Caught by rules alone: {change.impact.bench.rulesBefore} → {change.impact.bench.rulesAfter}</p>}
               </div>
               <Requests ids={change.rows} state={state} />
               {actions({ kind: "apply", id: change.id }, change.id, "Apply")}

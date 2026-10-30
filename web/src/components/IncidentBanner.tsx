@@ -38,7 +38,7 @@ export function IncidentBanner({ state }: { state: State }) {
   if (!newest && !showAdvice) return null;
   const frozen = frozenCount(newest?.frozen_agents ?? null);
   return (
-    <Alert variant="destructive" data-film="incident" className="border-destructive/40 bg-destructive/5">
+    <Alert variant="destructive" data-film="incident" className="incident-banner border-destructive/40 bg-destructive/5">
       <ShieldAlert />
       <AlertTitle className="line-clamp-none">Money moved outside Floorwalker</AlertTitle>
       <AlertDescription className="gap-3">

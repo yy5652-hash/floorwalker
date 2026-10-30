@@ -353,8 +353,18 @@ def srt(timeline, path):
     Path(path).write_text("".join(f"{i}\n{ts(l['start'])} --> {ts(l['end'] + 0.3)}\n{l['text']}\n\n" for i, l in enumerate(rows, 1)))
 
 
+def track(path, total):
+    """A finished piece of music as the bed, level-matched and ending with the film."""
+    raw = subprocess.run([M.FFMPEG, "-hide_banner", "-loglevel", "error", "-i", str(path), "-f", "f32le", "-ac", "2", "-ar", str(SR), "-"], check=True, capture_output=True).stdout
+    x = np.frombuffer(raw, dtype=np.float32).reshape(-1, 2).astype(np.float64)
+    n = int(total * SR)
+    x = x[:n] if len(x) >= n else np.concatenate([x, np.zeros((n - len(x), 2))])
+    return x / max(1e-9, np.sqrt((x ** 2).mean())) * 0.16
+
+
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--music", help="a finished music file to use instead of the synthesised score")
     ap.add_argument("--out", default="out/allowance-demo.mp4")
     ap.add_argument("--audio-only", action="store_true", help="write work/mix.wav and stop")
     a = ap.parse_args()
@@ -368,10 +378,13 @@ def main():
         raise SystemExit(f"the film is {total:.1f} s; the limit is 2:55")
     holds = [e["t"] for e in events["events"] if e["kind"] == "hit"]
     voice = voice_chain(narration(timeline, total))
-    bed = arranged(timeline, holds)
+    bed = track(a.music, total) if a.music else arranged(timeline, holds)
     fx = foley(total, events["events"])
     wav = HERE / "work/mix.wav"
-    mix_down(voice, bed, fx, wav, total)
+    if a.music:
+        mix_down(voice, bed, fx, wav, total, duck_db=-9.0, music_gain=1.0, fx_gain=0.3)
+    else:
+        mix_down(voice, bed, fx, wav, total)
     M.write_wav(HERE / "work/voice-processed.wav", voice / np.abs(voice).max() * 0.8)
     if a.audio_only:
         return

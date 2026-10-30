@@ -1,14 +1,20 @@
-<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"></head><body class="brand-stage">
-<div class="stage">
-  <div class="logo fade" id="a"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#006b5e"/><path d="M8 25V7h17v5H13v3h9v5h-9v5z" fill="#fff"/><path d="m20 24 2 2 5-5" fill="none" stroke="#b1e3d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Floorwalker</div>
-  <div class="tag fade" id="b">Every refund checked. Fewer taps every week.</div>
-  <div class="chips fade" id="c" style="flex-wrap:wrap;justify-content:center;max-width:1500px"><span class="chip">PayPal Agent Toolkit</span><span class="chip">Refunds · Payouts · Subscriptions</span><span class="chip">REST API &amp; MCP</span><span class="chip">Learns from your decisions</span><span class="chip">Watches PayPal</span><span class="chip">AG Grid</span><span class="chip">Gemini</span></div>
-  <div class="tag fade" id="f" style="font-size:28px;margin-top:44px">Free to start · connect your own PayPal sandbox app · invite your team</div>
-  <div class="tag fade" id="d" style="font-size:34px;margin-top:22px;color:var(--mint);font-weight:600">Try it live: floorwalker.43-160-214-187.sslip.io</div>
-  <div class="tag fade" id="e" style="font-size:28px;margin-top:14px">github.com/yy5652-hash/floorwalker</div>
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><link rel="stylesheet" href="cine.css">
+<style>
+  .col { position: absolute; left: 120px; top: 280px; width: 1000px; color: #fff; }
+  .logo { color: #fff; font-size: 104px; } .logo svg { width: 112px; height: 112px; }
+  .tag { color: #e5f4ef; font-size: 44px; margin-top: 26px; }
+  .link { font-size: 40px; font-weight: 600; margin-top: 56px; color: #9fe9d4; letter-spacing: -.02em; }
+  .sub { font-size: 30px; margin-top: 14px; color: #d8e7e2; }
+</style></head><body>
+<div class="shot" id="s"><img src="img/shop-dusk.jpg" alt=""><div class="shade" style="background:linear-gradient(90deg,rgba(3,14,20,.9) 18%,rgba(3,14,20,.5) 56%,rgba(3,14,20,0) 78%)"></div></div>
+<div class="col">
+  <div class="logo quiet" id="a"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#006b5e"/><path d="M8 25V7h17v5H13v3h9v5h-9v5z" fill="#fff"/><path d="m20 24 2 2 5-5" fill="none" stroke="#b1e3d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Floorwalker</div>
+  <div class="tag quiet" id="b">Every refund checked. Fewer taps every week.</div>
+  <div class="link quiet" id="d">floorwalker.43-160-214-187.sslip.io</div>
+  <div class="sub quiet" id="e">github.com/yy5652-hash/floorwalker</div>
 </div>
+<script src="cine.js"></script>
 <script>
-  const show = (id, t, at) => { const e = document.getElementById(id); const p = Math.max(0, Math.min(1, (t - at) / 0.6)); e.style.opacity = p; e.style.transform = `translateY(${18 * (1 - p)}px)`; };
-  window.render = t => { show('a', t, 0.1); show('b', t, 0.4); show('c', t, 1.2); show('f', t, 1.6); show('d', t, 1.9); show('e', t, 2.2); };
+  window.render = (t) => { shot('s', t, -0.4, 60, { zoom: [1.08, 1.0], drift: [-20, 0] }); rise('a', t, 0.4); rise('b', t, 0.9); rise('d', t, 1.7); rise('e', t, 2.1); };
   window.ready = true;
 </script></body></html>

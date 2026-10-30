@@ -1,0 +1,7 @@
+/* Full-bleed stills with a slow camera move; words sit quietly on top. */
+html, body { background: #06100e; }
+.shot { position: absolute; inset: 0; overflow: hidden; opacity: 0; will-change: opacity; }
+.shot img { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover; transform-origin: 50% 50%; will-change: transform; }
+.shade { position: absolute; inset: 0; }
+.display { position: absolute; color: #fff; font-weight: 500; letter-spacing: -.035em; line-height: 1.04; text-shadow: 0 2px 40px rgba(0,0,0,.45); }
+.quiet { opacity: 0; }

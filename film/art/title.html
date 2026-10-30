@@ -1,11 +1,15 @@
-<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"></head><body class="brand-stage">
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><link rel="stylesheet" href="cine.css">
+<style>
+  .logo, .tag { color: #fff; } .tag { color: #dff3ec; text-shadow: 0 2px 24px rgba(0,0,0,.5); }
+  .logo { text-shadow: 0 2px 40px rgba(0,0,0,.4); }
+</style></head><body>
+<div class="shot" id="s"><img src="img/floorwalker.jpg" alt=""><div class="shade" style="background:radial-gradient(ellipse at center,rgba(0,52,45,.62),rgba(0,30,26,.78))"></div></div>
 <div class="stage">
   <div class="logo fade" id="a"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#006b5e"/><path d="M8 25V7h17v5H13v3h9v5h-9v5z" fill="#fff"/><path d="m20 24 2 2 5-5" fill="none" stroke="#b1e3d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Floorwalker</div>
   <div class="tag fade" id="b">Every refund checked. Fewer taps every week.</div>
-  <div class="flow fade" id="c"><div class="box">AI agent</div><div class="arrow">→</div><div class="box mid">Floorwalker</div><div class="arrow">→</div><div class="box">PayPal</div></div>
 </div>
+<script src="cine.js"></script>
 <script>
-  const show = (id, t, at) => { const e = document.getElementById(id); const p = Math.max(0, Math.min(1, (t - at) / 0.6)); e.style.opacity = p; e.style.transform = `translateY(${18 * (1 - p)}px)`; };
-  window.render = t => { show('a', t, 0.1); show('b', t, 0.5); show('c', t, (window.LINES?.t2?.[0] ?? 5) - 0.2); };
+  window.render = (t) => { shot('s', t, -0.3, 40, { zoom: [1.1, 1.0] }); rise('a', t, 0.5); rise('b', t, 1.2); };
   window.ready = true;
 </script></body></html>

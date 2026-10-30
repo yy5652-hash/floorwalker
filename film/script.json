@@ -48,6 +48,20 @@
    ]
   },
   {
+   "id": "mug",
+   "kind": "art",
+   "page": "art/mug.html",
+   "lead": 0.5,
+   "tail": 0.5,
+   "lines": [
+    {
+     "id": "g1",
+     "text": "Maya's mug arrived chipped.",
+     "gap": 0.0
+    }
+   ]
+  },
+  {
    "id": "maya",
    "kind": "app",
    "lead": 0.6,
@@ -55,9 +69,9 @@
    "lines": [
     {
      "id": "m1",
-     "text": "Maya's mug arrived chipped. The Support agent refunds the one mug: $24.",
+     "text": "The Support agent refunds the one mug: $24.",
      "gap": 0.0,
-     "spoken": "Maya's mug arrived chipped. The Support agent refunds the one mug: twenty-four dollars."
+     "spoken": "The Support agent refunds the one mug: twenty-four dollars."
     },
     {
      "id": "m2",

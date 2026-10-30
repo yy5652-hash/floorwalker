@@ -12,8 +12,9 @@
     #film-fade { inset: 0; background: #f5f7fa; opacity: 0; }
     #film-cursor { width: 38px; height: 38px; left: 0; top: 0; opacity: 0; transform-origin: 4px 4px; filter: drop-shadow(0 5px 8px rgba(18,35,63,.35)); }
     #film-ripple { width: 76px; height: 76px; margin: -38px 0 0 -38px; border-radius: 50%; border: 4px solid #12233f; opacity: 0; }
-    #film-caption { left: 50%; bottom: 54px; transform: translateX(-50%); max-width: 1760px; width: max-content; font-weight: 600; font-size: 36px; line-height: 1.36; color: #ffffff; text-align: center;
-      background: rgba(18, 35, 63, 0.9); padding: 14px 32px 15px; border-radius: 18px; opacity: 0; box-shadow: 0 14px 34px rgba(18,35,63,.28); border: 1px solid rgba(255, 255, 255, 0.16); letter-spacing: -0.003em; }
+    #film-caption { left: 50%; bottom: 54px; transform: translateX(-50%); max-width: 1660px; width: max-content; font-family: 'Manrope Variable', Inter, sans-serif; font-weight: 500; font-size: 36px; line-height: 1.34; color: #ffffff; text-align: center;
+      background: rgba(13, 34, 31, 0.92); padding: 13px 30px 14px; border-radius: 12px; opacity: 0; box-shadow: 0 14px 34px rgba(0,0,0,.22); letter-spacing: -.012em; }
+    #film-caption.on-art { background: transparent; box-shadow: none; font-size: 40px; bottom: 64px; text-shadow: 0 2px 6px rgba(0,0,0,.75), 0 0 34px rgba(0,0,0,.65); }
     #film-key { left: 0; top: 0; font-weight: 600; font-size: 28px; color: #ffffff; background: #12233f; padding: 8px 18px; border-radius: 12px; opacity: 0; box-shadow: 0 10px 24px rgba(18,35,63,.3); letter-spacing: .02em; }
     #film-stat { left: 48px; top: 40px; font-weight: 600; font-size: 26px; color: #ffffff; background: rgba(18, 35, 63, 0.92); padding: 10px 22px 11px; border-radius: 14px; opacity: 0; box-shadow: 0 10px 26px rgba(18,35,63,.25); }
     #film-stat b { color: #8ee0ae; font-weight: 700; }

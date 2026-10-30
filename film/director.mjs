@@ -33,7 +33,7 @@ const frameOffset = id => { let n = 0; for (const sc of timeline.scenes) { if (s
 mkdirSync(framesDir, { recursive: true });
 
 // ---------------------------------------------------------------- servers and browser
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2' };
 const server = createServer((req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   let file = path.startsWith('/film/') ? join(HERE, path.slice(6)) : join(ROOT, 'dist/web', path === '/' ? 'index.html' : path);
@@ -111,7 +111,7 @@ async function artScene(sc) {
   cam = { x: 0, y: 0, w: 1920 };
   await open(`http://127.0.0.1:${PORT}/film/${sc.page}`, 'window.ready === true');
   const rel = Object.fromEntries(sc.lines.map(l => [l.id, [l.start - sc.start, l.end - sc.start]]));
-  await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); true`);
+  await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); document.getElementById('film-caption').classList.add('on-art'); true`);
   const n = Math.round((sc.end - sc.start) * FPS);
   for (let f = 0; f < n; f++) {
     if (f % EVERY) continue;
@@ -319,7 +319,7 @@ async function phoneScene(sc) {
   const rel = Object.fromEntries(sc.lines.map(l => [l.id, [l.start - sc.start, l.end - sc.start]]));
   await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); true`);
   // The phone fills the right of the frame, so the caption sits under the words on the left instead of across it.
-  await js(`Object.assign(document.getElementById('film-caption').style, { left: '100px', bottom: '90px', transform: 'none', width: '860px', maxWidth: '860px', textAlign: 'left' }); true`);
+  await js(`Object.assign(document.getElementById('film-caption').style, { left: '100px', bottom: '90px', transform: 'none', width: '860px', maxWidth: '860px', textAlign: 'left', background: 'transparent', boxShadow: 'none', padding: '0' }); true`);
   const inner = sel => js(`(() => { const f = document.getElementById('app'), r = f.getBoundingClientRect(), e = f.contentDocument.querySelector(${JSON.stringify(sel)}); if (!e) return null; const b = e.getBoundingClientRect(), k = r.width / f.offsetWidth; return { x: r.left + (b.left + b.width / 2) * k, y: r.top + (b.top + b.height / 2) * k }; })()`);
   // The push notification shows the same text the server sends (server/notify.ts), for the recorded request.
   const row = st.after.ledger.find(r => r.id === ap.ledgerId);

@@ -1,18 +1,20 @@
 <!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
 <style>
-  h1 { font-size: 56px; margin: 0 0 14px; letter-spacing: -0.02em; }
-  .sub { font-size: 29px; color: var(--muted); margin-bottom: 58px; }
-  .grid { display: grid; grid-template-columns: repeat(3, 520px); gap: 0; }
-  .card { background: #fff; border-radius: 0; padding: 38px 42px; border-right: 1px solid var(--line); }
-  .card.win { background: var(--brand-dark); color: var(--white); border-radius: 12px; }
-  .k { font-size: 30px; color: var(--ink); font-weight: 700; }
-  .s { font-size: 28px; color: var(--muted); margin-top: 4px; }
-  .v { font-size: 92px; font-weight: 800; letter-spacing: -0.04em; margin: 22px 0 0; }
-  .v.bad { color: var(--block); } .v.mid { color: var(--hold); } .v.good { color: var(--allow); }
-  .d { font-size: 28px; color: var(--muted); margin-top: 2px; }
-  .t { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 28px; color: var(--muted); }
-  .t b { font-size: 40px; color: var(--ink); }
-.card.win .k, .card.win .v, .card.win .t b { color: var(--white); } .card.win .s, .card.win .d, .card.win .t { color: var(--mint); } .card.win .t { border-color: #ffffff35; } .v { font-weight: 500; font-size: 100px; } h1 { font-weight: 550; font-size: 64px; }
+  html, body { background: #00443b; color: #fff; }
+  h1 { font-size: 62px; margin: 0 0 16px; letter-spacing: -.03em; font-weight: 500; }
+  .sub { font-size: 30px; color: #bfe6da; margin-bottom: 66px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 540px); gap: 0; }
+  .card { padding: 34px 48px 40px; border-left: 1px solid #ffffff30; }
+  .card:first-child { border-left: 0; }
+  .card.win { background: #f4faf7; color: #182b29; border-radius: 14px; border-left: 0; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
+  .k { font-size: 36px; font-weight: 600; letter-spacing: -.02em; }
+  .s { font-size: 28px; color: #bfe6da; margin-top: 6px; }
+  .v { font-size: 124px; font-weight: 500; letter-spacing: -.05em; margin: 28px 0 0; line-height: 1.05; }
+  .d { font-size: 28px; color: #bfe6da; margin-top: 4px; }
+  .t { margin-top: 30px; padding-top: 22px; border-top: 1px solid #ffffff30; font-size: 28px; color: #bfe6da; }
+  .t b { font-size: 48px; font-weight: 500; color: #fff; margin-right: 6px; }
+  .v.bad { color: #ffb4bd; } .v.mid { color: #ffd98f; } .v.good { color: #006b5e; }
+  .win .s, .win .d, .win .t { color: #40564e; } .win .t { border-color: #dce5e1; } .win .t b { color: #182b29; }
 </style></head><body>
 <div class="stage">
   <h1 class="fade" id="a">FloorwalkerBench</h1>

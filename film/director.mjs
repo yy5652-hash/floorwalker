@@ -318,7 +318,9 @@ async function phoneScene(sc) {
   await js('document.getElementById("app").contentDocument.fonts.ready.then(() => true)');
   const rel = Object.fromEntries(sc.lines.map(l => [l.id, [l.start - sc.start, l.end - sc.start]]));
   await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); true`);
-  const inner = sel => js(`(() => { const f = document.getElementById('app'), r = f.getBoundingClientRect(), e = f.contentDocument.querySelector(${JSON.stringify(sel)}); if (!e) return null; const b = e.getBoundingClientRect(); return { x: r.left + b.left + b.width / 2, y: r.top + b.top + b.height / 2 }; })()`);
+  // The phone fills the right of the frame, so the caption sits under the words on the left instead of across it.
+  await js(`Object.assign(document.getElementById('film-caption').style, { left: '100px', bottom: '90px', transform: 'none', width: '860px', maxWidth: '860px', textAlign: 'left' }); true`);
+  const inner = sel => js(`(() => { const f = document.getElementById('app'), r = f.getBoundingClientRect(), e = f.contentDocument.querySelector(${JSON.stringify(sel)}); if (!e) return null; const b = e.getBoundingClientRect(), k = r.width / f.offsetWidth; return { x: r.left + (b.left + b.width / 2) * k, y: r.top + (b.top + b.height / 2) * k }; })()`);
   // The push notification shows the same text the server sends (server/notify.ts), for the recorded request.
   const row = st.after.ledger.find(r => r.id === ap.ledgerId);
   const note = { title: `Approve a $${row.amount.toFixed(2)} ${row.kind}?`, body: `Support agent → ${row.counterparty} · AI review: ${row.review?.verdict ?? 'unavailable'}` };

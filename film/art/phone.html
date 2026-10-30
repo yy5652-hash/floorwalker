@@ -24,15 +24,18 @@
   .scrim { position: absolute; inset: 0; z-index: 1; background: rgba(15, 23, 42, .18); opacity: 0; pointer-events: none; }
 .side h1 { font-weight: 550; font-size: 72px; } .side .chip { border-radius: 0; background: transparent; padding: 20px 0 0; border: 0; color: var(--brand); border-top: 1px solid var(--line); } .notch { top: 23px; height: 22px; width: 100px; margin-left: -50px; } .screen iframe { margin-top: 28px; height: 936px; } .note { left: 12px; }
 
-/* Video framing keeps the live app at readable type sizes without scaling it. */
-.side { left: 100px; width: 680px; }
-.phone { left: 940px; top: 20px; width: 820px; height: 1040px; }
-.screen { width: 780px; height: 1000px; }
-.screen iframe { width: 780px; height: 972px; }
-.note { left: 24px; width: 732px; }
-.note .top { gap: 16px; padding: 22px 24px 12px; }
-.note .title, .note .body { padding-inline: 24px; }
-.note .top img { width: 36px; height: 36px; }
+/* Video framing: the real phone layout at a real phone's proportions, enlarged to read in a video. It runs off the bottom of the frame. */
+.side { left: 100px; top: 210px; width: 760px; }
+.phone { left: 1120px; top: 28px; width: 516px; height: 1140px; border-radius: 72px; }
+.notch { top: 24px; }
+.screen { left: 14px; top: 14px; width: 488px; height: 1112px; border-radius: 58px; }
+.screen iframe { width: 390px; height: 862px; margin-top: 34px; transform: scale(1.25); transform-origin: 0 0; }
+.note { left: 14px; top: 62px; width: 460px; }
+.note .top { gap: 12px; padding: 18px 20px 8px; font-size: 18px; }
+.note .top img { width: 32px; height: 32px; }
+.note .title { padding-inline: 20px; font-size: 25px; }
+.note .body { padding: 6px 20px 16px; font-size: 21px; }
+.note .actions div { font-size: 22px; padding: 16px 0; }
 </style></head><body>
 <div class="side fade" id="a">
   <h1>Approve from your phone</h1>
@@ -47,7 +50,7 @@
     <div class="body" id="note-body"></div>
     <div class="actions"><div>Approve</div><div>Decline</div></div>
   </div>
-  <iframe id="app" src="/approve" onload="const sheet = this.contentDocument.createElement('link'); sheet.rel = 'stylesheet'; sheet.href = '/film/art/phone-app.css'; this.contentDocument.head.append(sheet)"></iframe>
+  <iframe id="app" src="/approve"></iframe>
 </div></div>
 <script>
   const ease = p => p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;

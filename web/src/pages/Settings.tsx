@@ -397,7 +397,7 @@ function Team({ state }: PageProps) {
                     <td>
                       <strong>{member.user.name}</strong>
                       <span className="block text-xs text-muted-foreground">
-                        {member.user.email}
+                        {member.user.email.endsWith(".invalid") ? "Demo account" : member.user.email}
                         {member.userId === state.me?.userId && " · You"}
                       </span>
                     </td>

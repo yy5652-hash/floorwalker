@@ -178,7 +178,7 @@ const options = {
       },
     }),
     anonymous({
-      emailDomainName: "demo.allowance.invalid",
+      emailDomainName: "demo.floorwalker.invalid",
       generateName: () => "Demo owner",
       // Signing up from the demo keeps the demo workspace: it moves to the new account.
       onLinkAccount: async ({ anonymousUser, newUser }) => {

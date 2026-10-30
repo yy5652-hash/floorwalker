@@ -50,7 +50,7 @@ function Limit({
       className={`limit min-w-0 space-y-1 rounded-lg border p-3   ${changed ? "changed" : ""}`}
     >
       <div className="text-[10px] text-muted-foreground">{k}</div>
-      <div className="text-sm font-medium tabular-nums">{fmt(v)}</div>
+      <div className="text-sm font-medium">{fmt(v)}</div>
     </div>
   );
 }
@@ -149,7 +149,7 @@ function PolicyView({ policy, base }: { policy: Policy; base: Policy }) {
                 </TableCell>
                 <TableCell className="font-mono text-xs">{p.email}</TableCell>
                 <TableCell>{p.role}</TableCell>
-                <TableCell style={{ textAlign: "right" }}>
+                <TableCell className="tabular-nums" style={{ textAlign: "right" }}>
                   {money(p.monthly_limit)}
                 </TableCell>
               </TableRow>

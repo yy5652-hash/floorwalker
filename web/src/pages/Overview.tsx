@@ -166,7 +166,7 @@ export function Overview(
               ),
           )}
         </div>
-        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3 [&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span]:text-xs [&>span]:text-muted-foreground [&_i]:size-2 [&_i]:rounded-sm [&_strong]:font-medium [&_strong]:text-foreground [&_strong]:tabular-nums">
+        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3 [&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span]:text-xs [&>span]:text-muted-foreground [&_i]:size-2 [&_i]:rounded-sm [&_strong]:font-medium [&_strong]:text-foreground">
           {outcomes.map((o) => (
             <span key={o.key}>
               <i style={{ background: o.color }} />
@@ -212,7 +212,7 @@ export function Overview(
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
           <h2>
             Needs you{" "}
-            <Badge className="tabular-nums" variant="secondary">
+            <Badge variant="secondary">
               {waiting.length}
             </Badge>
           </h2>

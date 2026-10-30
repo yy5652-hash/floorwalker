@@ -50,7 +50,7 @@ export function WorkspaceMenu({ state }: { state: State }) {
           <Button
             variant="ghost"
             disabled={busy}
-            className="ml-auto min-w-0 max-w-[200px] flex-1 shrink gap-1 px-2 text-xs"
+            className="ml-auto min-w-0 max-w-[200px] flex-1 shrink gap-1 lg:max-w-none lg:flex-none lg:shrink-0 px-2 text-xs"
           >
             <span className="truncate">
               {state.workspace?.name ?? "Juniper & Oak Ceramics"}

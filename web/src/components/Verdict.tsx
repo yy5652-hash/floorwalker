@@ -86,8 +86,8 @@ export function ReviewNote({
           AI review
         </span>
       </div>
+      <p className={condensed ? "line-clamp-2" : undefined}>{review.summary}</p>
       {!condensed && <>
-      <p>{review.summary}</p>
       {review.cited_rule && (
         <div className="cited-rule border-t border-current/15 pt-3 text-xs leading-relaxed">
           Rule: “{review.cited_rule}”{" "}
@@ -143,7 +143,7 @@ export function Verdict(props: VerdictProps) {
             {money(amount)} to {personName(props.counterparty)}
           </h3>
         </div>
-        <div className="text-xl font-semibold tracking-tight tabular-nums [&>small]:block [&>small]:text-xs [&>small]:font-normal [&>small]:text-muted-foreground">
+        <div className="text-xl font-semibold tracking-tight [&>small]:block [&>small]:text-xs [&>small]:font-normal [&>small]:text-muted-foreground">
           {money(amount)}
           {props.approvedAmount != null &&
             props.approvedAmount !== props.amount && (

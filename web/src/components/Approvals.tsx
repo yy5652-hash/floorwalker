@@ -541,7 +541,7 @@ export function Approvals(props: PageProps) {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
         <h2>
           Waiting for your approval{" "}
-          <Badge className="tabular-nums" variant="secondary">
+          <Badge variant="secondary">
             {waiting.length}
           </Badge>
         </h2>
@@ -581,7 +581,7 @@ export function Approvals(props: PageProps) {
         {recent.length ? (
           recent.map((e) => (
             <a
-              className="flex flex-wrap items-center gap-3 border-b px-5 py-4 last:border-0 hover:bg-muted/50 [&>div]:flex [&>div]:min-w-0 [&>div]:flex-1 [&>div]:flex-col [&_strong]:tabular-nums [&_span]:break-words [&>time]:ml-auto"
+              className="flex flex-wrap items-center gap-3 border-b px-5 py-4 last:border-0 hover:bg-muted/50 [&>div]:flex [&>div]:min-w-0 [&>div]:flex-1 [&>div]:flex-col [&_span]:break-words [&>time]:ml-auto"
               key={e.id}
               href={`/app#ledger/${e.id}`}
             >

@@ -216,7 +216,7 @@ export function AgentCard({
               )}
             </div>
           )}
-          <div className="grid grid-cols-3 gap-2 border-t pt-4 [&_strong]:block [&_strong]:text-xl [&_strong]:font-medium [&_strong]:tabular-nums [&_span]:mt-1 [&_span]:block [&_span]:text-[10px] [&_span]:text-muted-foreground">
+          <div className="grid grid-cols-3 gap-2 border-t pt-4 [&_strong]:block [&_strong]:text-xl [&_strong]:font-medium [&_span]:mt-1 [&_span]:block [&_span]:text-[10px] [&_span]:text-muted-foreground">
             <div>
               <strong>{agent.metrics.funnel.auto}</strong>
               <span>Done on its own</span>

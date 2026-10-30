@@ -324,7 +324,7 @@ export function Inbox({
       <Card className="min-w-0 gap-0 overflow-hidden py-0 shadow-xs">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
           <h2>All messages</h2>
-          <Badge className="tabular-nums" variant="secondary">
+          <Badge variant="secondary">
             {state.tickets.length}
           </Badge>
         </CardHeader>

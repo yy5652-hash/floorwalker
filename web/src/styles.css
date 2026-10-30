@@ -239,7 +239,7 @@
 
 /* Product typography and surfaces. Body copy remains readable; metadata recedes. */
 :root { --text-sm: .9375rem; --text-sm--line-height: 1.6; --text-xs: .8125rem; --text-xs--line-height: 1.5; }
-body { font-variant-numeric: tabular-nums; }
+body { font-variant-numeric: proportional-nums; }
 button, input, select, textarea { font: inherit; }
 button, a, summary { outline-offset: 4px; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ring); }
@@ -247,7 +247,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 [data-slot="button"][data-size="default"] { min-height: 40px; }
 [data-slot="button"][data-size="lg"] { min-height: 48px; padding-inline: 24px; }
 [data-slot="badge"] { font-size: 12px; font-weight: 500; border-radius: 5px; }
-.money { font-variant-numeric: tabular-nums; letter-spacing: -.045em; white-space: nowrap; }
+.money { letter-spacing: -.045em; white-space: nowrap; }
 .money-cents { font-size: .55em; letter-spacing: -.015em; }
 .status-label { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; background: transparent; padding: 0; border: 0; }
 .status-label::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
@@ -394,8 +394,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .site-section h2 { font-size: 38px; line-height: 1.15; font-weight: 550; letter-spacing: -.045em; }
 .site-section h3 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
 .section-index { color: var(--muted-foreground); font-size: 12px; margin-bottom: 18px; }
-.guard-story { display: grid; grid-template-columns: .9fr 1.5fr; gap: 64px; }
-.failure-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.guard-story { display: grid; grid-template-columns: .8fr 1.6fr; gap: 48px; }
+.failure-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .failure-pair p { font-size: 14px; color: var(--muted-foreground); margin-top: 6px; }
 .guard-answer { font-size: 16px; line-height: 1.8; margin-top: 26px; max-width: 640px; }
 .guard-answer strong { font-weight: 600; }
@@ -410,10 +410,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .learning-figure span { font-size: 50px; color: var(--muted-foreground); }
 .learning-proof p { font-size: 14px; color: var(--muted-foreground); }
 .learning-boundary { display: flex; align-items: center; gap: 8px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 13px; }
-.watch-story { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 64px; }
-.watch-story > .section-index { grid-column: 1 / -1; margin: 0; }
-.watch-story > p:not(.section-index) { color: var(--muted-foreground); font-size: 16px; line-height: 1.8; }
-.watch-story > a { grid-column: 2; }
+.watch-story { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+.watch-copy > p:not(.section-index) { color: var(--muted-foreground); font-size: 15px; line-height: 1.8; margin: 16px 0; }
 .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 32px; margin-bottom: 28px; }
 .section-heading > p { color: var(--muted-foreground); font-size: 13px; max-width: 430px; line-height: 1.7; }
 .benchmark-scroll { overflow-x: auto; }
@@ -422,6 +420,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .benchmark-table thead th { font-size: 12px; color: var(--muted-foreground); font-weight: 500; }
 .benchmark-table th small { font-size: inherit; font-weight: inherit; }
 .benchmark-table tbody th { font-weight: 500; }
+.benchmark-table td { font-variant-numeric: tabular-nums; }
 .benchmark-table td:nth-child(2) { font-size: 26px; letter-spacing: -.04em; font-weight: 550; }
 .benchmark-winner { background: var(--brand-field); color: var(--brand-ink); }
 .benchmark-winner th { font-weight: 700 !important; }
@@ -468,18 +467,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .hero-intro > p { font-size: 15px; margin: 20px 0; line-height: 1.6; }
   .hero-intro > button { width: 100%; }
   .hero-intro .hero-disclosure { text-align: center; margin-top: 9px; font-size: 11px; }
-  .product-window { padding: 16px 16px 0; max-height: 414px; }
+  .product-window { padding: 16px 16px 0; }
   .product-caption { font-size: 12px; }
   .product-caption > span:last-child { display: none; }
   .product-desktop { display: none; }
-  .product-phone { display: block; width: 100%; height: 330px; object-fit: cover; object-position: 0 34%; border-radius: 6px; }
+  .product-phone { display: block; width: 100%; height: auto; border-radius: 6px; }
   .product-window figcaption { font-size: 9px; line-height: 1.5; }
   .site-section { padding-block: 30px; }
   .site-section h2 { font-size: 30px; }
   .site-section h2 br { display: none; }
   .section-index { font-size: 11px; margin-bottom: 10px; }
   .guard-story, .learning-story, .developer-story, .watch-story { display: block; }
-  .failure-pair { margin-top: 20px; gap: 16px; }
+  .failure-pair { grid-template-columns: minmax(0, 1fr); margin-top: 24px; gap: 28px; }
   .site-section h3 { font-size: 15px; }
   .failure-pair p { font-size: 13px; }
   .guard-answer { font-size: 14px; margin-top: 18px; line-height: 1.65; }
@@ -553,6 +552,32 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .site-hero .product-window { padding-inline: 22px; }
 @media (max-width: 600px) {
  .site-hero .product-window { padding-inline: 16px; }
- .product-phone { object-position: 0 63%; }
  .site-section h2 { word-spacing: 0; }
 }
+
+/* Concrete failure modes and the recorded PayPal incident. */
+.failure-example { min-width: 0; }
+.failure-visual { margin-top: 18px; }
+.request-stack { display: grid; gap: 8px; }
+.request-stamp { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 12px; }
+.request-stamp > div { display: grid; gap: 4px; }
+.request-stamp small { font-size: 12px; color: var(--muted-foreground); }
+.request-stamp strong { font-size: 22px; font-weight: 550; }
+.rubber-stamp { display: inline-flex; align-items: center; gap: 4px; padding: 5px 8px; border: 1px solid var(--input); border-radius: 4px; font-size: 12px; color: var(--muted-foreground); }
+.email-preview { border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 16px; }
+.email-preview header { display: grid; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.email-preview header strong { font-size: 14px; font-weight: 600; }
+.email-preview header span { font-size: 12px; color: var(--muted-foreground); }
+.email-preview .message > p { margin-top: 12px; color: var(--foreground); font-size: 13px; line-height: 1.6; }
+.email-preview .hidden-part { display: block; margin-top: 12px; padding: 12px; border-radius: 6px; background: var(--block-bg); color: var(--block); font-size: 13px; line-height: 1.6; }
+.email-preview .hidden-part strong { display: block; margin-bottom: 6px; font-size: 12px; }
+.failure-example .example-caption, .incident-example figcaption { font-size: 11px; line-height: 1.6; color: var(--muted-foreground); margin-top: 10px; }
+.incident-example { min-width: 0; }
+.incident-example .incident-banner { padding: 24px; background: var(--block-bg); border-color: var(--block); color: var(--block); }
+.incident-example [data-slot="alert-title"] { font-size: 20px; line-height: 1.35; }
+.incident-example [data-slot="alert-description"] { gap: 18px; color: var(--block); margin-top: 12px; }
+.incident-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.incident-preview-actions > span { display: inline-flex; align-items: center; border: 1px solid var(--input); border-radius: 8px; padding: 9px 12px; background: var(--card); color: var(--foreground); font-size: 13px; font-weight: 500; }
+.incident-preview-actions > span:last-child { background: var(--block); color: var(--background); border-color: var(--block); }
+@media (max-width: 1100px) { .guard-story { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
+@media (max-width: 600px) { .incident-example { margin-top: 24px; } .incident-example .incident-banner { padding: 18px; } }

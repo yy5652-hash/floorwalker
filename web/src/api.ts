@@ -425,9 +425,9 @@ export const relativeTime = (at: string | null) => {
     Math.floor((Date.now() - Date.parse(at)) / 60000),
   );
   if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)} hr ago`;
-  return `${Math.floor(minutes / 1440)} days ago`;
+  if (minutes < 60) return `${plural(minutes, "minute", "minutes")} ago`;
+  if (minutes < 1440) return `${plural(Math.floor(minutes / 60), "hour", "hours")} ago`;
+  return `${plural(Math.floor(minutes / 1440), "day", "days")} ago`;
 };
 export const why = (e: LedgerEntry) =>
   (

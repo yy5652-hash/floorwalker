@@ -377,8 +377,10 @@ S.jordan = async (B, sc) => {
   const st = stepOf('T5');
   await prime(st.before, { T5: st.events });
   cam = { ...WIDE };
-  click(B, 1.4, item('Jordan Blake'), sc.start);
-  scrollTo(B, 1.8, 0.5, 0);
+  // Jordan's email is below the fold of the message list, which scrolls on its own.
+  B.span(0.1, 0.6, async p => { await js(`(() => { const e = [...document.querySelectorAll('.item')].find(x => x.textContent.includes('Jordan Blake')), l = e.parentElement; l.scrollTop = ${ease(p)} * (e.offsetTop - l.offsetTop); return true; })()`); });
+  click(B, 2.1, item('Jordan Blake'), sc.start);
+  scrollTo(B, 2.3, 0.4, 0);
   click(B, 3.0, film('run'), sc.start);
   const end = lineAt(sc, 'j2') + 0.6;
   replay(B, 3.2, end - 3.2, 'T5', st.events.at(-1).t / Math.max(1, end - 3.2), () => setState(st.after));
@@ -524,9 +526,13 @@ S.ask = async (B, sc) => {
   const seen = stepOf('learned'), st = stepOf('assistant');
   await prime(seen.before, {}, { learned: seen.response, assistant: st.response.answer }, 'overview');
   cam = { ...WIDE };
+  await js(`Object.assign(document.getElementById('film-caption').style, { left: '60px', transform: 'none', width: 'auto', maxWidth: '1180px', textAlign: 'left' }); true`);
+  B.do(0, () => { hud = ''; });
   click(B, 1.0, '.assistant-launcher', sc.start);
-  camTo(B, 1.4, 1.0, async () => fit(await rect('.assistant-panel'), { pad: 60, minW: 860, ay: 0.5 }));
+  // The panel grows as the answer arrives, so the camera is set for its full height, and the caption stays clear of it.
+  camTo(B, 1.4, 1.0, { x: VW - 1384, y: VH - 778, w: 1384 });
   click(B, 2.6, '.assistant-suggestions button', sc.start);
+  cursorTo(B, 3.5, 0.65, '.assistant-panel textarea');
 };
 
 // ---------------------------------------------------------------- run
@@ -537,6 +543,8 @@ for (const sc of timeline.scenes) {
   if (sc.kind === 'art') await artScene(sc);
   else if (sc.kind === 'phone') await phoneScene(sc);
   else await appScene(sc, B => S[sc.id](B, sc));
+  const slip = await js(`(document.body.innerText.match(/film: [^\\n]+/) ?? [''])[0]`).catch(() => '');
+  if (slip) console.log(`WARNING ${sc.id}: ${slip}`);
   console.log(`${sc.id.padEnd(8)} ${((sc.end - sc.start) * FPS).toFixed(0)} frames in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 }
 if (!PATCH) writeFileSync(join(HERE, ONLY ? 'work/events.preview.json' : 'work/events.json'), JSON.stringify({ events }));

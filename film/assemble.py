@@ -385,7 +385,7 @@ def main():
     fx = foley(total, events["events"])
     wav = HERE / "work/mix.wav"
     if a.music:
-        mix_down(voice, bed, fx, wav, total, duck_db=-9.0, music_gain=1.0, fx_gain=0.3)
+        mix_down(voice, bed, fx, wav, total, duck_db=-13.0, music_gain=1.0, fx_gain=0.3)
     else:
         mix_down(voice, bed, fx, wav, total)
     M.write_wav(HERE / "work/voice-processed.wav", voice / np.abs(voice).max() * 0.8)

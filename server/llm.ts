@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { GoogleGenAI, type Content, type Part } from "@google/genai";
+import { GoogleGenAI, type Content, type Part, ThinkingLevel } from "@google/genai";
 import { z } from "zod/v4";
 import { config } from "./config.ts";
 
@@ -119,7 +119,8 @@ async function geminiLoop(opts: Parameters<typeof toolLoop>[0]): Promise<string>
     const res = await gemini().models.generateContent({
       model: opts.model,
       contents,
-      config: { systemInstruction: opts.system, tools: [{ functionDeclarations }] },
+      // The guard and its reviewer make the decisions; the agent only needs to act quickly.
+      config: { systemInstruction: opts.system, tools: [{ functionDeclarations }], thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } },
     });
     const content = res.candidates?.[0]?.content;
     if (!content) throw new Error(`Model returned no output (${res.candidates?.[0]?.finishReason ?? "unknown"})`);

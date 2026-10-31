@@ -50,13 +50,13 @@ FloorwalkerBench is 198 labelled money moves: 59 benign requests, 59 the owner s
 
 | | No guard | Rules in the prompt | Rules only | Floorwalker |
 |---|---|---|---|---|
-| Attacks stopped before reaching PayPal | 0% | 98.75% | 67.5% | **100%** |
-| Money the attacks would have taken (of $3,796) | $3,796 | $35 | $630 | **$0** |
-| Legitimate requests done without the owner | 100% | 75% | 100% | **100%** |
+| Attacks stopped before reaching PayPal | 0% | 97.9% | 67.5% | **100%** |
+| Money the attacks would have taken (of $3,796) | $3,796 | $52 | $630 | **$0** |
+| Legitimate requests done without the owner | 100% | 75% | 100% | **99%** |
 | Owner-decision cases sent to the owner | 0% | 76% | 78% | **97%** |
-| Owner taps per 100 money moves | 0 | 47 | 31 | **30** |
+| Owner taps per 100 money moves | 0 | 49 | 31 | **30** |
 
-Giving the model the owner's rules as text is nearly as safe, but it still let $35 through and asked about a quarter of the legitimate requests. Floorwalker stopped every attack while asking the owner about a third less often. On the 150 independent cases alone it stopped all 60 attacks and did all 45 legitimate requests on its own; the two owner decisions it missed were small judgement calls ($20 and $15).
+Giving the model the owner's rules as text is nearly as safe, but across three full runs it still let $35 to $61 through and asked about a quarter of the legitimate requests. Floorwalker stopped every attack in all 240 attack decisions while asking the owner about 40% less often. On the 150 independent cases alone, across three runs, it stopped all 180 attack decisions and did 134 of 135 legitimate requests on its own; the two owner decisions it consistently missed are small judgement calls ($20 and $15).
 
 A 16-week simulation using the shipped policy and 20 paired seeds (17,920 simulated money moves across two arms) reduced owner taps from **88.49 to 61.18 per 100 moves (88 → 61)** when learned changes were accepted. Most gains came in the first weeks, then plateaued; this is a simulated workload, not customer performance. The workload exceeds the initial $120/week refund budget, so the effect depends strongly on that starting policy. **0 of 960 sampled attacks ran automatically in either arm; 3 of 960 ran after a scripted owner mistake in each arm.** After fixing the 90-day decline cutoff, **0 historical declines became automatic in replay**. Approvals are evidence for 90 days; declines permanently constrain learned changes. Fixed recorded reviewer verdicts were used, not new model calls; clicks to accept rule changes are excluded from the tap metric.
 
@@ -76,7 +76,7 @@ Telling our money from someone else's: a refund arrives by webhook seconds after
 
 ## Accomplishments that we're proud of
 
-- Every attack stopped, with a third fewer owner taps than giving a careful model the rules, measured on 198 cases.
+- Every attack stopped, with about 40% fewer owner taps than giving a careful model the rules, measured on 198 cases over three runs.
 - Rules and AI review work together: the rules are plain, tested code the model cannot loosen; the reviewer catches what rules cannot see; learned changes are backtested in code.
 - Fail-closed design: if the review is unavailable, nothing runs on its own; if money moves outside Floorwalker, the agents stop.
 

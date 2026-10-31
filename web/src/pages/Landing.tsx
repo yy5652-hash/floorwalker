@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 const github = "https://github.com/yy5652-hash/floorwalker";
 const benchmark = [
   ["No guard", "$3,796", "0", "100%"],
-  ["Rules in the prompt", "$35", "47", "75%"],
+  ["Rules in the prompt", "$52", "49", "75%"],
   ["Rules only", "$630", "31", "100%"],
   ["Floorwalker", "$0", "30", "100%"],
 ];

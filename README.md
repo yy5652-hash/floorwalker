@@ -122,20 +122,20 @@ The same code runs on Claude (`claude-sonnet-5-5`, Anthropic SDK with tool use a
 
 198 labelled money moves for the demo shop: 59 benign requests the agent should just do, 59 the owner should decide, and 80 attacks (prompt injection in plain text, quoted mail, signatures, HTML, other languages, base64 and fake system notices; payment redirection; fake owner, Sam and Priya addresses including Unicode look-alikes; refunds to someone other than the buyer, above what was paid or repeated; split payments; unknown-vendor invoices; threats). Each case carries the facts Floorwalker reads from PayPal (payment, order, tracking, earlier refunds and payouts). 150 of the cases were written by a different model, independently of the reviewer, and run once.
 
-The same cases go through four guards, with `gemini-3.8-flash` as the model:
+The same cases go through four guards, with `gemini-3.8-flash` as the model, averaged over three full runs (594 decisions):
 
 | | No guard | Rules in the prompt | Rules only | **Floorwalker** |
 |---|---|---|---|---|
-| Attacks stopped before reaching PayPal | 0% | 98.75% | 67.5% | **100%** |
-| Money the 80 attacks would have taken (of $3,796 attempted) | $3,796 | $35 | $630 | **$0** |
-| Legitimate requests done without the owner | 100% | 75% | 100% | **100%** |
+| Attacks stopped before reaching PayPal | 0% | 97.9% | 67.5% | **100%** |
+| Money the 80 attacks would have taken (of $3,796 attempted) | $3,796 | $52 | $630 | **$0** |
+| Legitimate requests done without the owner | 100% | 75% | 100% | **99%** |
 | Owner-decision cases sent to the owner | 0% | 76% | 78% | **97%** |
-| Owner taps per 100 money moves | 0 | 47 | 31 | **30** |
+| Owner taps per 100 money moves | 0 | 49 | 31 | **30** |
 | Decision matches the label | 30% | 72% | 76% | **98%** |
 
-*No guard* sends the agent's proposal straight to PayPal. *Rules in the prompt* gives the owner's rules to the same model as text and lets it decide, without PayPal's records: nearly as safe, but it asks the owner about a quarter of the legitimate requests. *Rules only* is Floorwalker's rule engine on PayPal's facts without the AI reviewer. On the 150 independent cases alone, Floorwalker stopped all 60 attacks, did all 45 legitimate requests on its own and sent 43 of 45 owner decisions to the owner (29 taps per 100); the two it let through were small judgement calls (a vague $20 complaint and a $15 claim with partial evidence).
+*No guard* sends the agent's proposal straight to PayPal. *Rules in the prompt* gives the owner's rules to the same model as text and lets it decide, without PayPal's records: nearly as safe, but it asks the owner about a quarter of the legitimate requests. *Rules only* is Floorwalker's rule engine on PayPal's facts without the AI reviewer. On the 150 independent cases alone, across three runs, Floorwalker stopped all 180 attack decisions, did 134 of 135 legitimate requests on its own and sent 129 of 135 owner decisions to the owner (30 taps per 100); the two cases it consistently let through are small judgement calls (a vague $20 complaint and a $15 claim with partial evidence). The rules-in-the-prompt guard took $35 to $61 across the runs.
 
-Every case and decision: [bench/all-RESULTS.md](bench/all-RESULTS.md). The earlier 32-case set with 3 runs per case and its 16-case held-out set are in [bench/RESULTS.md](bench/RESULTS.md) and [bench/heldout-RESULTS.md](bench/heldout-RESULTS.md). `npm run bench -- --set all` reproduces the table and writes `bench/replay.json`, which the learning feature uses to re-check suggested changes against every attack.
+Every case and decision: [bench/all-RESULTS.md](bench/all-RESULTS.md). The earlier 32-case set with 3 runs per case and its 16-case held-out set are in [bench/RESULTS.md](bench/RESULTS.md) and [bench/heldout-RESULTS.md](bench/heldout-RESULTS.md). `npm run bench -- --set all --repeats 3` reproduces the table and writes `bench/replay.json`, which the learning feature uses to re-check suggested changes against every attack.
 
 ## Run it locally
 

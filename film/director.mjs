@@ -519,6 +519,16 @@ S.watch = async (B, sc) => {
   B.do(lineAt(sc, 'w3', true) + 0.5, () => js(`__film.release('resolve')`));
 };
 
+// The assistant answers a real question; the words are its real answer, recorded from the live run.
+S.ask = async (B, sc) => {
+  const seen = stepOf('learned'), st = stepOf('assistant');
+  await prime(seen.before, {}, { learned: seen.response, assistant: st.response.answer }, 'overview');
+  cam = { ...WIDE };
+  click(B, 1.0, '.assistant-launcher', sc.start);
+  camTo(B, 1.4, 1.0, async () => fit(await rect('.assistant-panel'), { pad: 60, minW: 860, ay: 0.5 }));
+  click(B, 2.6, '.assistant-suggestions button', sc.start);
+};
+
 // ---------------------------------------------------------------- run
 for (const sc of timeline.scenes) {
   if (ONLY && !ONLY.includes(sc.id)) continue;

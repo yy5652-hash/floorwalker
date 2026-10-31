@@ -231,6 +231,19 @@
    ]
   },
   {
+   "id": "ask",
+   "kind": "app",
+   "lead": 0.6,
+   "tail": 1.4,
+   "lines": [
+    {
+     "id": "k1",
+     "text": "And a small assistant answers live: why a request was blocked, or what needs her today. It can't move money.",
+     "gap": 0.0
+    }
+   ]
+  },
+  {
    "id": "bench",
    "kind": "art",
    "page": "art/bench.html",

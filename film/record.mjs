@@ -121,6 +121,15 @@ await step('api', async () => {
 
 await step('audit', async () => ({ response: { log: await get('/api/audit?limit=100'), verify: await get('/api/audit/verify') } }));
 
+// The assistant, answering for real from this workspace's activity.
+await step('assistant', async () => {
+  const question = 'Why was the last request blocked?';
+  const r = await fetch(`${BASE}/api/assistant`, { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: question }) });
+  let answer = '';
+  for (const line of (await r.text()).split('\n')) { try { const e = JSON.parse(line); answer += e.text ?? e.token ?? e.delta ?? e.content ?? ''; } catch {} }
+  return { response: { question, answer } };
+});
+
 mkdirSync(join(HERE, 'data'), { recursive: true });
 writeFileSync(join(HERE, 'data/run.json'), JSON.stringify(run, null, 1));
 console.log('wrote film/data/run.json');

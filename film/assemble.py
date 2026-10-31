@@ -355,9 +355,12 @@ def srt(timeline, path):
 
 def track(path, total):
     """A finished piece of music as the bed, level-matched and ending with the film."""
-    raw = subprocess.run([M.FFMPEG, "-hide_banner", "-loglevel", "error", "-i", str(path), "-f", "f32le", "-ac", "2", "-ar", str(SR), "-"], check=True, capture_output=True).stdout
-    x = np.frombuffer(raw, dtype=np.float32).reshape(-1, 2).astype(np.float64)
     n = int(total * SR)
+    decode = lambda *f: np.frombuffer(subprocess.run([M.FFMPEG, "-hide_banner", "-loglevel", "error", "-i", str(path), *f, "-f", "f32le", "-ac", "2", "-ar", str(SR), "-"], check=True, capture_output=True).stdout, dtype=np.float32).reshape(-1, 2).astype(np.float64)
+    x = decode()
+    # A slightly shorter track is slowed imperceptibly, so its own ending lands on the film's last seconds.
+    if len(x) < n:
+        x = decode("-filter:a", f"atempo={max(0.9, len(x) / n):.5f}")
     x = x[:n] if len(x) >= n else np.concatenate([x, np.zeros((n - len(x), 2))])
     return x / max(1e-9, np.sqrt((x ** 2).mean())) * 0.16
 

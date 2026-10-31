@@ -397,7 +397,7 @@ def main():
                     # the frames are full-range sRGB JPEGs; deliver standard BT.709 limited range like any HD video
                     "-vf", "scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=lanczos,format=yuv420p",
                     "-color_range", "tv", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
-                    "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-profile:v", "high", "-r", str(FPS),
+                    "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-profile:v", "high", "-r", str(FPS),
                     "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", "-shortest", str(out)], check=True)
     srt(timeline, out.with_suffix(".srt"))
     print(out, f"{M.probe_duration(out):.2f} s", f"{out.stat().st_size / 2**20:.1f} MiB")

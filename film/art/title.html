@@ -1,15 +1,29 @@
-<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><link rel="stylesheet" href="cine.css">
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><link rel="stylesheet" href="cine.css"><link rel="stylesheet" href="sf.css">
 <style>
-  .logo, .tag { color: #fff; } .tag { color: #dff3ec; text-shadow: 0 2px 24px rgba(0,0,0,.5); }
-  .logo { text-shadow: 0 2px 40px rgba(0,0,0,.4); }
+  #lockup { position: absolute; left: 0; right: 0; top: 402px; text-align: center; }
+  #a { font-size: 112px; opacity: 0; }
+  #b { font-size: 29px; color: var(--soft); margin-top: 26px; opacity: 0; }
 </style></head><body>
-<div class="shot" id="s"><img src="img/floorwalker.jpg" alt=""><div class="shade" style="background:radial-gradient(ellipse at center,rgba(0,52,45,.62),rgba(0,30,26,.78))"></div></div>
-<div class="stage">
-  <div class="logo fade" id="a"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#006b5e"/><path d="M8 25V7h17v5H13v3h9v5h-9v5z" fill="#fff"/><path d="m20 24 2 2 5-5" fill="none" stroke="#b1e3d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Floorwalker</div>
-  <div class="tag fade" id="b">Every refund checked. Fewer taps as it learns.</div>
-</div>
+<canvas class="gl" id="c"></canvas>
+<div class="shot" id="s"><img src="img/w-sentinel.jpg" alt=""></div>
+<div id="lockup"><div class="wordmark" id="a">Floorwalker</div><div class="mono" id="b">Every refund checked. Fewer taps as it learns.</div></div>
 <script src="cine.js"></script>
-<script>
-  window.render = (t) => { shot('s', t, -0.3, 40, { zoom: [1.1, 1.0] }); rise('a', t, 0.5); rise('b', t, 1.2); };
+<script type="module">
+  import { stage, streams, ring, floor, dust } from './gate.js';
+  const s = stage(document.getElementById('c'));
+  const st = streams({ count: 3400, attackShare: 0.22 }), gate = ring({ R: 9 }), fl = floor({ y: -13 }), du = dust({});
+  [st, gate, fl, du].forEach(o => s.scene.add(o.object));
+  window.render = t => {
+    // The sentinel stands in its gate; then the camera goes through into the gate itself, with the money flying through.
+    const swap = window.LINES?.t2?.[0] ?? 3.5;
+    shot('s', t, -1, swap - 0.9, { zoom: [1.0, 1.14], fade: 0.9 });
+    const p = smooth(clamp((t - (swap - 1.4)) / 3.0));
+    s.camera.position.set(Math.sin(t * 0.13) * 2.4, 1.2 - p * 0.6, 66 - p * 34);
+    s.camera.lookAt(0, 0, 0);
+    st.set(t + 4, 1); gate.set(t, 1, Math.pow(Math.max(0, Math.sin(t * 2.3)), 26)); fl.set(1); du.set(t);
+    s.draw();
+    rise('a', t, swap - 0.2, 0, 1.2); rise('b', t, swap + 0.6, 0, 1.0);
+    document.getElementById('a').style.letterSpacing = `${0.46 - 0.22 * smooth(clamp((t - swap + 0.2) / 2.2))}em`;
+  };
   window.ready = true;
 </script></body></html>

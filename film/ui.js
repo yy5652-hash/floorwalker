@@ -9,34 +9,39 @@
   const css = `
     #film-ui { position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; z-index: 2147483000; pointer-events: none; font-family: Inter, -apple-system, sans-serif; overflow: hidden; }
     #film-ui > div { position: absolute; }
-    #film-fade { inset: 0; background: #f5f7fa; opacity: 0; }
-    #film-cursor { width: 38px; height: 38px; left: 0; top: 0; opacity: 0; transform-origin: 4px 4px; filter: drop-shadow(0 5px 8px rgba(18,35,63,.35)); }
-    #film-ripple { width: 76px; height: 76px; margin: -38px 0 0 -38px; border-radius: 50%; border: 4px solid #12233f; opacity: 0; }
-    #film-caption { left: 50%; bottom: 54px; transform: translateX(-50%); max-width: 1660px; width: max-content; font-family: 'Manrope Variable', Inter, sans-serif; font-weight: 500; font-size: 36px; line-height: 1.34; color: #ffffff; text-align: center;
-      background: rgba(13, 34, 31, 0.92); padding: 13px 30px 14px; border-radius: 12px; opacity: 0; box-shadow: 0 14px 34px rgba(0,0,0,.22); letter-spacing: -.012em; }
-    #film-caption.on-art { background: transparent; box-shadow: none; font-size: 40px; bottom: 64px; text-shadow: 0 2px 6px rgba(0,0,0,.75), 0 0 34px rgba(0,0,0,.65); }
+    #film-fade { inset: 0; background: #fff; opacity: 0; }
+    #film-cursor { width: 46px; height: 46px; left: 0; top: 0; opacity: 0; transform-origin: 4px 4px; filter: drop-shadow(0 4px 8px rgba(40,60,90,.35)); }
+    #film-ripple { width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; border: 2.5px solid #6d3df5; opacity: 0; }
+    #film-caption { left: 50%; bottom: 58px; transform: translateX(-50%); max-width: 1660px; width: max-content; font-family: 'Space Grotesk', Inter, sans-serif; font-weight: 500; font-size: 35px; line-height: 1.32; color: #0b1220; text-align: center;
+      background: rgba(255, 255, 255, .94); padding: 12px 32px 13px; border: 1.5px solid transparent; border-image: linear-gradient(90deg, #00b8d9, #6d3df5, #f0268f, #f59300) 1; opacity: 0; box-shadow: 0 12px 34px rgba(40,60,90,.16); }
+    #film-caption.on-art { background: transparent; border: 0; box-shadow: none; font-size: 38px; bottom: 60px; text-shadow: 0 0 14px #fff, 0 0 14px #fff, 0 0 30px #fff, 0 0 30px #fff; }
     #film-key { left: 0; top: 0; font-weight: 600; font-size: 28px; color: #ffffff; background: #12233f; padding: 8px 18px; border-radius: 12px; opacity: 0; box-shadow: 0 10px 24px rgba(18,35,63,.3); letter-spacing: .02em; }
     #film-stat { left: 48px; top: 40px; font-weight: 600; font-size: 26px; color: #ffffff; background: rgba(18, 35, 63, 0.92); padding: 10px 22px 11px; border-radius: 14px; opacity: 0; box-shadow: 0 10px 26px rgba(18,35,63,.25); }
     #film-stat b { color: #8ee0ae; font-weight: 700; }
     #film-photo { inset: 0; overflow: hidden; opacity: 0; background: #f5f7fa; }
     #film-photo img { position: absolute; max-width: none; display: block; }
-    #film-hud { right: 48px; top: 40px; display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 25px; color: #12233f; background: rgba(255, 254, 251, 0.94); border: 2px solid #12233f; padding: 9px 20px 9px 16px; border-radius: 999px; opacity: 0; }
-    #film-hud i { width: 14px; height: 14px; border-radius: 50%; background: #d6434a; display: block; }
+    #film-hud { left: 84px; bottom: 11px; white-space: nowrap; display: flex; align-items: center; gap: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 16px; letter-spacing: .1em; text-transform: uppercase; color: #3b4557; background: rgba(255, 255, 255, .92); border: 1px solid #d5dce6; padding: 4px 14px; opacity: 0; }
+    #film-hud i { width: 9px; height: 9px; border-radius: 50%; background: #e8123f; display: block; }
+    .film-c { width: 44px; height: 44px; border: 0 solid rgba(11, 18, 32, .5); }
+    #film-read { right: 84px; bottom: 11px; background: rgba(255, 255, 255, .82); padding: 2px 8px; font-family: 'JetBrains Mono', monospace; font-size: 16px; letter-spacing: .12em; color: #3b4557; text-transform: uppercase; }
     .film-ring { position: fixed; z-index: 2147482000; pointer-events: none; border-style: solid; }`;
   const style = document.createElement('style');
-  style.textContent = css;
+  style.textContent = `@font-face { font-family: 'Space Grotesk'; font-weight: 300 700; src: url('/film/art/fonts/space-grotesk-latin-wght-normal.woff2') format('woff2'); }
+    @font-face { font-family: 'JetBrains Mono'; font-weight: 100 800; src: url('/film/art/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2'); }` + css;
   document.head.appendChild(style);
   const ui = document.createElement('div');
   ui.id = 'film-ui';
-  ui.innerHTML = `<div id="film-ripple"></div>
-    <div id="film-cursor"><svg viewBox="0 0 38 38" width="38" height="38"><path d="M4 3 L4 29 L11 22.5 L16 33.5 L21 31.3 L16 20.5 L26 20.5 Z" fill="#fff" stroke="#12233f" stroke-width="2.2" stroke-linejoin="round"/></svg></div>
+  ui.innerHTML = `<div class="film-c" style="left:28px;top:28px;border-width:2px 0 0 2px"></div><div class="film-c" style="right:28px;top:28px;border-width:2px 2px 0 0"></div>
+    <div class="film-c" style="left:28px;bottom:28px;border-width:0 0 2px 2px"></div><div class="film-c" style="right:28px;bottom:28px;border-width:0 2px 2px 0"></div>
+    <div id="film-ripple"></div>
+    <div id="film-cursor"><svg viewBox="0 0 46 46" width="46" height="46"><path d="M4 3 L4 31 L11.5 24 L17 36 L22.5 33.6 L17 22 L28 22 Z" fill="#fff" stroke="#0b1220" stroke-width="2.4" stroke-linejoin="round"/></svg></div>
     <div id="film-photo"><img alt=""></div><div id="film-hud"><i></i><span></span></div><div id="film-key"></div><div id="film-stat"></div>
-    <div id="film-caption"></div><div id="film-fade"></div>`;
+    <div id="film-read"></div><div id="film-caption"></div><div id="film-fade"></div>`;
   document.documentElement.appendChild(ui);
   const $ = id => document.getElementById(id);
   let cam = { x: 0, y: 0, w: 1920 };
   let cur = { x: 0, y: 0, show: false };
-  let press = 0;
+  let press = 0, label = '';
   const rings = new Map();           // key -> { sel, i, color, a, el }
   const k = () => cam.w / 1920;      // viewport pixels per sheet pixel
 
@@ -71,6 +76,8 @@
     } else r = el.getBoundingClientRect();
     return { x: r.left, y: r.top, w: r.width, h: r.height };
   };
+  const NEON = { '#dc2626': '#e8123f', '#b91c1c': '#e8123f', '#059669': '#00a77a', '#2563eb': '#6d3df5' };
+  const neon = c => NEON[c] ?? '#6d3df5';
   const placeRings = () => {
     for (const [key, g] of rings) {
       if (g.a <= 0) { g.el?.remove(); rings.delete(key); continue; }
@@ -80,8 +87,8 @@
       const s = k(), bw = Math.max(1.5, 4 * s), pad = 5 * s;
       Object.assign(g.el.style, {
         left: `${r.x - pad - bw}px`, top: `${r.y - pad - bw}px`, width: `${r.w + 2 * (pad + bw)}px`, height: `${r.h + 2 * (pad + bw)}px`,
-        borderWidth: `${bw}px`, borderColor: g.color, borderRadius: `${(g.radius ?? 12) * s + pad}px`, opacity: g.a,
-        boxShadow: `0 0 0 ${6 * s}px ${g.color}2e, 0 0 ${30 * s}px ${g.color}66`,
+        borderWidth: `${bw * 0.7}px`, borderColor: neon(g.color), borderRadius: `${4 * s}px`, opacity: g.a,
+        boxShadow: `0 0 ${24 * s}px ${neon(g.color)}55`,
       });
     }
   };
@@ -99,7 +106,12 @@
   window.film = {
     setCam(x, y, w) { cam = { x, y, w }; layout(); placeRings(); return true; },
     getCam() { return cam; },
-    frame(t) { layout(); placeRings(); stepAnimations(t); layout(); placeRings(); return window.scrollY; },
+    label(text) { label = text; return true; },
+    frame(t) {
+      const m = Math.floor(t / 60), sec = (t % 60).toFixed(1).padStart(4, '0');
+      $('film-read').textContent = label ? `${label} // T+${String(m).padStart(2, '0')}:${sec}` : '';
+      layout(); placeRings(); stepAnimations(t); layout(); placeRings(); return window.scrollY;
+    },
     point(spec, dx = 0.5, dy = 0.5) { const r = rectOf(spec); return r && { x: r.x + r.w * dx, y: r.y + r.h * dy }; },
     caption(text, a) { const c = $('film-caption'); if (c.textContent !== text) c.textContent = text; c.style.opacity = text ? a : 0; return true; },
     hud(text, a) { const h = $('film-hud'); const s = h.querySelector('span'); if (s.textContent !== text) s.textContent = text; h.style.opacity = text ? a : 0; return true; },

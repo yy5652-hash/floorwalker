@@ -1,0 +1,12 @@
+/* The film's look: bright white future, colour only in thin lines of prismatic light. No filled colour blocks; words sit straight on white or in clear glass. */
+@font-face { font-family: 'Oxanium'; font-weight: 200 800; src: url('fonts/oxanium-latin-wght-normal.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-weight: 100 800; src: url('fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-weight: 300 700; src: url('fonts/space-grotesk-latin-wght-normal.woff2') format('woff2'); }
+:root { --ink: #0b1220; --soft: #4a5568; --cyan: #00a9d6; --violet: #6d3df5; --magenta: #f0268f; --amber: #f59300; --red: #e8123f; --green: #00a77a; --prism: linear-gradient(90deg, #00b8d9, #6d3df5, #f0268f, #f59300); }
+html, body { background: #fff; color: var(--ink); font-family: 'Space Grotesk', sans-serif; }
+canvas.gl { position: absolute; inset: 0; width: 1920px; height: 1080px; display: block; }
+.mono { font-family: 'JetBrains Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
+.wordmark { font-family: 'Oxanium', sans-serif; font-weight: 400; letter-spacing: .24em; text-transform: uppercase; color: var(--ink); }
+.holo { position: absolute; padding: 16px 24px; background: rgba(255,255,255,.72); backdrop-filter: blur(10px); color: var(--ink); border: 1.5px solid transparent; border-image: var(--prism) 1; box-shadow: 0 10px 30px rgba(40,60,90,.12); opacity: 0; }
+.alert { position: absolute; padding: 12px 28px; font-family: 'Oxanium', sans-serif; font-weight: 600; font-size: 52px; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; background: rgba(255,255,255,.82); border: 2px solid currentColor; box-shadow: 0 10px 36px -8px currentColor; opacity: 0; }
+.alert.red { color: var(--red); } .alert.amber { color: var(--amber); }

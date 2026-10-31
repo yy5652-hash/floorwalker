@@ -43,7 +43,7 @@ const server = createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' });
   createReadStream(file).pipe(res);
 }).listen(PORT, '127.0.0.1');
-const chrome = spawn(SHELL, [`--remote-debugging-port=${DEBUG}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), 'allowance-film-'))}`, '--window-size=1920,1080', '--hide-scrollbars', '--force-color-profile=srgb', '--font-render-hinting=none', 'about:blank'], { stdio: 'ignore' });
+const chrome = spawn(SHELL, [`--remote-debugging-port=${DEBUG}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), 'allowance-film-'))}`, '--window-size=1920,1080', '--hide-scrollbars', '--force-color-profile=srgb', '--font-render-hinting=none', '--use-gl=angle', '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader', 'about:blank'], { stdio: 'ignore' });
 process.on('exit', () => { chrome.kill(); server.close(); });
 
 async function until(fn, what, tries = 160) {
@@ -70,8 +70,9 @@ await send('Page.enable'); await send('Runtime.enable');
 await send('Emulation.setLocaleOverride', { locale: 'en-US' });
 await send('Emulation.setTimezoneOverride', { timezoneId: 'America/Los_Angeles' });
 await send('Emulation.setFocusEmulationEnabled', { enabled: true });
-await send('Page.addScriptToEvaluateOnNewDocument', { source: `if (!location.pathname.startsWith('/film/')) { ${readFileSync(join(HERE, 'shim.js'), 'utf8')} }` });
+await send('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.setItem('floorwalker-theme', 'light'); } catch {}\nif (!location.pathname.startsWith('/film/')) { ${readFileSync(join(HERE, 'shim.js'), 'utf8')} }` });
 const UI = readFileSync(join(HERE, 'ui.js'), 'utf8');
+const LABELS = { hook: 'Threat brief', title: 'Floorwalker', mug: 'Claim 01', maya: 'Claim 01 / Auto', daniel: 'Claim 02 / Hold', phone: 'Claim 02 / Owner', jordan: 'Claim 05 / Injection', hijack: 'Hijack sim', freeze: 'Agent frozen', learn: 'Learning', watch: 'PayPal watch', api: 'Any agent', ask: 'Assistant', bench: 'Benchmark', end: '' };
 
 // ---------------------------------------------------------------- capture
 let frameNo = 0, mode = null;
@@ -111,7 +112,7 @@ async function artScene(sc) {
   cam = { x: 0, y: 0, w: 1920 };
   await open(`http://127.0.0.1:${PORT}/film/${sc.page}`, 'window.ready === true');
   const rel = Object.fromEntries(sc.lines.map(l => [l.id, [l.start - sc.start, l.end - sc.start]]));
-  await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); document.getElementById('film-caption').classList.add('on-art'); true`);
+  await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); film.label(${JSON.stringify(LABELS[sc.id] ?? '')}); document.getElementById('film-caption').classList.add('on-art'); true`);
   const n = Math.round((sc.end - sc.start) * FPS);
   for (let f = 0; f < n; f++) {
     if (f % EVERY) continue;
@@ -233,6 +234,7 @@ async function appScene(sc, script) {
   sceneStart = sc.start;
   const B = beats();
   await script(B);
+  await js(`film.label(${JSON.stringify(LABELS[sc.id] ?? '')}); true`);
   const n = Math.round((sc.end - sc.start) * FPS);
   B.list.sort((a, b) => a.at - b.at);
   const done = new Set();
@@ -317,9 +319,9 @@ async function phoneScene(sc) {
   await open(`http://127.0.0.1:${PORT}/film/${sc.page}`, `window.ready === true && !!document.getElementById('app').contentDocument?.querySelector('[data-film="approve"]')`);
   await js('document.getElementById("app").contentDocument.fonts.ready.then(() => true)');
   const rel = Object.fromEntries(sc.lines.map(l => [l.id, [l.start - sc.start, l.end - sc.start]]));
-  await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); true`);
+  await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); film.label(${JSON.stringify(LABELS[sc.id] ?? '')}); true`);
   // The phone fills the right of the frame, so the caption sits under the words on the left instead of across it.
-  await js(`Object.assign(document.getElementById('film-caption').style, { left: '100px', bottom: '90px', transform: 'none', width: '860px', maxWidth: '860px', textAlign: 'left', background: 'transparent', boxShadow: 'none', padding: '0' }); true`);
+  await js(`Object.assign(document.getElementById('film-caption').style, { left: '100px', bottom: '90px', transform: 'none', width: '860px', maxWidth: '860px', textAlign: 'left', background: 'transparent', boxShadow: 'none', padding: '0', border: '0', borderImage: 'none', textShadow: '0 0 14px #fff, 0 0 14px #fff' }); true`);
   const inner = sel => js(`(() => { const f = document.getElementById('app'), r = f.getBoundingClientRect(), e = f.contentDocument.querySelector(${JSON.stringify(sel)}); if (!e) return null; const b = e.getBoundingClientRect(), k = r.width / f.offsetWidth; return { x: r.left + (b.left + b.width / 2) * k, y: r.top + (b.top + b.height / 2) * k }; })()`);
   // The push notification shows the same text the server sends (server/notify.ts), for the recorded request.
   const row = st.after.ledger.find(r => r.id === ap.ledgerId);

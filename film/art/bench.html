@@ -1,38 +1,49 @@
-<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><link rel="stylesheet" href="cine.css"><link rel="stylesheet" href="sf.css">
 <style>
-  html, body { background: #00443b; color: #fff; }
-  h1 { font-size: 62px; margin: 0 0 16px; letter-spacing: -.03em; font-weight: 500; }
-  .sub { font-size: 30px; color: #bfe6da; margin-bottom: 66px; }
-  .grid { display: grid; grid-template-columns: repeat(3, 540px); gap: 0; }
-  .card { padding: 34px 48px 40px; border-left: 1px solid #ffffff30; }
-  .card:first-child { border-left: 0; }
-  .card.win { background: #f4faf7; color: #182b29; border-radius: 14px; border-left: 0; box-shadow: 0 30px 80px rgba(0,0,0,.35); }
-  .k { font-size: 36px; font-weight: 600; letter-spacing: -.02em; }
-  .s { font-size: 28px; color: #bfe6da; margin-top: 6px; }
-  .v { font-size: 124px; font-weight: 500; letter-spacing: -.05em; margin: 28px 0 0; line-height: 1.05; }
-  .d { font-size: 28px; color: #bfe6da; margin-top: 4px; }
-  .t { margin-top: 30px; padding-top: 22px; border-top: 1px solid #ffffff30; font-size: 28px; color: #bfe6da; }
-  .t b { font-size: 48px; font-weight: 500; color: #fff; margin-right: 6px; }
-  .v.bad { color: #ffb4bd; } .v.mid { color: #ffd98f; } .v.good { color: #006b5e; }
-  .win .s, .win .d, .win .t { color: #40564e; } .win .t { border-color: #dce5e1; } .win .t b { color: #182b29; }
+  #head { position: absolute; left: 0; right: 0; top: 34px; text-align: center; }
+  h1 { margin: 0; font-family: 'Oxanium'; font-weight: 300; font-size: 54px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink); opacity: 0; }
+  .sub { font-size: 23px; color: var(--soft); margin-top: 10px; opacity: 0; letter-spacing: .1em; }
+  .col { position: absolute; top: 530px; width: 560px; text-align: center; opacity: 0; }
+  .k { font-family: 'Oxanium'; font-weight: 500; font-size: 34px; letter-spacing: .06em; color: var(--ink); }
+  .s { font-size: 22px; color: var(--soft); margin-top: 2px; letter-spacing: .06em; }
+  .v { font-family: 'Oxanium'; font-weight: 500; font-size: 118px; line-height: 1.12; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .d { font-size: 22px; color: var(--soft); letter-spacing: .1em; }
+  .t { margin-top: 14px; font-size: 23px; color: var(--soft); letter-spacing: .06em; }
+  .t b { font-family: 'Oxanium'; font-size: 42px; font-weight: 500; color: var(--ink); margin-right: 8px; letter-spacing: 0; }
+  .bad { color: var(--red); } .mid { color: var(--amber); } .good { color: var(--green); }
 </style></head><body>
-<div class="stage">
-  <h1 class="fade" id="a">FloorwalkerBench</h1>
-  <div class="sub fade" id="b">198 labelled money moves · 80 attacks trying to take $3,796 · average of 3 runs</div>
-  <div class="grid">
-    <div class="card fade" id="c"><div class="k">No guard</div><div class="s">requests go straight to PayPal</div>
-      <div class="v bad">$3,796</div><div class="d">taken by attacks</div><div class="t"><b>0</b> taps per 100 money moves</div></div>
-    <div class="card fade" id="d"><div class="k">Rules in the prompt</div><div class="s">the model, told the rules</div>
-      <div class="v mid">$52</div><div class="d">taken by attacks</div><div class="t"><b>49</b> taps per 100 money moves</div></div>
-    <div class="card win fade" id="e"><div class="k">Floorwalker</div><div class="s">PayPal facts · rules · AI review</div>
-      <div class="v good">$0</div><div class="d">taken by attacks</div><div class="t"><b>30</b> taps per 100 money moves</div></div>
-  </div>
-</div>
-<script>
-  const show = (id, t, at) => { const e = document.getElementById(id); const p = Math.max(0, Math.min(1, (t - at) / 0.6)); e.style.opacity = p; e.style.transform = `translateY(${18 * (1 - p)}px)`; };
+<canvas class="gl" id="g"></canvas>
+<div id="head"><h1 id="a">FloorwalkerBench</h1><div class="sub mono" id="b">198 labelled money moves · 80 attacks · $3,796 at stake · average of 3 runs</div></div>
+<div class="col" id="c" style="left:60px"><div class="k">No guard</div><div class="s">requests go straight to PayPal</div><div class="v bad" id="v1">$0</div><div class="d mono">taken by attacks</div><div class="t"><b>0</b>taps per 100 money moves</div></div>
+<div class="col" id="d" style="left:680px"><div class="k">Rules in the prompt</div><div class="s">the model, told the rules</div><div class="v mid" id="v2">$0</div><div class="d mono">taken by attacks</div><div class="t"><b>49</b>taps per 100 money moves</div></div>
+<div class="col" id="e" style="left:1300px"><div class="k">Floorwalker</div><div class="s">PayPal facts · rules · AI review</div><div class="v good">$0</div><div class="d mono">taken by attacks</div><div class="t"><b>30</b>taps per 100 money moves</div></div>
+<script src="cine.js"></script>
+<script type="module">
+  import { stage, streams, ring } from './gate.js';
+  const s = stage(document.getElementById('g'), { fov: 30 });
+  // One gate per guard, each drawn with its own vanishing point over its column: the share of red streams that get through follows how much money that guard let through.
+  const G = [[620, 1], [0, 0.07], [-620, 0]].map(([x, leak]) => {
+    const scene = new s.scene.constructor(), st = streams({ count: 3600, attackShare: 0.5, R: 6.6, leak, near: 26, far: 70, speed: 1.3 }), r = ring({ R: 6.6 });
+    scene.add(st.object); scene.add(r.object);
+    return { scene, st, r, x };
+  });
+  s.camera.position.set(0, 0, 92);
+  G.forEach(g => { g.r.object.renderOrder = 1; }); s.camera.lookAt(0, 0, 0);
+  s.renderer.autoClear = false;
+  const col = (id, t, at) => rise(id, t, at, 0, 0.6);
+  const count = (id, t, at, to) => { document.getElementById(id).textContent = '$' + Math.round(to * smooth(clamp((t - at) / 2.0))).toLocaleString('en-US'); };
   window.render = t => {
-    show('a', t, 0.1); show('b', t, 0.4);
-    show('c', t, 2.2); show('d', t, (window.LINES?.b2?.[0] ?? 8) - 0.2); show('e', t, (window.LINES?.b3?.[0] ?? 14) - 0.2);
+    const at1 = 2.2, at2 = (window.LINES?.b2?.[0] ?? 8) - 0.2, at3 = (window.LINES?.b3?.[0] ?? 14) - 0.2;
+    rise('a', t, 0.1, 0, 0.6); rise('b', t, 0.4, 0, 0.6);
+    col('c', t, at1); col('d', t, at2); col('e', t, at3);
+    count('v1', t, at1, 3796); count('v2', t, at2, 52);
+    s.renderer.clear();
+    [at1, at2, at3].forEach((at, i) => {
+      const on = smooth(clamp((t - at + 0.7) / 0.9));
+      G[i].st.set(t + 3, on); G[i].r.set(t, on, i === 0 ? 0.9 : i === 1 ? 0.3 : 0);
+      s.camera.setViewOffset(1920, 1080, G[i].x, 225, 1920, 1080);
+      s.renderer.render(G[i].scene, s.camera);
+    });
   };
   window.ready = true;
 </script></body></html>

@@ -21,4 +21,4 @@ Try it live: https://floorwalker.43-160-214-187.sslip.io
 Built with the PayPal Agent Toolkit, PayPal Orders, Payments, Payouts, Webhooks and Subscriptions APIs (sandbox), Gemini, DeepSeek (chat), shadcn/ui, AG Grid Enterprise, AG Charts and MCP.
 Code: https://github.com/yy5652-hash/floorwalker
 
-Narration: Kokoro-82M (Apache-2.0). Music generated with Google Lyria 3 and still images with Google Gemini, for this video; no third-party music. The product footage is the real app replaying a recorded live run; the demo shop and its people are fictional.
+Narration: Kokoro-82M (Apache-2.0). Music generated with Google Lyria and still images with Google Gemini, for this video; no third-party music. 3D scenes rendered with three.js (MIT). The product footage is the real app replaying a recorded live run; the demo shop and its people are fictional.

@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><link rel="stylesheet" href="sf.css">
 <style>
   body { background: var(--paper); }
   .side { position: absolute; left: 190px; top: 330px; width: 640px; }
@@ -36,10 +36,18 @@
 .note .title { padding-inline: 20px; font-size: 25px; }
 .note .body { padding: 6px 20px 16px; font-size: 21px; }
 .note .actions div { font-size: 22px; padding: 16px 0; }
-html, body { background: #00443b; }
-.side h1, .side p { color: #fff; } .side p { color: #d5efe7; } .side .chip { color: #9fe9d4; border-color: #ffffff30; }
-.phone { box-shadow: 0 50px 120px rgba(0,0,0,.45); }
+html, body { background: #fff; }
+.side h1 { font-family: 'Oxanium'; font-weight: 500; font-size: 66px; letter-spacing: .02em; color: var(--ink); }
+.side p { color: var(--soft); } .side .chip { color: var(--violet); border-color: #dfe5ee; font-family: 'JetBrains Mono'; font-size: 24px; }
+.phone { background: #fff; box-shadow: 0 0 0 2px #0b1220, 0 30px 90px rgba(40,60,90,.22); }
+.screen { background: #fff; }
+.notch { background: #0b1220; }
+.note { background: rgba(255,255,255,.97); box-shadow: 0 0 0 1px #dfe5ee, 0 18px 50px rgba(40,60,90,.22); }
+.note .top, .note .top b, .note .body { color: var(--soft); } .note .title { color: var(--ink); }
+.note .actions { border-color: #e6ebf2; } .note .actions div { color: var(--violet); } .note .actions div + div { color: var(--soft); border-color: #e6ebf2; }
+.scrim { background: rgba(255,255,255,.55); }
 </style></head><body>
+<canvas class="gl" id="g"></canvas>
 <div class="side fade" id="a">
   <h1>Approve from your phone</h1>
   <p>Every request arrives already checked against PayPal's records and your rules. One tap runs exactly that action, once.</p>
@@ -72,5 +80,15 @@ html, body { background: #00443b; }
     note.style.transform = `translateY(${-60 * (1 - inP) - 80 * outP}px) scale(${1 - 0.04 * outP})`;
     document.getElementById('scrim').style.opacity = NOTE.title ? inP * (1 - outP) : 0;
   };
+</script>
+<script type="module">
+  import { stage, streams, ring, floor, dust } from './gate.js';
+  const s = stage(document.getElementById('g'));
+  const st = streams({ count: 2200, attackShare: 0, R: 10 }), r = ring({ R: 10 }), du = dust({});
+  [st, r, du].forEach(o => s.scene.add(o.object));
+  s.camera.position.set(0, 0, 40); s.camera.lookAt(0, 0, 0);
+  s.camera.setViewOffset(1920, 1080, -418, 0, 1920, 1080);
+  const page = window.render;
+  window.render = t => { st.set(t, 0.8); r.set(t, 1, 0); du.set(t); s.draw(); page(t); };
   window.ready = true;
 </script></body></html>

@@ -1,4 +1,18 @@
-<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><link rel="stylesheet" href="cine.css"></head><body>
-<div class="shot" id="a"><img src="img/chipped-mug.jpg" alt=""></div>
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><link rel="stylesheet" href="cine.css"><link rel="stylesheet" href="sf.css">
+<style>
+  #laser { position: absolute; left: 0; right: 0; height: 2px; background: var(--prism); }
+  #r1 { left: 1290px; top: 180px; font-size: 25px; line-height: 1.8; width: 480px; }
+  #r1 b { color: var(--violet); font-weight: 600; }
+</style></head><body>
+<div class="shot" id="a"><img src="img/w-mug.jpg" alt=""></div>
+<div id="laser"></div>
+<div class="holo mono" id="r1">Claim scan<br><b>Chipped rim</b><br>Order JO-9677-MAY<br><b>$24.00</b></div>
 <script src="cine.js"></script>
-<script>window.render = (t) => shot('a', t, -0.3, 30, { zoom: [1.0, 1.1], drift: [40, 10] }); window.ready = true;</script></body></html>
+<script>
+  window.render = t => {
+    shot('a', t, -0.3, 30, { zoom: [1.0, 1.08], drift: [20, 6], fade: 0.4 });
+    document.getElementById('laser').style.top = `${200 + 620 * (0.5 + 0.5 * Math.sin(t * 1.9 - 1.2))}px`;
+    rise('r1', t, 0.5, 0, 0.3);
+  };
+  window.ready = true;
+</script></body></html>

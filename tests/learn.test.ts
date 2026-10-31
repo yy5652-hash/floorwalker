@@ -63,3 +63,40 @@ test("taps per 100 money moves", () => {
   assert.equal(weeks.length, 14);
   assert.equal(weeks.reduce((t, w) => t + w.moves, 0), store.ledger().length);
 });
+
+test("declines older than 90 days still veto learning, while old approvals are not evidence", () => {
+  const older = new Date(Date.now() - 120 * 86_400_000).toISOString();
+  const row = store.ledger().find((r) => r.kind === "refund" && r.amount === 50)!;
+  const facts = JSON.parse(row.facts!);
+  facts.rules.capturedAt = older;
+  store.db().prepare("UPDATE ledger SET status = 'declined', created_at = ?, decided_at = ?, facts = ?, decline_reason = 'Never allow this' WHERE id = ?")
+    .run(older, older, JSON.stringify(facts), row.id);
+  const changes = learnedChanges(DEFAULT_POLICY);
+  assert.ok(changes.every(c => !c.id.startsWith("refunds.auto_approve_up_to") || c.draft.refunds.auto_approve_up_to < 50));
+  for (const c of changes) assert.notEqual(simulate(c.draft).rows.find(r => r.id === row.id)!.after, "allow");
+  store.db().prepare("UPDATE ledger SET created_at = ?, decided_at = ? WHERE status IN ('approved', 'executed')").run(older, older);
+  assert.deepEqual(learnedChanges(DEFAULT_POLICY), []);
+});
+
+test("an old decline vetoes a budget change through historical replay", () => {
+  store.db().exec("DELETE FROM ledger");
+  const now = Date.now(), old = now - 180 * 86_400_000;
+  function row(at: number, amount: number, status: "approved" | "declined", holds: string[]) {
+    const time = new Date(at).toISOString();
+    const id = store.recordProposal({ tool: "create_refund", kind: "refund", params: { kind: "refund", captureId: `CAP-${at}`, amount }, amount,
+      decision: "hold", status, checks: holds.map(id => ({ id, label: id, detail: "", outcome: "hold" })),
+      facts: { rules: { captureFound: true, captureStatus: "COMPLETED", capturedAmount: 200, refundedSoFar: 0, capturedAt: time, buyerEmail: "buyer@example.com", requesterEmail: "buyer@example.com", customerRefunds30d: 0 } } });
+    store.db().prepare("UPDATE ledger SET created_at = ?, decided_at = ?, decided_by = 'Owner' WHERE id = ?").run(time, time, id);
+    return id;
+  }
+  row(old, 120, "approved", ["auto_limit"]);
+  const declined = row(old + 60_000, 24, "declined", ["budget", "auto_limit"]);
+  row(now - 600_000, 120, "approved", ["auto_limit"]);
+  for (let i = 1; i <= 3; i++) row(now - (4 - i) * 60_000, 24, "approved", ["budget"]);
+  assert.ok(!learnedChanges(DEFAULT_POLICY).some(c => c.id.startsWith("refunds.budget=")));
+  // Without that old decline, the recent approvals really would propose a larger budget.
+  store.db().prepare("UPDATE ledger SET status = 'blocked' WHERE id = ?").run(declined);
+  const change = learnedChanges(DEFAULT_POLICY).find(c => c.id.startsWith("refunds.budget="));
+  assert.ok(change);
+  assert.equal(simulate(change.draft).rows.find(r => r.id === declined)!.after, "allow");
+});

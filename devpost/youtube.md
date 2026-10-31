@@ -5,10 +5,10 @@
 - Audience: not made for kids.
 
 **Title**
-Floorwalker: every AI agent refund in PayPal checked, fewer taps every week | PayPal AI Hackathon
+Floorwalker: every AI agent refund in PayPal checked, fewer taps as it learns | PayPal AI Hackathon
 
 **Description**
-Every refund checked. Fewer taps every week.
+Every refund checked. Fewer taps as it learns.
 
 AI agents can now refund customers and pay people through PayPal. Guardrails for them fail in two ways: ask the owner about everything and she starts approving without reading; ask about nothing and one email can tell the agent to pay a stranger.
 

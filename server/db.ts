@@ -125,6 +125,7 @@ const COLUMNS: [table: string, column: string, type: string][] = [
   ["ledger", "reminded_at", "TEXT"],
   ["ledger", "idempotency_key", "TEXT"],
   ["ledger", "source", "TEXT"],
+  ["ledger", "execution_started_at", "TEXT"],
   ["agents", "max_per_action", "REAL"],
   ["agents", "budget", "REAL"],
   ["agents", "budget_period", "TEXT"],
@@ -362,6 +363,7 @@ export type LedgerRow = {
   paypal_result: string | null;
   error: string | null;
   created_at: string;
+  execution_started_at: string | null;
   decided_at: string | null;
   decided_by: string | null;
   decline_reason: string | null;

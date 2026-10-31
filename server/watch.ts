@@ -4,7 +4,7 @@ import { ctx, inWorkspace, type PayPalCreds, type Workspace } from "./context.ts
 import * as store from "./db.ts";
 import { publish } from "./events.ts";
 import { getOrder, refundCapture } from "./paypal/api.ts";
-import { paypal } from "./paypal/client.ts";
+import { paypal, PayPalError } from "./paypal/client.ts";
 import { openWorkspaces } from "./workspaces.ts";
 
 /**
@@ -44,7 +44,7 @@ function accountedFor(ref: string, captureId?: string | null): boolean {
   if (rows.some((r) => r.paypal_ref === ref)) return true;
   if (!captureId) return false;
   const recent = Date.now() - RACE_MS;
-  return rows.some((r) => r.kind === "refund" && r.status === "executing" && Date.parse(r.decided_at ?? r.created_at) >= recent && JSON.parse(r.params).captureId === captureId);
+  return rows.some((r) => r.kind === "refund" && r.status === "executing" && Date.parse(r.execution_started_at ?? r.decided_at ?? r.created_at) >= recent && JSON.parse(r.params).captureId === captureId);
 }
 
 function raise(i: Omit<Incident, "id" | "created_at" | "frozen_agents" | "resolved_at" | "resolved_by" | "resolution">): Incident | null {
@@ -143,7 +143,14 @@ export function handlePayPalEvent(event: any): { matched: boolean; incident: Inc
     if (row) {
       // Keep the ledger's copy of the payout's state current (e.g. UNCLAIMED or RETURNED after it was sent).
       const status = res.transaction_status ?? res.batch_header?.batch_status;
-      if (status) store.db().prepare("UPDATE ledger SET paypal_result = json_set(COALESCE(paypal_result, '{}'), '$.webhook_status', ?) WHERE id = ?").run(status, row.id);
+      const previous = JSON.parse(row.paypal_result ?? "{}");
+      const time = Date.parse(event.create_time);
+      const previousTime = Date.parse(previous.webhook_time ?? "");
+      const terminal = new Set(["SUCCESS", "SUCCEEDED", "RETURNED", "FAILED", "DENIED", "BLOCKED", "REFUNDED", "REVERSED", "CANCELED", "CANCELLED"]);
+      // An undated first delivery may initialize status, but cannot overwrite one. Terminal states stay.
+      if (status && (Number.isFinite(time) ? (!Number.isFinite(previousTime) || time > previousTime) : !previous.webhook_status) && !terminal.has(previous.webhook_status)) {
+        store.setPaypalResult(row.id, { ...previous, webhook_status: status, webhook_time: Number.isFinite(time) ? new Date(time).toISOString() : null });
+      }
       return { matched: true, incident: null };
     }
     if (!type.startsWith("PAYMENT.PAYOUTSBATCH.")) return { matched: false, incident: null };
@@ -184,11 +191,18 @@ export async function ensureWebhook(creds: PayPalCreds, url: string): Promise<st
 export async function verifyPayPalWebhook(creds: PayPalCreds, webhookId: string, headers: Record<string, string | string[] | undefined>, event: unknown): Promise<boolean> {
   const h = (k: string) => String(headers[k] ?? "");
   if (!h("paypal-transmission-sig")) return false;
-  const out = await paypal<{ verification_status: string }>("POST", "/v1/notifications/verify-webhook-signature", {
-    auth_algo: h("paypal-auth-algo"), cert_url: h("paypal-cert-url"), transmission_id: h("paypal-transmission-id"),
-    transmission_sig: h("paypal-transmission-sig"), transmission_time: h("paypal-transmission-time"), webhook_id: webhookId, webhook_event: event,
-  }, { creds });
-  return out.verification_status === "SUCCESS";
+  try {
+    const out = await paypal<{ verification_status: string }>("POST", "/v1/notifications/verify-webhook-signature", {
+      auth_algo: h("paypal-auth-algo"), cert_url: h("paypal-cert-url"), transmission_id: h("paypal-transmission-id"),
+      transmission_sig: h("paypal-transmission-sig"), transmission_time: h("paypal-transmission-time"), webhook_id: webhookId, webhook_event: event,
+    }, { creds });
+    return out.verification_status === "SUCCESS";
+  } catch (e) {
+    // PayPal rejects malformed verification inputs with 400/422; these are invalid deliveries.
+    // Keep outages/auth errors retryable rather than acknowledging an unverified event.
+    if (e instanceof PayPalError && (e.status === 400 || e.status === 422)) return false;
+    throw e;
+  }
 }
 
 /**

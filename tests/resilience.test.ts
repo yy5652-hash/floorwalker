@@ -264,3 +264,74 @@ test('benchmark shard partition and merge reject partial, duplicate and mismatch
     assert.deepEqual(JSON.parse(readFileSync(replayPath, 'utf8')).map((r: any) => r.id), CASES.map(c => c.id));
   } finally { rmSync(temp, { recursive: true, force: true }); }
 });
+
+test('expiry on approval records the same reason, actor and audit event as the sweep', async () => {
+  const { row } = await propose();
+  store.db().prepare('UPDATE ledger SET expires_at = ? WHERE id = ?').run(new Date(Date.now() - 1).toISOString(), row.id);
+  await assert.rejects(guard.approve(row.id, 'Owner'), /expired.*declined/);
+  const expired = store.ledgerEntry(row.id)!;
+  assert.equal(expired.status, 'declined');
+  assert.equal(expired.decided_by, 'Floorwalker (expired)');
+  assert.match(expired.decline_reason!, /declined automatically/);
+  assert.equal(store.db().prepare("SELECT COUNT(*) AS n FROM audit WHERE action = 'action.expired' AND target = ?").get(`act_${row.id}`)?.n, 1);
+  assert.equal(guard.expireOverdue(), 0);
+  assert.equal(calls.length, 0);
+});
+
+test('freeze refusal is explicit, leaves the request waiting and permits approval after unfreeze', async () => {
+  const { row } = await propose();
+  store.setAgentStatus('test-agent', 'frozen');
+  await assert.rejects(guard.approve(row.id, 'Owner'), { message: 'This agent is frozen; unfreeze it first.', code: 'agent_frozen', status: 409 });
+  assert.equal(store.ledgerEntry(row.id)!.status, 'awaiting_approval');
+  assert.equal(calls.length, 0);
+  store.setAgentStatus('test-agent', 'active');
+  assert.equal((await guard.approve(row.id, 'Owner')).status, 'approved');
+  assert.equal(calls.length, 1);
+});
+
+test('automatic refund adapter exceptions record failure and cannot be retried', async () => {
+  guard.deps.callToolkit = async (_tool, _input, key) => { calls.push(key!); throw new Error('adapter unavailable'); };
+  const { row } = await propose(24, 'throw-once');
+  assert.equal(row.status, 'failed');
+  assert.equal(row.error, 'adapter unavailable');
+  assert.ok(row.execution_started_at);
+  assert.equal((await propose(24, 'throw-once')).row.id, row.id);
+  await assert.rejects(guard.approve(row.id, 'Owner'), /not awaiting approval/);
+  assert.equal(calls.length, 1);
+});
+
+for (const malformed of [null, 'approve', true, {}, { ...review, verdict: 'allow' }, { ...review, concerns: null }, { ...review, injection_detected: 'false' }, { ...review, summary: undefined }]) {
+  test(`guard validates reviewer result: ${JSON.stringify(malformed)}`, async () => {
+    guard.deps.reviewAction = async () => malformed as any;
+    const { row } = await propose(24);
+    assert.equal(row.status, 'awaiting_approval');
+    assert.equal(row.review, null);
+    assert.equal(calls.length, 0);
+  });
+}
+
+test('payout event time orders nonterminal updates and terminal status is sticky even for newer events', () => {
+  const id = store.recordProposal({ tool: 'send_payout', kind: 'payout', params: {}, amount: 35, decision: 'allow', checks: [], status: 'executed' });
+  store.updateLedger(id, { status: 'executed', paypalRef: 'BATCH' });
+  const event = (status: string, day: number) => ({ create_time: `2026-01-0${day}T00:00:00Z`, event_type: `PAYMENT.PAYOUTS-ITEM.${status}`, resource: { payout_batch_id: 'BATCH', transaction_status: status } });
+  watch.handlePayPalEvent(event('UNCLAIMED', 2));
+  watch.handlePayPalEvent(event('PENDING', 1));
+  assert.equal(JSON.parse(store.ledgerEntry(id)!.paypal_result!).webhook_status, 'UNCLAIMED');
+  watch.handlePayPalEvent(event('RETURNED', 3));
+  watch.handlePayPalEvent(event('UNCLAIMED', 4));
+  const result = JSON.parse(store.ledgerEntry(id)!.paypal_result!);
+  assert.equal(result.webhook_status, 'RETURNED');
+  assert.equal(result.webhook_time, '2026-01-03T00:00:00.000Z');
+});
+
+
+test('all terminal payout statuses stay terminal on later pending deliveries', () => {
+  for (const status of ['SUCCESS', 'SUCCEEDED', 'RETURNED', 'FAILED', 'DENIED', 'BLOCKED', 'REFUNDED', 'REVERSED', 'CANCELED', 'CANCELLED']) {
+    const id = store.recordProposal({ tool: 'send_payout', kind: 'payout', params: {}, amount: 35, decision: 'allow', checks: [], status: 'executed' });
+    const batch = `TERMINAL-${status}`;
+    store.updateLedger(id, { status: 'executed', paypalRef: batch });
+    watch.handlePayPalEvent({ create_time: '2026-01-01T00:00:00Z', event_type: `PAYMENT.PAYOUTS-ITEM.${status}`, resource: { payout_batch_id: batch, transaction_status: status } });
+    watch.handlePayPalEvent({ create_time: '2026-01-02T00:00:00Z', event_type: 'PAYMENT.PAYOUTS-ITEM.UNCLAIMED', resource: { payout_batch_id: batch, transaction_status: 'UNCLAIMED' } });
+    assert.equal(JSON.parse(store.ledgerEntry(id)!.paypal_result!).webhook_status, status);
+  }
+});

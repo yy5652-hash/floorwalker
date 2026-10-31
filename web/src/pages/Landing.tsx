@@ -30,7 +30,7 @@ export function Landing() {
     <main>
       <section className="site-hero">
         <div className="hero-copy">
-          <h1>Every refund checked.<br /> <span>Fewer taps every week.</span></h1>
+          <h1>Every refund checked.<br /> <span>Fewer taps as it learns.</span></h1>
           <div className="hero-intro">
             <p>AI agents can now move money in PayPal. Give them a shop manager who checks every move—and learns when to stop asking you.</p>
             <DemoButton size="lg" />
@@ -81,7 +81,7 @@ export function Landing() {
         </div>
       </section>
       <section className="learning-story site-section">
-        <div className="learning-copy"><p className="section-index">02 / Less asking. Same boundaries.</p><h2>Your decisions<br /> make it smarter.</h2><p>Keep approving the same kind of refund? Floorwalker suggests a rule change, tests it on your history, and leaves the final say to you.</p><a href="/app#rules">See the reasoning <ArrowRight size={16} /></a></div>
+        <div className="learning-copy"><p className="section-index">02 / Less asking. Same boundaries.</p><h2>Your decisions<br /> make it smarter.</h2><p>Keep approving the same kind of refund? Floorwalker suggests a rule change, tests it on your history, and leaves the final say to you.</p><p>In a 16-week simulation with 20 paired seeds, owner taps fell from 88 to 61 per 100 money moves. Most gains came early, then leveled off; customer results may differ.</p><a href="/app#rules">See the reasoning <ArrowRight size={16} /></a></div>
         <div className="learning-proof"><span>From the recorded demo</span><div className="learning-figure">53 <span>→</span> 42</div><p>owner taps per 100 money moves</p><div className="learning-boundary"><Check size={16} /><span>Your declines still define the boundary.</span></div></div>
       </section>
       <section className="watch-story site-section">
@@ -125,6 +125,6 @@ export function Landing() {
         </article>)}</div>
       </section>
     </main>
-    <footer className="site-footer"><Brand /><p>Every refund checked. Fewer taps every week.</p><a href={github} target="_blank" rel="noreferrer">GitHub <ExternalLink size={14} /></a></footer>
+    <footer className="site-footer"><Brand /><p>Every refund checked. Fewer taps as it learns.</p><a href={github} target="_blank" rel="noreferrer">GitHub <ExternalLink size={14} /></a></footer>
   </div>;
 }

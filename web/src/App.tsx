@@ -803,7 +803,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
         </main>
         <footer className="flex items-center justify-center gap-2 px-4 py-6 text-xs text-muted-foreground">
           <ShieldCheck className="size-3" />
-          Every refund checked. Fewer taps every week.
+          Every refund checked. Fewer taps as it learns.
         </footer>
       </SidebarInset>
       <Suspense fallback={null}>

@@ -5,7 +5,7 @@ import * as store from "../db.ts";
 import { publish, type EventType } from "../events.ts";
 import { getCapture, getOrder, orderIdFromCapture, sendPayout, usd } from "../paypal/api.ts";
 import { callToolkit } from "../toolkit.ts";
-import { reviewAction, type Review } from "./review.ts";
+import { reviewAction, ReviewSchema, type Review } from "./review.ts";
 import {
   actionAmount, checkAgent, checkPayout, checkRefund, decide, PERIOD_DAYS,
   type Check, type Decision, type MoneyAction, type PayoutAction, type PayoutFacts, type RefundAction, type RefundFacts,
@@ -166,18 +166,24 @@ const requestKey = (row: store.LedgerRow) => `allowance-${row.id}-${Date.parse(r
 /** Runs an approved ledger entry against PayPal, with the row's request key for idempotency. */
 async function execute(id: number): Promise<{ ok: boolean; ref?: string; note: string; result?: unknown; error?: string }> {
   const row = store.ledgerEntry(id)!;
+  store.db().prepare("UPDATE ledger SET execution_started_at = ? WHERE id = ?").run(new Date().toISOString(), id);
   const params = JSON.parse(row.params);
   // An owner may approve a smaller amount than the agent asked for.
   if (row.approved_amount !== null) params.amount = row.approved_amount;
   if (row.tool === "create_refund") {
     const input: any = { capture_id: params.captureId, note_to_payer: params.note ?? `Refund from ${current().ws.name}` };
     if (params.amount !== undefined) input.amount = usd(params.amount);
-    const res = await deps.callToolkit("create_refund", input, requestKey(row));
-    if (!res || res.error || !res.id) {
-      const msg = res?.error?.message ?? JSON.stringify(res).slice(0, 300);
-      return { ok: false, note: `PayPal refused the refund: ${msg}`, error: msg };
+    try {
+      const res = await deps.callToolkit("create_refund", input, requestKey(row));
+      if (!res || res.error || !res.id) {
+        const msg = res?.error?.message ?? String(JSON.stringify(res)).slice(0, 300);
+        return { ok: false, note: `PayPal refused the refund: ${msg}`, error: msg };
+      }
+      return { ok: true, ref: res.id, result: res, note: `PayPal refund ${res.id} is ${res.status} for $${res.amount?.value ?? params.amount}.` };
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { ok: false, note: `PayPal refused the refund: ${message}`, error: message };
     }
-    return { ok: true, ref: res.id, result: res, note: `PayPal refund ${res.id} is ${res.status} for $${res.amount?.value ?? params.amount}.` };
   }
   if (row.tool === "send_payout") {
     try {
@@ -253,10 +259,10 @@ export async function guard(tool: string, input: unknown, ctx: GuardContext): Pr
   let reviewError: string | undefined;
   if (config.ai.configured) {
     try {
-      review = await deps.reviewAction({
+      review = ReviewSchema.parse(await deps.reviewAction({
         action: prepared.action, tool, justification: ctx.justification, facts: prepared.facts, checks: prepared.checks, policy, policyText,
         source: ctx.ticket ? { from: `${ctx.ticket.from_name} <${ctx.ticket.from_email}>`, subject: ctx.ticket.subject, body: ctx.ticket.body, channel: ctx.ticket.channel } : null,
-      });
+      }));
     } catch (e: any) {
       reviewError = e.message;
     }
@@ -302,12 +308,19 @@ export type ApproveOptions = {
  */
 export async function approve(id: number, by: string, opts: ApproveOptions | number = {}) {
   const { amount, allowPayeeDays, note } = typeof opts === "number" ? { amount: opts } as ApproveOptions : opts;
-  if (!paypalConfigured()) throw new Error("PayPal is not configured");
   const row = store.ledgerEntry(id);
   if (!row) throw new Error(`No request #${id}`);
+  if (row.status === "awaiting_approval" && row.expires_at && Date.parse(row.expires_at) <= Date.now()) {
+    expireRequest(row.id);
+    throw new Error(`Request #${id} expired and was declined automatically.`);
+  }
+  if (row.status === "awaiting_approval" && row.agent_id && store.agent(row.agent_id)?.status === "frozen") {
+    throw Object.assign(new Error("This agent is frozen; unfreeze it first."), { status: 409, code: "agent_frozen" });
+  }
   if (row.decision === "block") throw new Error("Blocked actions cannot be approved here; do it yourself in PayPal if you really mean it.");
   if (amount !== undefined && !(amount > 0 && amount <= row.amount + 0.005)) throw new Error(`Approve between $0.01 and $${row.amount.toFixed(2)}.`);
   if (allowPayeeDays !== undefined && (row.kind !== "payout" || !(allowPayeeDays >= 1 && allowPayeeDays <= 90))) throw new Error("A temporary allowance is for payouts, from 1 to 90 days.");
+  if (!paypalConfigured()) throw new Error("PayPal is not configured");
   if (!store.transition(id, "awaiting_approval", "executing")) throw new Error(`Request #${id} is ${row.status}, not awaiting approval`);
   if (amount !== undefined && Math.abs(amount - row.amount) > 0.005) store.setApprovedAmount(id, Math.round(amount * 100) / 100);
   const run = await execute(id);
@@ -330,15 +343,17 @@ export function declineRequest(id: number, by: string, reason?: string) {
   return store.ledgerEntry(id)!;
 }
 
+/** Same expiry outcome whether noticed by an approver or the scheduled sweep. */
+function expireRequest(id: number): boolean {
+  if (!store.transition(id, "awaiting_approval", "declined")) return false;
+  store.updateLedger(id, { status: "declined", decidedBy: "Floorwalker (expired)" });
+  store.setDeclineReason(id, `No one answered within ${approvalTtlHours()} hours, so it was declined automatically.`);
+  audit("action.expired", `act_${id}`);
+  announce(id, "action.expired");
+  return true;
+}
+
 /** Declines held requests nobody answered in time (fail closed: silence is a no). */
 export function expireOverdue(): number {
-  const rows = store.overdueRequests();
-  for (const r of rows) {
-    if (!store.transition(r.id, "awaiting_approval", "declined")) continue;
-    store.updateLedger(r.id, { status: "declined", decidedBy: "Floorwalker (expired)" });
-    store.setDeclineReason(r.id, `No one answered within ${approvalTtlHours()} hours, so it was declined automatically.`);
-    audit("action.expired", `act_${r.id}`);
-    announce(r.id, "action.expired");
-  }
-  return rows.length;
+  return store.overdueRequests().filter((r) => expireRequest(r.id)).length;
 }

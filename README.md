@@ -1,6 +1,6 @@
 # Floorwalker
 
-**Every refund checked. Fewer taps every week.** Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.
+**Every refund checked. Fewer taps as it learns.** Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.
 
 Built for the PayPal AI Hackathon with the **PayPal Agent Toolkit**, the **PayPal REST APIs** (Orders, Payments, Payouts, Shipment Tracking, Webhooks, Subscriptions) in the sandbox, **Gemini** (`gemini-3.8-flash`, or Claude when an Anthropic key is set), **shadcn/ui** and **AG Grid**.
 
@@ -159,7 +159,7 @@ Floorwalker only talks to `api-m.sandbox.paypal.com`; there is no setting for th
 
 Sign-in, workspaces and the demo pool need nothing else: a secret and VAPID keys for push are created in `data/` on first start (or set `BETTER_AUTH_SECRET`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`). Set `FLOORWALKER_BASE_URL` to the public URL when you host it; passkeys and cookies are bound to it. See [.env.example](.env.example).
 
-Optional **Ask Floorwalker**: set server-only `DEEPSEEK_API_KEY` and restart. With no key the widget is hidden. The code defaults to `deepseek-chat` as requested in the assistant brief; DeepSeek's [current official model list](https://api-docs.deepseek.com/quick_start/pricing/) (checked 2026-10-30) lists `deepseek-flash` and `deepseek-v4-pro`, so `.env.example` explicitly selects `deepseek-flash`. Streaming follows the [Chat Completions API](https://api-docs.deepseek.com/api/create-chat-completion/) with thinking disabled and a 500-token cap. A live DeepSeek call has not been tested; automated tests mock fetch.
+Optional **Ask Floorwalker**: set server-only `DEEPSEEK_API_KEY` and restart. With no key the widget is hidden. The code and `.env.example` default to `deepseek-flash`, verified against DeepSeek's [official model list](https://api-docs.deepseek.com/quick_start/pricing/) on 2026-10-31. Streaming follows the [Chat Completions API](https://api-docs.deepseek.com/api/create-chat-completion/) with thinking disabled and a 500-token cap. A live DeepSeek call has not been tested; automated tests mock fetch.
 
 The landing chat sends product facts and chat only. Demo workspaces also send a compact activity summary. Real workspaces default to no activity sharing; only the owner can enable **Settings → General → Let the assistant read this workspace's activity**, and changes are audited. The panel explains what goes to DeepSeek. Credentials, sealed values and raw PayPal payloads are excluded. The assistant has no tools and cannot move money, approve or edit rules. Requests allow 1,000 characters, retain at most 10 turns, time out after 30 seconds and cancel on disconnect. Limits are 15/hour per public IP and 60/hour per signed-in user and IP (in-memory, per server process).
 
@@ -181,6 +181,14 @@ claude mcp add --transport http floorwalker https://floorwalker.43-160-214-187.s
 ```
 
 A local stdio MCP server works on the local workspace without a key: `claude mcp add floorwalker -- npx tsx server/mcp.ts`. Money-moving tools take two extra fields, `requester_email` and `source_message`, which the reviewer weighs against PayPal's records.
+
+### Engineering experiments
+
+A 16-week simulation using the shipped policy and 20 paired seeds (17,920 simulated money moves across two arms) reduced owner taps from **88.49 to 61.18 per 100 moves (88 → 61)** when learned changes were accepted. Most gains came in the first weeks, then plateaued; this is a simulated workload, not customer performance. The workload exceeds the initial $120/week refund budget, so the effect depends strongly on that starting policy. **0 of 960 sampled attacks ran automatically in either arm; 3 of 960 ran after a scripted owner mistake in each arm.** After fixing the 90-day decline cutoff, **0 historical declines became automatic in replay**. Approvals are evidence for 90 days; declines permanently constrain learned changes. Fixed recorded reviewer verdicts were used, not new model calls; clicks to accept rule changes are excluded from the tap metric.
+
+All **103 automated tests pass, with none skipped**, including failure injection for execution, approvals, reviews, learning, webhooks and inbox handoff. Local HTTP tests cover the plan's **402 quota refusal** and **PayPal checkout with a stubbed PayPal**, without approving a subscription. The earlier live HTTP/SSE end-to-end run recorded **34 passes / 5 failures**, including demo billing restrictions; the focused developer recheck recorded **10 passes / 1 failure**. Those runs exposed defects fixed here. Post-deployment live checks, including T4, are still pending; local tests do not establish a deployed fix.
+
+See the [16-week results](bench/longitudinal-RESULTS.md) and [failure-injection / live-check report](tests/experiments-REPORT.md).
 
 ### Tests and checks
 

@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Floorwalker",
   "short_name": "Floorwalker",
-  "description": "Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.",
+  "description": "Every refund checked. Fewer taps as it learns. Floorwalker sits between AI agents and a business's PayPal account: every refund or payout is checked against PayPal's records and your rules, and it learns from your decisions when it no longer needs to ask you.",
   "start_url": "/approve",
   "scope": "/",
   "display": "standalone",

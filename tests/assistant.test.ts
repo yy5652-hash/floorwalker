@@ -75,7 +75,7 @@ test("public route has product facts only, preserves tokens and never accesses w
   const { body, url } = h.calls[0]; const prompt = JSON.stringify(body.messages);
   assert.equal(url, "https://api.deepseek.com/chat/completions");
   assert.equal(body.stream, true); assert.equal(body.max_tokens, 500); assert.equal(body.tools, undefined);
-  assert.equal(body.model, process.env.FLOORWALKER_ASSISTANT_MODEL || "deepseek-chat");
+  assert.equal(body.model, process.env.FLOORWALKER_ASSISTANT_MODEL || "deepseek-flash");
   assert.match(prompt, /Pro \$29/); assert.match(prompt, /98.75%/); assert.match(prompt, /43\/45/);
   assert.doesNotMatch(prompt, /PRIVATE_RULE_MARKER|private-bot|Secret shop|WORKSPACE_DATA_[a-f0-9]/);
   assert.equal((await h.send("/assistant")).status, 401);

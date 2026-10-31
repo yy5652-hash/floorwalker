@@ -34,12 +34,18 @@ const Controls = {
   payees: z.array(z.email()).max(200).nullable().optional(),
   expires_at: z.iso.datetime().nullable().optional(),
 };
-const AgentBody = z.object({
+const AgentFields = z.object({
   name: z.string().trim().min(1).max(60),
-  role: z.string().trim().max(200).default(""),
-  can_refund: z.boolean().default(false),
-  can_payout: z.boolean().default(false),
+  role: z.string().trim().max(200),
+  can_refund: z.boolean(),
+  can_payout: z.boolean(),
   ...Controls,
+});
+
+const AgentBody = AgentFields.extend({
+  role: AgentFields.shape.role.default(""),
+  can_refund: AgentFields.shape.can_refund.default(false),
+  can_payout: AgentFields.shape.can_payout.default(false),
 });
 
 function applyControls(id: string, b: Partial<z.infer<typeof AgentBody>>) {
@@ -68,7 +74,7 @@ manage.patch("/agents/:id", need({ agents: ["manage"] }), handle((req) => {
   const id = String(req.params.id);
   const a = store.agent(id);
   if (!a) throw new HttpError(404, "No such agent");
-  const b = parse(AgentBody.partial(), req.body);
+  const b = parse(AgentFields.partial(), req.body);
   store.upsertAgent({
     id, name: b.name ?? a.name, role: b.role ?? a.role,
     can_refund: b.can_refund === undefined ? a.can_refund : b.can_refund ? 1 : 0,

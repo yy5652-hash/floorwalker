@@ -133,7 +133,7 @@ export function createAssistant(options: { fetch?: typeof fetch; key?: () => str
       emit({ type: "context", shared: context !== null });
       const upstream = await (options.fetch ?? fetch)("https://api.deepseek.com/chat/completions", {
         method: "POST", headers: { Authorization: `Bearer ${key()}`, "Content-Type": "application/json" }, signal: controller.signal,
-        body: JSON.stringify({ model: process.env.FLOORWALKER_ASSISTANT_MODEL?.trim() || "deepseek-chat", stream: true, max_tokens: 500, thinking: { type: "disabled" }, messages }),
+        body: JSON.stringify({ model: process.env.FLOORWALKER_ASSISTANT_MODEL?.trim() || "deepseek-flash", stream: true, max_tokens: 500, thinking: { type: "disabled" }, messages }),
       });
       if (!upstream.ok || !upstream.body) { await upstream.body?.cancel(); throw new Error("Assistant unavailable"); }
       await readDeepSeek(upstream.body, text => emit({ type: "token", text }));

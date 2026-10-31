@@ -93,6 +93,7 @@ export function ApprovalCard({
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState<"approve" | "decline" | null>(null);
   const [error, setError] = useState("");
+  const [freezeRefusal, setFreezeRefusal] = useState(false);
   const [result, setResult] = useState<LedgerEntry | null>(
     entry.status === "awaiting_approval" ? null : entry,
   );
@@ -124,6 +125,9 @@ export function ApprovalCard({
     : null;
   const expired = remaining === 0;
   const permitted = canApprove(state);
+  const agent = state.agents.find((a) => a.id === entry.agent_id);
+  const frozen = entry.status === "awaiting_approval" && (agent?.status === "frozen" || freezeRefusal);
+  useEffect(() => { setFreezeRefusal(false); }, [agent?.status, state]);
   const invalidDays =
     allowPayee &&
     (!Number.isInteger(Number(days)) || Number(days) < 1 || Number(days) > 90);
@@ -145,7 +149,7 @@ export function ApprovalCard({
       result ||
       !permitted ||
       expired ||
-      (action === "approve" && invalidDays) ||
+      (action === "approve" && (invalidDays || frozen)) ||
       entry.status !== "awaiting_approval"
     )
       return;
@@ -184,6 +188,12 @@ export function ApprovalCard({
       );
       await refresh();
     } catch (e) {
+      if (e instanceof ApiError && e.code === "agent_frozen") {
+        setFreezeRefusal(true);
+        setStepUp(null);
+        await refresh();
+        return;
+      }
       if (
         e instanceof ApiError &&
         e.code === "step_up" &&
@@ -259,7 +269,7 @@ export function ApprovalCard({
         >
           <span className="inline-block size-1.5 shrink-0 rounded-full bg-current" />
           {entry.status === "awaiting_approval"
-            ? "Needs you"
+            ? frozen ? "Blocked by freeze" : "Needs you"
             : "Decision recorded"}
         </Badge>
       </div>
@@ -283,6 +293,11 @@ export function ApprovalCard({
           <Checks checks={entry.checks} review={entry.review} />
         </div>
       </details>
+      {frozen && (
+        <p className="rounded-lg border p-3 text-sm tone-hold" role="status">
+          This agent is frozen; unfreeze it first. This request is still waiting for approval.
+        </p>
+      )}
       {result ? (
         <div className="space-y-3 rounded-lg border p-3">
           <StatusPill status={result.status} />
@@ -353,7 +368,7 @@ export function ApprovalCard({
             <Button
               data-film="approve"
               disabled={
-                !!busy || !permitted || expired || invalidDays || !!stepUp
+                !!busy || !permitted || expired || frozen || invalidDays || !!stepUp
               }
               onClick={() => void decide("approve")}
               variant="default"
@@ -382,7 +397,7 @@ export function ApprovalCard({
             className="h-auto justify-start px-0 py-1 text-xs"
             data-film="approve-other"
             disabled={
-              !!busy || !permitted || expired || invalidDays || !!stepUp
+              !!busy || !permitted || expired || frozen || invalidDays || !!stepUp
             }
             aria-expanded={other}
             onClick={() => {
@@ -425,6 +440,7 @@ export function ApprovalCard({
                     !!busy ||
                     !permitted ||
                     expired ||
+                    frozen ||
                     invalidDays ||
                     !!stepUp
                   }

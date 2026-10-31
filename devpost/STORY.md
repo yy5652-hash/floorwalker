@@ -1,6 +1,6 @@
 # Floorwalker
 
-**Tagline:** Every refund checked. Fewer taps every week.
+**Tagline:** Every refund checked. Fewer taps as it learns.
 
 ## Try it
 
@@ -42,7 +42,7 @@ The demo shop, Juniper & Oak Ceramics, has a morning inbox (a chipped mug refund
 - **PayPal:** Agent Toolkit (`get_order`, `get_refund`, and `create_refund`, which Floorwalker intercepts and executes with a per-request `PayPal-Request-Id`), Orders v2 for the demo orders, Payments v2 captures and refunds for ground truth, Payouts v1 for contractor payments, Orders v2 tracking, Webhooks (registration and `verify-webhook-signature`) for refunds and payouts that skip Floorwalker, and Subscriptions (catalog products, billing plans, subscriptions) for Floorwalker's own plans.
 - **AI:** the support agent, the reviewer, the rules compiler and the learning features run on Gemini (`gemini-3.8-flash`) with function calling and JSON-schema output; the same code runs on Claude when an Anthropic key is set. Learned changes come from the ledger and are backtested in code; the model rewords the owner's rules and reads her decline reasons, but never sets a number.
 - **App:** Node.js and TypeScript, Express, SQLite (`node:sqlite`, one file per workspace), better-auth, React with shadcn/ui and Tailwind, AG Grid Enterprise and AG Charts, Web Push, Standard Webhooks, and an MCP server on the official SDK.
-- **Tests and benchmark:** 47 unit tests (rule engine, guard, agent limits, learning, the PayPal watch, idempotency, the audit chain, keys) and FloorwalkerBench.
+- **Tests and benchmark:** Automated regression tests (rules, guard, learning, failure injection, agent permissions, billing HTTP paths, approval rendering, audit and keys) and FloorwalkerBench.
 
 ## Results
 
@@ -57,6 +57,12 @@ FloorwalkerBench is 198 labelled money moves: 59 benign requests, 59 the owner s
 | Owner taps per 100 money moves | 0 | 47 | 31 | **30** |
 
 Giving the model the owner's rules as text is nearly as safe, but it still let $35 through and asked about a quarter of the legitimate requests. Floorwalker stopped every attack while asking the owner about a third less often. On the 150 independent cases alone it stopped all 60 attacks and did all 45 legitimate requests on its own; the two owner decisions it missed were small judgement calls ($20 and $15).
+
+A 16-week simulation using the shipped policy and 20 paired seeds (17,920 simulated money moves across two arms) reduced owner taps from **88.49 to 61.18 per 100 moves (88 → 61)** when learned changes were accepted. Most gains came in the first weeks, then plateaued; this is a simulated workload, not customer performance. The workload exceeds the initial $120/week refund budget, so the effect depends strongly on that starting policy. **0 of 960 sampled attacks ran automatically in either arm; 3 of 960 ran after a scripted owner mistake in each arm.** After fixing the 90-day decline cutoff, **0 historical declines became automatic in replay**. Approvals are evidence for 90 days; declines permanently constrain learned changes. Fixed recorded reviewer verdicts were used, not new model calls; clicks to accept rule changes are excluded from the tap metric.
+
+All **103 automated tests pass, with none skipped**, including failure injection for execution, approvals, reviews, learning, webhooks and inbox handoff. Local HTTP tests cover the plan's **402 quota refusal** and **PayPal checkout with a stubbed PayPal**, without approving a subscription. The earlier live HTTP/SSE end-to-end run recorded **34 passes / 5 failures**, including demo billing restrictions; the focused developer recheck recorded **10 passes / 1 failure**. Those runs exposed defects fixed here. Post-deployment live checks, including T4, are still pending; local tests do not establish a deployed fix.
+
+See [simulation results](../bench/longitudinal-RESULTS.md) and [engineering / live-check evidence](../tests/experiments-REPORT.md).
 
 In the demo shop's history, accepting the learned refund-limit change takes the owner from 66 to 50 taps per 100 money moves, with nothing she declined becoming automatic.
 

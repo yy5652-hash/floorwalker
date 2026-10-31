@@ -46,7 +46,7 @@ type Decided = { row: store.LedgerRow; holds: Check[]; approved: boolean; kind: 
 function decided(): Decided[] {
   const since = Date.now() - WINDOW_DAYS * 86_400_000;
   return store.ledger()
-    .filter((r) => r.decision === "hold" && r.decided_by && r.facts && Date.parse(r.created_at) >= since)
+    .filter((r) => r.decision === "hold" && r.decided_by && r.facts && (r.status === "declined" || Date.parse(r.created_at) >= since))
     .filter((r) => (r.kind === "refund" || r.kind === "payout") && ["executed", "approved", "declined"].includes(r.status))
     .map((r) => ({
       row: r,
@@ -172,11 +172,11 @@ function measure(policy: Policy, draft: Policy): LearnedChange["impact"] {
   const byId = new Map(store.ledger().map((r) => [r.id, r]));
   const recent = sim.rows.filter((s) => Date.parse(s.at) >= since);
   let tapsSaved = 0, declinedLetThrough = 0, moreAutoUsd = 0;
-  for (const s of recent) {
+  for (const s of sim.rows) {
     if (s.before !== "hold" || s.after !== "allow") continue;
     const r = byId.get(s.id)!;
     if (r.status === "declined") declinedLetThrough++;
-    else if (r.decided_by) { tapsSaved++; moreAutoUsd += r.approved_amount ?? r.amount; }
+    else if (Date.parse(s.at) >= since && r.decided_by) { tapsSaved++; moreAutoUsd += r.approved_amount ?? r.amount; }
   }
   return {
     tapsSaved, declinedLetThrough, moreAutoUsd: Math.round(moreAutoUsd * 100) / 100,

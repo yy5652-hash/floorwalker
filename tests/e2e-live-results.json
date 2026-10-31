@@ -1,245 +1,245 @@
 {
   "base": "https://floorwalker.43-160-214-187.sslip.io",
-  "began": "2026-10-31T02:49:57.239Z",
+  "began": "2026-10-31T02:57:41.768Z",
   "rows": [
     {
       "check": "/ loads with JS asset",
       "result": "PASS",
-      "seconds": 2.251,
+      "seconds": 3.134,
       "detail": "HTML 200 and referenced JS 200 (rendering not checked)"
     },
     {
       "check": "/app loads with JS asset",
       "result": "PASS",
-      "seconds": 1.505,
+      "seconds": 1.746,
       "detail": "HTML 200 and referenced JS 200 (rendering not checked)"
     },
     {
       "check": "Anonymous sign-in",
       "result": "PASS",
-      "seconds": 0.505,
+      "seconds": 0.511,
       "detail": "Fresh anonymous identity; cookie retained in memory only"
     },
     {
       "check": "Instant demo with simulated history",
       "result": "PASS",
-      "seconds": 0.25,
+      "seconds": 0.401,
       "detail": "3 paid orders, 6 tickets, 32 history rows"
     },
     {
       "check": "Learned changes",
       "result": "PASS",
-      "seconds": 1.615,
+      "seconds": 1.543,
       "detail": "2 backtested suggestions"
     },
     {
       "check": "Apply learned change",
       "result": "PASS",
-      "seconds": 7.24,
+      "seconds": 25.39,
       "detail": "Applied policy version 2"
     },
     {
       "check": "Restore policy",
       "result": "PASS",
-      "seconds": 0.989,
+      "seconds": 1.126,
       "detail": "Restored as version 3"
     },
     {
       "check": "Rules compile and backtest",
       "result": "PASS",
-      "seconds": 23.416,
+      "seconds": 21.764,
       "detail": "32 past moves replayed; 6 changed"
     },
     {
       "check": "Inbox T1 expected outcome",
       "result": "PASS",
-      "seconds": 17.719,
+      "seconds": 18.404,
       "detail": "refund $24: executed"
     },
     {
       "check": "Inbox T2 expected outcome",
-      "result": "FAIL",
-      "seconds": 21,
-      "detail": "Expected refund $86 awaiting_approval; observed refund $96 awaiting_approval"
+      "result": "PASS",
+      "seconds": 27.101,
+      "detail": "refund $86: awaiting_approval"
     },
     {
       "check": "Inbox T3 expected outcome",
       "result": "PASS",
-      "seconds": 15.497,
+      "seconds": 14.281,
       "detail": "payout $35: executed"
     },
     {
       "check": "Inbox T4 expected outcome",
       "result": "PASS",
-      "seconds": 0.707,
+      "seconds": 0.999,
       "detail": "Escalated; 0 money proposals, none executed"
     },
     {
       "check": "Inbox T5 expected outcome",
       "result": "PASS",
-      "seconds": 30.143,
+      "seconds": 33.533,
       "detail": "refund $64: blocked"
     },
     {
       "check": "Inbox T6 expected outcome",
       "result": "PASS",
-      "seconds": 18.297,
+      "seconds": 30.277,
       "detail": "payout $180: awaiting_approval"
     },
     {
       "check": "Approve held inbox request",
       "result": "PASS",
-      "seconds": 2.972,
+      "seconds": 4.224,
       "detail": "Request 34 approved with PayPal reference"
     },
     {
       "check": "Decline with a reason",
       "result": "PASS",
-      "seconds": 0.815,
+      "seconds": 0.846,
       "detail": "Declined; exact reason persisted"
     },
     {
       "check": "Freeze and unfreeze all agents",
       "result": "PASS",
-      "seconds": 1.685,
+      "seconds": 1.588,
       "detail": "Verified"
     },
     {
       "check": "Bypass opens incident",
       "result": "PASS",
-      "seconds": 7.208,
+      "seconds": 7.171,
       "detail": "Untracked $25 sandbox refund found; agents frozen"
     },
     {
       "check": "PayPal webhook arrives within 90 seconds",
       "result": "PASS",
-      "seconds": 7.297,
-      "detail": "Server observed verified refund webhook at 2026-10-31T02:52:37.370Z; endpoint exposes no refund/event ID, so exact bypass-event correlation is unavailable"
+      "seconds": 7.045,
+      "detail": "Server observed verified refund webhook at 2026-10-31T03:01:02.706Z; endpoint exposes no refund/event ID, so exact bypass-event correlation is unavailable"
     },
     {
       "check": "Resolve incident and restore agents",
       "result": "PASS",
-      "seconds": 2.243,
+      "seconds": 1.667,
       "detail": "Verified"
     },
     {
       "check": "Bad webhook signature changes nothing",
       "result": "PASS",
-      "seconds": 1.905,
+      "seconds": 1.459,
       "detail": "Rejected HTTP 400; incidents and last verified event unchanged"
     },
     {
       "check": "Create agent and ephemeral key",
       "result": "PASS",
-      "seconds": 0.969,
+      "seconds": 0.73,
       "detail": "Key created, used and retained only in process memory"
     },
     {
       "check": "/v1/refunds held by agent cap",
       "result": "PASS",
-      "seconds": 9.945,
+      "seconds": 8.307,
       "detail": "act_38: $5 held"
     },
     {
       "check": "Idempotent retry returns same action",
       "result": "PASS",
-      "seconds": 1.273,
+      "seconds": 1.205,
       "detail": "Verified"
     },
     {
       "check": "Approve a different amount",
       "result": "PASS",
-      "seconds": 2.522,
+      "seconds": 2.274,
       "detail": "Requested $5, approved $2 with PayPal reference"
     },
     {
       "check": "Agent permission refusal",
       "result": "PASS",
-      "seconds": 5.135,
+      "seconds": 6.49,
       "detail": "Verified"
     },
     {
       "check": "Agent permission patch preserves other permissions",
       "result": "PASS",
-      "seconds": 1.051,
+      "seconds": 0.956,
       "detail": "Existing refund permission preserved"
     },
     {
       "check": "/v1/payouts",
       "result": "PASS",
-      "seconds": 13.378,
+      "seconds": 13.359,
       "detail": "act_40 held and declined"
     },
     {
       "check": "MCP tools/list over HTTP",
       "result": "PASS",
-      "seconds": 0.579,
+      "seconds": 0.682,
       "detail": "6 tools returned"
     },
     {
       "check": "MCP tools/call over HTTP",
       "result": "PASS",
-      "seconds": 1.519,
+      "seconds": 1.635,
       "detail": "Verified"
     },
     {
       "check": "Billing checkout link",
       "result": "FAIL",
-      "seconds": 0.248,
+      "seconds": 0.406,
       "detail": "UNAVAILABLE in anonymous demo: checkout is explicitly refused; no sandbox approval link can be verified without a non-demo account"
     },
     {
       "check": "Plan quota refusal",
       "result": "FAIL",
-      "seconds": 0.316,
+      "seconds": 0.235,
       "detail": "UNAVAILABLE in demo: Business limits; monthly action quota 50000. Not generating 50,000 model/money calls or changing production data to force exhaustion"
     },
     {
       "check": "Outgoing webhook create and test delivery",
       "result": "PASS",
-      "seconds": 3.068,
+      "seconds": 3.283,
       "detail": "Test event delivered; attempts 1"
     },
     {
       "check": "Audit log and integrity verification",
       "result": "PASS",
-      "seconds": 0.56,
+      "seconds": 0.57,
       "detail": "27 chained entries verified"
     },
     {
       "check": "CSV export",
       "result": "PASS",
-      "seconds": 0.318,
+      "seconds": 0.243,
       "detail": "Audit CSV includes header and rows"
     },
     {
       "check": "Cross-site POST refused",
       "result": "PASS",
-      "seconds": 1.786,
+      "seconds": 2.227,
       "detail": "Verified"
     },
     {
       "check": "API request-rate quota refusal",
       "result": "PASS",
-      "seconds": 6.487,
+      "seconds": 4.511,
       "detail": "429 rate_limited observed (distinct from billing quota)"
     },
     {
       "check": "Revoked key refused",
       "result": "PASS",
-      "seconds": 0.561,
+      "seconds": 0.713,
       "detail": "Verified"
     },
     {
       "check": "Cleanup endpoints and keys; freeze agents with history",
       "result": "PASS",
-      "seconds": 0.888,
+      "seconds": 0.807,
       "detail": "Keys revoked and webhook endpoints removed; agents with ledger history frozen as required by the API"
     },
     {
       "check": "Sign out and confirm access refused",
       "result": "PASS",
-      "seconds": 0.57,
+      "seconds": 0.611,
       "detail": "Signed out; /api/state returns 401"
     }
   ]

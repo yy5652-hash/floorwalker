@@ -89,6 +89,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
+const Assistant = lazy(() => import("./components/Assistant"));
+
 const Ledger = lazy(() =>
   import("./components/Ledger").then((module) => ({ default: module.Ledger })),
 );
@@ -804,6 +806,9 @@ function Workspace({ mobile }: { mobile: boolean }) {
           Every refund checked. Fewer taps every week.
         </footer>
       </SidebarInset>
+      <Suspense fallback={null}>
+        <Assistant key={`${workspaceId}:${state.workspace?.assistantContext}`} workspaceId={workspaceId ?? "film"} shared={state.workspace?.assistantContext ?? demo} demo={demo} />
+      </Suspense>
       {palette}
       {freezeDialog}
     </SidebarProvider>
@@ -815,7 +820,7 @@ function Routes() {
     return <AuthPage signup={path === "/signup"} />;
   if (path.startsWith("/invite/"))
     return <AuthPage invitationId={decodeURIComponent(path.slice(8))} />;
-  if (path === "/") return <Landing />;
+  if (path === "/") return <><Landing /><Suspense fallback={null}><Assistant /></Suspense></>;
   if (path === "/approve") return <Workspace mobile />;
   if (path === "/app") return <Workspace mobile={false} />;
   return (

@@ -1,3 +1,4 @@
+import { createAssistant, assistantContextAllowed } from "./assistant.ts";
 import { toNodeHandler } from "better-auth/node";
 import express, { type Response } from "express";
 import helmet from "helmet";
@@ -133,8 +134,12 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
+const assistant = createAssistant();
+app.use("/api", assistant.publicRoutes);
+
 // Everything under /api below needs a signed-in member and runs inside their active workspace.
 app.use("/api", signedIn);
+app.use("/api", assistant.workspaceRoutes);
 app.use("/api", manage);
 
 app.get("/api/state", (req, res) => {
@@ -147,7 +152,7 @@ app.get("/api/state", (req, res) => {
     appUrl: config.baseUrl,
     me: req.me,
     workspace: {
-      id: ws.id, name: ws.name, demo: ws.demo, plan: w.plan, seedStatus: w.seed_status,
+      id: ws.id, name: ws.name, demo: ws.demo, assistantContext: assistantContextAllowed(), plan: w.plan, seedStatus: w.seed_status,
       paypal: { connected: Boolean(ws.paypal), own: Boolean(w.paypal_client_id), clientIdHint: w.paypal_client_id ? `${w.paypal_client_id.slice(0, 6)}…${w.paypal_client_id.slice(-4)}` : null, verifiedAt: w.paypal_verified_at, merchant: w.paypal_merchant },
     },
     configured: { paypal: paypalConfigured(), ai: config.ai.configured, provider: config.ai.provider, agentModel: config.ai.agentModel, reviewModel: config.ai.reviewModel },

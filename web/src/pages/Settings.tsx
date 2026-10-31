@@ -115,6 +115,17 @@ function General({ state, refresh }: PageProps) {
     <Resource query={settings}>
       {settings.data && (
         <Card className="max-w-2xl p-6">
+          <h2>Assistant privacy</h2>
+          <Toggle
+            label="Let the assistant read this workspace's activity"
+            hint={state.workspace?.demo ? "Demo activity is shared with DeepSeek. Real workspaces start with sharing off." : "DeepSeek receives your chat and, when enabled, rules, agent status, recent ledger checks, incidents and learning summaries. Only the owner can change this."}
+            checked={state.workspace?.assistantContext ?? !!state.workspace?.demo}
+            disabled={!isOwner(state) || busy || !!state.workspace?.demo}
+            onChange={(enabled) => void run(async () => {
+              await api("/api/assistant/privacy", "PATCH", { enabled });
+              await refresh();
+            }, "Assistant privacy saved")}
+          />
           <h2>Workspace details</h2>
           <form
             key={JSON.stringify(settings.data)}

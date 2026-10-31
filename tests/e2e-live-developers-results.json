@@ -1,0 +1,72 @@
+{
+  "base": "https://floorwalker.43-160-214-187.sslip.io",
+  "began": "2026-10-30T23:55:16.042Z",
+  "rows": [
+    {
+      "check": "Anonymous sign-in",
+      "result": "PASS",
+      "seconds": 1.347,
+      "detail": "Fresh anonymous identity; cookie retained in memory only"
+    },
+    {
+      "check": "Instant demo with simulated history",
+      "result": "PASS",
+      "seconds": 1.652,
+      "detail": "3 paid orders, 6 tickets, 32 history rows"
+    },
+    {
+      "check": "Create agent and ephemeral key",
+      "result": "PASS",
+      "seconds": 1.021,
+      "detail": "Key created, used and retained only in process memory"
+    },
+    {
+      "check": "Agent permission refusal",
+      "result": "PASS",
+      "seconds": 4.299,
+      "detail": "Verified"
+    },
+    {
+      "check": "Agent permission patch preserves other permissions",
+      "result": "FAIL",
+      "seconds": 1.26,
+      "detail": "PATCH {can_payout:true} must preserve existing can_refund:true false !== true "
+    },
+    {
+      "check": "/v1/payouts",
+      "result": "PASS",
+      "seconds": 12.709,
+      "detail": "act_34 held and declined"
+    },
+    {
+      "check": "MCP tools/list over HTTP",
+      "result": "PASS",
+      "seconds": 0.57,
+      "detail": "6 tools returned"
+    },
+    {
+      "check": "MCP tools/call over HTTP",
+      "result": "PASS",
+      "seconds": 1.488,
+      "detail": "Verified"
+    },
+    {
+      "check": "Revoked key refused",
+      "result": "PASS",
+      "seconds": 0.569,
+      "detail": "Verified"
+    },
+    {
+      "check": "Cleanup endpoints and keys; freeze agents with history",
+      "result": "PASS",
+      "seconds": 0.561,
+      "detail": "Keys revoked and webhook endpoints removed; agents with ledger history frozen as required by the API"
+    },
+    {
+      "check": "Sign out and confirm access refused",
+      "result": "PASS",
+      "seconds": 0.56,
+      "detail": "Signed out; /api/state returns 401"
+    }
+  ]
+}

@@ -24,6 +24,28 @@
     const method = (init.method || 'GET').toUpperCase();
     if (!url.pathname.startsWith('/api/')) return realFetch(input, init);
     load();
+    if (url.pathname === '/api/assistant/status') return Promise.resolve(json({ enabled: typeof F.responses.assistant === 'string' }));
+    if (method === 'POST' && ['/api/assistant', '/api/assistant/public'].includes(url.pathname)) {
+      if (typeof F.responses.assistant !== 'string') return Promise.resolve(json({ error: 'No assistant replay configured.' }, 503));
+      const chunks = F.responses.assistant.match(/.{1,22}(?:\s|$)|.{1,22}/gs) ?? [];
+      const enc = new TextEncoder(); let timer, closed = false, abort;
+      const stream = new ReadableStream({
+        start(ctl) {
+          const end = () => { if (!closed) { closed = true; clearInterval(timer); init.signal?.removeEventListener('abort', abort); ctl.close(); } };
+          abort = end;
+          init.signal?.addEventListener('abort', abort, { once: true });
+          if (init.signal?.aborted) return end();
+          ctl.enqueue(enc.encode(JSON.stringify({ type: 'context', shared: url.pathname === '/api/assistant' }) + '\n'));
+          timer = setInterval(() => {
+            if (closed) return;
+            if (chunks.length) ctl.enqueue(enc.encode(JSON.stringify({ type: 'token', text: chunks.shift() }) + '\n'));
+            else { ctl.enqueue(enc.encode('{"type":"done"}\n')); end(); }
+          }, 25);
+        },
+        cancel() { closed = true; clearInterval(timer); init.signal?.removeEventListener('abort', abort); },
+      });
+      return Promise.resolve(new Response(stream, { headers: { 'Content-Type': 'application/x-ndjson' } }));
+    }
     if (url.pathname === '/api/state') return Promise.resolve(json(F.state));
     if (url.pathname === '/api/policy/versions') return Promise.resolve(json(F.state?.policy ? [{ ...F.state.policy, created_at: new Date().toISOString() }] : []));
     if (method === 'GET') {

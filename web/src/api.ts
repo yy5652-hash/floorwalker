@@ -199,6 +199,7 @@ export type State = {
     id: string;
     name: string;
     demo: boolean;
+    assistantContext?: boolean;
     plan: string;
     seedStatus: string | null;
     paypal: {

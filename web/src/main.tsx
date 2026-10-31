@@ -17,7 +17,7 @@ createRoot(document.getElementById("root")!).render(
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <App />
-          <Toaster closeButton duration={6500} />
+          <Toaster position="top-center" closeButton duration={6500} />
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>

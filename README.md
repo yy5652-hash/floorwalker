@@ -114,6 +114,7 @@ The owner writes the rules in plain words on the **Rules** tab ("Up to $40 on it
 | Reviewer | `gemini-3.8-flash` (JSON-schema output) | Verdict (approve / escalate / reject), injection flag, concerns with verbatim evidence, one-line summary for the owner |
 | Rules compiler | `gemini-3.8-flash` (JSON-schema output) | Turns the owner's plain-language rules into the validated policy schema |
 | Learning from decisions | `gemini-3.8-flash` (JSON-schema output) | Rewrites the owner's rules in her own words when she accepts a learned change, and proposes a reviewer note from her decline reasons. The changes themselves come from the ledger and are backtested in code; the model never sets a number. |
+| Ask Floorwalker | DeepSeek over streaming fetch (no SDK); `FLOORWALKER_ASSISTANT_MODEL` | Read-only product answers and optional workspace explanations. No tools or payment permissions. |
 
 The same code runs on Claude (`claude-sonnet-5-5`, Anthropic SDK with tool use and structured outputs) when `ANTHROPIC_API_KEY` is set. Models are configurable in `.env`.
 
@@ -157,6 +158,10 @@ Requirements: Node.js 22.13 or newer, a free [PayPal Developer](https://develope
 Floorwalker only talks to `api-m.sandbox.paypal.com`; there is no setting for the live API.
 
 Sign-in, workspaces and the demo pool need nothing else: a secret and VAPID keys for push are created in `data/` on first start (or set `BETTER_AUTH_SECRET`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`). Set `FLOORWALKER_BASE_URL` to the public URL when you host it; passkeys and cookies are bound to it. See [.env.example](.env.example).
+
+Optional **Ask Floorwalker**: set server-only `DEEPSEEK_API_KEY` and restart. With no key the widget is hidden. The code defaults to `deepseek-chat` as requested in the assistant brief; DeepSeek's [current official model list](https://api-docs.deepseek.com/quick_start/pricing/) (checked 2026-10-30) lists `deepseek-flash` and `deepseek-v4-pro`, so `.env.example` explicitly selects `deepseek-flash`. Streaming follows the [Chat Completions API](https://api-docs.deepseek.com/api/create-chat-completion/) with thinking disabled and a 500-token cap. A live DeepSeek call has not been tested; automated tests mock fetch.
+
+The landing chat sends product facts and chat only. Demo workspaces also send a compact activity summary. Real workspaces default to no activity sharing; only the owner can enable **Settings → General → Let the assistant read this workspace's activity**, and changes are audited. The panel explains what goes to DeepSeek. Credentials, sealed values and raw PayPal payloads are excluded. The assistant has no tools and cannot move money, approve or edit rules. Requests allow 1,000 characters, retain at most 10 turns, time out after 30 seconds and cancel on disconnect. Limits are 15/hour per public IP and 60/hour per signed-in user and IP (in-memory, per server process).
 
 ### Use it from your own agent
 

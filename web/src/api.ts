@@ -235,6 +235,8 @@ export type State = {
     provider: "anthropic" | "gemini" | null;
     agentModel: string;
     reviewModel: string;
+    fallback: "deepseek" | null;
+    usingFallback: boolean;
   };
   policy: { id: number; text: string; policy: Policy };
   tickets: Ticket[];

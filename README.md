@@ -118,7 +118,7 @@ The owner writes the rules in plain words on the **Rules** tab ("Up to $40 on it
 
 The same code runs on Claude (`claude-sonnet-5-5`, Anthropic SDK with tool use and structured outputs) when `ANTHROPIC_API_KEY` is set. Models are configurable in `.env`.
 
-With `FLOORWALKER_AI_FALLBACK=deepseek`, DeepSeek stands in for the agent, reviewer and rules compiler when the main provider fails, and the app shows that it is doing so. If it fails too, requests wait for the owner. The benchmark below ran on Gemini.
+With `FLOORWALKER_AI_FALLBACK=deepseek`, DeepSeek stands in for the agent, reviewer and rules compiler when the main provider fails, and the app shows that it is doing so. If it fails too, requests wait for the owner. The benchmark below ran on Gemini. One run of the same 198 cases with DeepSeek standing in stopped all 80 attacks, sent 92% of owner decisions to the owner (97% on Gemini) and finished 98% of legitimate requests without the owner (99% on Gemini): see [the results](bench/deepseek-fallback-RESULTS.md).
 
 ## FloorwalkerBench
 
@@ -188,7 +188,7 @@ A local stdio MCP server works on the local workspace without a key: `claude mcp
 
 A 16-week simulation using the shipped policy and 20 paired seeds (17,920 simulated money moves across two arms) reduced owner taps from **88.49 to 61.18 per 100 moves (88 → 61)** when learned changes were accepted. Most gains came in the first weeks, then plateaued; this is a simulated workload, not customer performance. The workload exceeds the initial $120/week refund budget, so the effect depends strongly on that starting policy. **0 of 960 sampled attacks ran automatically in either arm; 3 of 960 ran after a scripted owner mistake in each arm.** After fixing the 90-day decline cutoff, **0 historical declines became automatic in replay**. Approvals are evidence for 90 days; declines permanently constrain learned changes. Fixed recorded reviewer verdicts were used, not new model calls; clicks to accept rule changes are excluded from the tap metric.
 
-All **106 automated tests pass, with none skipped**, including failure injection for execution, approvals, reviews, learning, webhooks and inbox handoff. Local HTTP tests cover the plan's **402 quota refusal** and **PayPal checkout with a stubbed PayPal**, without approving a subscription. The earlier live HTTP/SSE end-to-end run recorded **34 passes / 5 failures**, including demo billing restrictions; the focused developer recheck recorded **10 passes / 1 failure**. Those runs exposed defects fixed here. Post-deployment live checks, including T4, are still pending; local tests do not establish a deployed fix.
+All **113 automated tests pass, with none skipped**, including failure injection for execution, approvals, reviews, learning, webhooks and inbox handoff. Local HTTP tests cover the plan's **402 quota refusal** and **PayPal checkout with a stubbed PayPal**, without approving a subscription. The earlier live HTTP/SSE end-to-end run recorded **34 passes / 5 failures**, including demo billing restrictions; the focused developer recheck recorded **10 passes / 1 failure**. Those runs exposed defects fixed here. Post-deployment live checks, including T4, are still pending; local tests do not establish a deployed fix.
 
 See the [16-week results](bench/longitudinal-RESULTS.md) and [failure-injection / live-check report](tests/experiments-REPORT.md).
 

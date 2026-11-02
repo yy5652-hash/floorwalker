@@ -75,7 +75,7 @@ type Delivery = {
   payload: unknown;
 };
 const date = (value: string | null) =>
-  value ? new Date(value).toLocaleString() : "—";
+  value ? new Date(value).toLocaleString("en-US") : "—";
 export const mcpCommand = () =>
   `claude mcp add --transport http floorwalker ${appOrigin()}/v1/mcp --header "Authorization: Bearer <key>"`;
 export const refundCurl = () =>

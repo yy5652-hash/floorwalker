@@ -48,7 +48,7 @@ function AuditDetail({ data }: ICellRendererParams<AuditRow>) {
   </section>;
 }
 const columns: ColDef<AuditRow>[] = [
-  { field: "at", headerName: "Time", width: 230, cellRenderer: "agGroupCellRenderer", valueFormatter: ({ value }) => new Date(value).toLocaleString() },
+  { field: "at", headerName: "Time", width: 230, cellRenderer: "agGroupCellRenderer", valueFormatter: ({ value }) => new Date(value).toLocaleString("en-US") },
   { field: "id", headerName: "#", width: 80 },
   { colId: "actor", headerName: "Actor", minWidth: 260, flex: 1,
     valueGetter: ({ data }) => data ? `${data.actor_kind}: ${data.actor_name || data.actor_id}${data.on_behalf_of ? ` · On behalf of ${data.on_behalf_of}` : ""}` : "",

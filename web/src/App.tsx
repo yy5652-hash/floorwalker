@@ -539,15 +539,12 @@ function Workspace({ mobile }: { mobile: boolean }) {
             <ThemeToggle />
           </div>
         </header>
-        <main className="mx-auto max-w-lg space-y-6 px-4 py-8">
+        <main className="mx-auto max-w-lg space-y-4 px-4 py-4">
           <div className="space-y-3">
             <p className="text-xs font-medium text-muted-foreground">
               {state.workspace?.name ?? "JUNIPER & OAK CERAMICS"}
             </p>
             <h1>Your call.</h1>
-            <p className="text-muted-foreground">
-              Everything checked. Just a decision from you.
-            </p>
           </div>
           {feedback}
           <IncidentBanner key={workspaceId} state={state} />
@@ -649,10 +646,10 @@ function Workspace({ mobile }: { mobile: boolean }) {
         <header className="sticky top-0 z-20 flex h-16 min-w-0 items-center gap-2 border-b bg-background px-4 md:gap-4 md:px-8">
           <SidebarTrigger />
           <Separator orientation="vertical" className="!h-5" />
-          <Breadcrumb className="hidden md:block">
-            <BreadcrumbList>
-              <BreadcrumbItem>Workspace</BreadcrumbItem>
-              <BreadcrumbSeparator />
+          <Breadcrumb className="hidden shrink-0 whitespace-nowrap md:block">
+            <BreadcrumbList className="flex-nowrap">
+              <BreadcrumbItem className="hidden xl:inline-flex">Workspace</BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden xl:block" />
               <BreadcrumbItem>
                 <BreadcrumbPage>{page.label}</BreadcrumbPage>
               </BreadcrumbItem>
@@ -678,6 +675,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
           >
             <Search />
           </Button>
+          <div id="assistant-trigger-slot" />
           <ThemeToggle />
           <UserMenu state={state} />
         </header>
@@ -690,9 +688,9 @@ function Workspace({ mobile }: { mobile: boolean }) {
           <header className="flex flex-wrap items-start justify-between gap-5">
             <div className="page-intro">
               <h1>{page.id === "watch" ? "PayPal watch" : page.label}</h1>
-              <p className="text-sm leading-relaxed text-muted-foreground">
+              {page.id !== "approvals" && <p className="text-sm leading-relaxed text-muted-foreground">
                 {page.subtitle}
-              </p>
+              </p>}
             </div>
             {page.id === "approvals" ? (
               <PhoneApproval workspaceId={state.workspace?.id} />
@@ -706,7 +704,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
             ) : null}
           </header>
           {feedback}
-          {["inbox", "approvals", "agents", "watch"].includes(page.id) && (
+          {["inbox", "approvals", "agents"].includes(page.id) && (
             <IncidentBanner key={workspaceId} state={state} />
           )}
           {state.workspace?.seedStatus?.startsWith("failed:") && (
@@ -797,7 +795,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
         </footer>
       </SidebarInset>
       <Suspense fallback={null}>
-        <Assistant key={`${workspaceId}:${state.workspace?.assistantContext}`} workspaceId={workspaceId ?? "film"} shared={state.workspace?.assistantContext ?? demo} demo={demo} />
+        <Assistant toolbar key={`${workspaceId}:${state.workspace?.assistantContext}`} workspaceId={workspaceId ?? "film"} shared={state.workspace?.assistantContext ?? demo} demo={demo} />
       </Suspense>
       {palette}
       {freezeDialog}

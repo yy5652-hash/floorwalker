@@ -86,7 +86,7 @@ export function Landing() {
         <p className="pricing-limit">At the monthly checked-action limit, new agent actions stop. No per-action overage is charged. You can review your plan in Settings → Billing.</p>
         <div className="pricing-plans">{publicPlans.map(plan => <article key={plan.id} className={plan.id === "pro" ? "plan featured-plan" : "plan"}>
           <div><h3>{plan.name}</h3><div className="plan-price"><Money value={`$${plan.price}`} /><small>/ month</small></div></div>
-          <p>{plan.agents === null ? "Unlimited" : plan.agents} agents · {plan.actionsPerMonth?.toLocaleString()} actions<br /> {plan.members === null ? "Unlimited" : plan.members} team members · {plan.webhooks === null ? "Unlimited" : plan.webhooks} webhooks</p>
+          <p>{plan.agents === null ? "Unlimited" : plan.agents} agents · {plan.actionsPerMonth?.toLocaleString("en-US")} actions<br /> {plan.members === null ? "Unlimited" : plan.members} team members · {plan.webhooks === null ? "Unlimited" : plan.webhooks} webhooks</p>
           <Button asChild variant={plan.id === "pro" ? "default" : "outline"}>{member ? <a href="/app#settings/billing">Choose {plan.name} <ArrowRight /></a> : <a href="/signup">Get started <ArrowRight /></a>}</Button>
         </article>)}</div>
       </section>

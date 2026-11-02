@@ -16,13 +16,18 @@ export function TapsChart({ state }: { state: State }) {
   const { weeks, changes, summary } = query.data ?? emptyLearnedRules;
   const { resolvedTheme } = useTheme();
   const latest = weeks.findLast((week) => week.moves > 0);
+  const firstIndex = weeks.findIndex(week => week.moves > 0);
+  const lastIndex = weeks.findLastIndex(week => week.moves > 0);
+  const lastActivity = state.ledger.filter(entry => entry.kind === "refund" || entry.kind === "payout").reduce<string | null>((latest, entry) => !latest || entry.created_at > latest ? entry.created_at : latest, null);
+  const currentWeek = new Date(); currentWeek.setUTCHours(0, 0, 0, 0); currentWeek.setUTCDate(currentWeek.getUTCDate() - currentWeek.getUTCDay());
+  const oldActivity = !!lastActivity && Date.parse(lastActivity) < currentWeek.getTime();
   const best = [...changes].sort((a, b) => b.impact.tapsSaved - a.impact.tapsSaved)[0];
   const options = useMemo<AgCartesianChartOptions<Omit<Week, "per100"> & { per100?: number }>>(() => {
     const dark = resolvedTheme === "dark";
     const foreground = chartColor("--muted-foreground");
     return {
       // A week without money moves is a gap, not zero taps.
-      data: weeks.map((week) => (week.moves ? week : { ...week, per100: undefined })),
+      data: weeks.slice(Math.max(0, firstIndex), lastIndex + 1).map((week) => (week.moves ? week : { ...week, per100: undefined })),
       height: 210,
       theme: chartTheme(dark),
       animation: { enabled: false },
@@ -58,7 +63,7 @@ export function TapsChart({ state }: { state: State }) {
         },
       },
     };
-  }, [weeks, resolvedTheme]);
+  }, [weeks, firstIndex, lastIndex, resolvedTheme]);
   return (
     <Card className="taps-primary min-w-0 gap-3 p-5 shadow-none">
       <h2>How often agents need you</h2>
@@ -98,7 +103,8 @@ export function TapsChart({ state }: { state: State }) {
             </p>
           </div>
           <div className="taps-trend">
-          {weeks.length > 0 && <AgCharts options={options} />}
+          {latest && <AgCharts options={options} />}
+          {oldActivity && lastActivity && <p className="text-xs text-muted-foreground">Last activity · <time dateTime={lastActivity}>{new Date(lastActivity).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}</time></p>}
           {(summary ? summary.moves === 0 : !latest) && (
             <p className="text-xs text-muted-foreground">No money moves yet.</p>
           )}

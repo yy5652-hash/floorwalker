@@ -1,3 +1,4 @@
+import { BlockReasons } from "./RecordedExplanation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, CircleAlert, ShieldAlert, Sparkles } from "lucide-react";
@@ -118,6 +119,7 @@ type VerdictProps = Omit<GuardEvent, "type" | "counterparty"> & {
   approvedAmount?: number | null;
   justification?: string | null;
   history?: boolean;
+  blockExplanations?: LedgerEntry["block_explanations"];
 };
 export function Verdict(props: VerdictProps) {
   const amount = props.approvedAmount ?? props.amount;
@@ -157,6 +159,7 @@ export function Verdict(props: VerdictProps) {
         </blockquote>
       )}
       <ReviewNote review={props.review} policyId={props.policyId} />
+      <BlockReasons explanations={props.blockExplanations} />
       <Checks checks={props.checks} review={props.review} />
       {props.history ? (
         <p className="border-t pt-3 text-xs text-muted-foreground">
@@ -179,6 +182,7 @@ export function Verdict(props: VerdictProps) {
 export function DecisionCard({ entry }: { entry: LedgerEntry }) {
   return (
     <Verdict
+      blockExplanations={entry.block_explanations}
       ledgerId={entry.id}
       tool={entry.tool}
       amount={entry.amount}

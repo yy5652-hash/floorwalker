@@ -433,7 +433,6 @@ export function ApprovalCard({
               <X size={15} />
               {busy === "decline" ? "Declining…" : "Decline"}
             </Button>
-          </div>
           <Button
             className="h-auto justify-start px-0 py-1 text-xs"
             data-film="approve-other"
@@ -450,6 +449,7 @@ export function ApprovalCard({
           >
             {compact ? "Different amount" : "Approve a different amount"}
           </Button>
+          </div>
           {suggestion && canManage(state) && <Button variant="link" className="learn-approve" disabled={!!busy || expired || frozen || !!stepUp || invalidDays} onClick={() => setLearning(true)}>Approve and stop asking about these</Button>}
           {other && (
             <form
@@ -753,7 +753,7 @@ function TemporaryAllowances({ state }: PageProps) {
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Up to {money(grant.max_amount)} · until{" "}
-                  {new Date(grant.expires_at).toLocaleDateString()} · by{" "}
+                  {new Date(grant.expires_at).toLocaleDateString("en-US")} · by{" "}
                   {grant.created_by}
                 </p>
               </div>

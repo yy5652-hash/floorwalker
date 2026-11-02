@@ -1,3 +1,4 @@
+import { BlockReasons } from "./RecordedExplanation";
 import { Badge } from "./ui/badge";
 import { ReviewNote } from "./Verdict";
 import { money, type LedgerEntry } from "../api";
@@ -19,6 +20,7 @@ export function DecisionTrace({ entry }: { entry: LedgerEntry }) {
     ];
   return <section aria-label={`Decision trace for request ${entry.id}`} className="space-y-4 whitespace-normal bg-card p-5 text-sm">
     <h3>Decision trace · #{entry.id}</h3>
+    <BlockReasons explanations={entry.block_explanations} />
     <div className="grid gap-5 lg:grid-cols-2">
       <div className="space-y-3">
         <ul className="space-y-2">
@@ -36,7 +38,7 @@ export function DecisionTrace({ entry }: { entry: LedgerEntry }) {
       <div className="space-y-3">
         <ReviewNote review={entry.review} policyId={entry.policy_id} />
         {entry.review && <p className="text-xs">Verdict: {entry.review.verdict} · Injection flag: {entry.review.injection_detected ? "Detected" : "Not detected"}</p>}
-        <p className="text-xs">Decided by {entry.decided_by ?? "Not recorded"} · {entry.decided_at ? new Date(entry.decided_at).toLocaleString() : "Decision time not recorded"}</p>
+        <p className="text-xs">Decided by {entry.decided_by ?? "Not recorded"} · {entry.decided_at ? new Date(entry.decided_at).toLocaleString("en-US") : "Decision time not recorded"}</p>
         {entry.decline_reason && <p className="text-xs">Decline reason: {entry.decline_reason}</p>}
         <p className="break-all text-xs">{entry.source === "history" ? "Simulated · not sent to PayPal" : `PayPal reference: ${entry.paypal_ref ?? "Not recorded"}`}</p>
         {entry.error && <p className="text-xs text-destructive">{entry.error}</p>}

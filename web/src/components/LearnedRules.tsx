@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, Minus } from "lucide-react";
+import { Minus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -48,7 +48,7 @@ function Requests({ ids, state }: { ids: number[]; state: State }) {
               <TableRow key={id}>
                 <TableCell>
                   <time dateTime={row.created_at}>
-                    {new Date(row.created_at).toLocaleDateString()}
+                    {new Date(row.created_at).toLocaleDateString("en-US")}
                   </time>
                 </TableCell>
                 <TableCell>{personName(row.counterparty)}</TableCell>
@@ -115,6 +115,7 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
       <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
+          variant="outline"
           data-film="apply"
           disabled={disabled}
           onClick={() => mutation.mutate(action)}
@@ -137,7 +138,7 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
   );
   return (
     <section
-      className="space-y-4"
+      className="c1-learned space-y-4"
       aria-labelledby="learned-rules-heading"
       aria-busy={query.isPending || mutation.isPending}
     >
@@ -150,7 +151,7 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
       </div>
       {query.isPending ? (
         <Card
-          className="gap-3 p-5"
+          className="c1-learned-item gap-3"
           role="status"
           aria-label="Loading suggestions"
         >
@@ -160,7 +161,7 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
           <span className="sr-only">Loading suggestions…</span>
         </Card>
       ) : query.isError ? (
-        <Card className="gap-3 p-5">
+        <Card className="c1-learned-item gap-3">
           <p role="alert" className="text-sm text-block">
             Couldn't load suggestions. {errorMessage(query.error)}
           </p>
@@ -177,7 +178,7 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
       ) : (
         <>
           {changes.map((change) => (
-            <Card key={change.id} data-film={`learned-${change.id.split("=")[0]}`} className="learned-card">
+            <Card key={change.id} data-film={`learned-${change.id.split("=")[0]}`} className="learned-card c1-learned-item">
               <div className="space-y-2">
                 <h3 className="font-semibold">{change.title}</h3>
                 <p className="text-sm">{change.evidence}</p>
@@ -195,16 +196,17 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
                 <p className="mt-3">{money(change.impact.moreAutoUsd)} more done without you</p>
               </div>
               <div className="learned-evidence">
-                <p><Check size={15} className="text-allow" />{change.impact.declinedLetThrough} requests you declined would go through</p>
-                {change.impact.bench && <p><Check size={15} className="text-allow" />Benchmark attacks still stopped: {change.impact.bench.stopped}/{change.impact.bench.attacks}</p>}
+                <p className={change.impact.declinedLetThrough > 0 ? "text-block" : undefined}>{change.impact.declinedLetThrough} requests you declined would go through</p>
+                {change.impact.bench && <p>Benchmark attacks still stopped: {change.impact.bench.stopped}/{change.impact.bench.attacks}</p>}
                 {change.impact.bench?.rulesBefore !== undefined && change.impact.bench.rulesAfter !== undefined && <p title="Benchmark attacks caught without AI review">Caught by rules alone: {change.impact.bench.rulesBefore} → {change.impact.bench.rulesAfter}</p>}
               </div>
+              {!change.impact.bench && <p className="text-xs text-muted-foreground">No benchmark result available for this suggestion.</p>}
               <Requests ids={change.rows} state={state} />
               {actions({ kind: "apply", id: change.id }, change.id, "Apply")}
             </Card>
           ))}
           {note && (
-            <Card className="min-w-0 gap-4 p-5 shadow-xs">
+            <Card className="c1-learned-item min-w-0 gap-4">
               <h3 className="font-semibold">Guidance for the AI reviewer</h3>
               <blockquote className="border-l-2 pl-3 text-sm">
                 “{note.note}”
@@ -217,7 +219,7 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
             </Card>
           )}
           {!changes.length && !note && (
-            <Card className="p-5 text-sm text-muted-foreground">
+            <Card className="c1-learned-item text-sm text-muted-foreground">
               Nothing to change yet. Floorwalker suggests a change after you've
               approved at least three similar requests.
             </Card>

@@ -1,3 +1,4 @@
+import { MessageBody } from "./MessageEvidence";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,35 +23,10 @@ import {
   type PageProps,
   type State,
   type Ticket,
+  type Review,
 } from "../api";
 import { DecisionCard, Verdict } from "./Verdict";
 import { EmptyState, StatusPill } from "./UI";
-function MessageBody({ body }: { body: string }) {
-  const parts = body.split(
-    /(<div\b[^>]*style=["'][^"']*display\s*:\s*none[^"']*["'][^>]*>[\s\S]*?<\/div>)/gi,
-  );
-  return (
-    <div className="message whitespace-pre-wrap break-words text-sm leading-7">
-      {parts.map((part, i) => {
-        const hidden = part.match(/^<div\b[^>]*>([\s\S]*?)<\/div>$/i);
-        return hidden ? (
-          <div
-            key={i}
-            className="hidden-part my-4 block space-y-2 rounded-lg border border-destructive/25 bg-destructive/5 p-4 text-block [&>strong]:flex [&>strong]:items-center [&>strong]:gap-2 [&>strong]:text-xs [&>span]:block [&>span]:text-xs"
-          >
-            <strong>
-              <ShieldAlert size={14} />
-              Hidden in the email's HTML
-            </strong>
-            <span>{hidden[1]}</span>
-          </div>
-        ) : (
-          <span key={i}>{part}</span>
-        );
-      })}
-    </div>
-  );
-}
 function toolSentence(
   call: Extract<
     AgentEvent,
@@ -247,6 +223,10 @@ export function Inbox({
   }, [attackRequest]);
   const ticket =
     state.tickets.find((t) => t.id === selected) ?? state.tickets[0];
+  const reviews: Review[] = ticket ? [
+    ...state.ledger.filter(e => e.ticket_id === ticket.id).flatMap(e => e.review ? [e.review] : []),
+    ...(events[ticket.id] ?? []).flatMap(e => e.type === "guard" && e.review ? [e.review] : []),
+  ] : [];
   const ready = state.configured.paypal && state.configured.ai && !disabled;
   const agent = state.agents.find(
     (a) => a.id === (ticket?.channel === "task" ? "ops" : "support"),
@@ -416,7 +396,7 @@ export function Inbox({
           </div>
         )}
       </Card>
-      <Card className="min-w-0 gap-0 py-0 shadow-xs inbox-detail">
+      <Card className={`min-w-0 gap-0 py-0 shadow-xs inbox-detail ${selected === "ATTACK" ? "inbox-simulation" : ""}`}>
         {selected === "ATTACK" ? (
           <>
             <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
@@ -441,6 +421,7 @@ export function Inbox({
         ) : (
           ticket && (
             <>
+              <section className="inbox-message" aria-label="The message">
               <div className="space-y-3 border-b p-5 [&>h2]:text-xl [&>h2]:tracking-tight [&>p]:text-sm [&_p>span]:block [&_p>span]:break-all [&_p>span]:text-xs [&_p>span]:text-muted-foreground">
                 <div className="block text-xs text-muted-foreground">
                   {ticket.channel === "email"
@@ -453,7 +434,7 @@ export function Inbox({
                 </p>
               </div>
               <CardContent className="space-y-4 p-5">
-                <MessageBody body={ticket.body} />
+                <MessageBody body={ticket.body} reviews={reviews} />
                 <div className="flex flex-wrap items-center gap-3 border-y py-4 [&>button]:h-auto [&>button]:min-h-10 [&>button]:whitespace-normal">
                   <Button
                     data-film="run"
@@ -493,6 +474,11 @@ export function Inbox({
                     </a>
                   )}
                 </div>
+
+              </CardContent>
+              </section>
+              <section className="inbox-agent-result" aria-label="What the agent did">
+                <h2>What the agent did</h2>
                 {events[ticket.id]?.length ? (
                   <Trace
                     state={state}
@@ -502,7 +488,8 @@ export function Inbox({
                 ) : (
                   past(ticket)
                 )}
-              </CardContent>
+                {!events[ticket.id]?.length && !ticket.reply && !state.ledger.some(e => e.ticket_id === ticket.id) && <p className="text-sm text-muted-foreground">No action yet. Let the agent handle this request to see its checks and reply here.</p>}
+              </section>
             </>
           )
         )}

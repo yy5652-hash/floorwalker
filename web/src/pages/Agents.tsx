@@ -1,3 +1,5 @@
+import { AgentTrust } from "../components/AgentTrust";
+import { FreezeReason } from "../components/RecordedExplanation";
 import { isFilm } from "../auth";
 import { api, canManage } from "../api";
 import {
@@ -18,16 +20,17 @@ import {
 } from "@/components/ui/sheet";
 import { Button as ActionButton } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Pause, Play, X } from "lucide-react";
+import { Pause, Play, X } from "lucide-react";
 import { useRef, useState } from "react";
 import {
   errorMessage,
   money,
   post,
   relativeTime,
+  STATUS_LABEL,
+  amountOf,
   type Agent,
   type PageProps,
 } from "../api";
@@ -84,162 +87,36 @@ export function AgentCard({
       setBusy(false);
     }
   }
-  return (
-    <Card
-      className={`min-w-0 gap-0 py-0 shadow-xs   agent-card space-y-5 p-5   ${compact ? "compact" : ""}`}
-      data-film={`agent-${agent.id}`}
-    >
-      <div className="flex flex-wrap items-center gap-3 [&>div]:min-w-0 [&>div]:flex-1 [&_p]:mt-1 [&_p]:text-xs [&_p]:leading-relaxed [&_p]:text-muted-foreground">
-        <Avatar className="size-10 rounded-xl">
-          <AvatarFallback className="rounded-xl text-xs">
-            {agent.name
-              .split(/[ -]/)
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((s) => s[0])
-              .join("")}
-          </AvatarFallback>
-        </Avatar>
-        <div>
-          <h3>{agent.name}</h3>
-          <p>
-            {compact
-              ? frozen
-                ? "Frozen"
-                : "Active · governed by your rules"
-              : agent.role}
-          </p>
-        </div>
-        <Button
-          className={`   ml-auto h-8 px-2.5 text-xs   ${frozen ? "" : "text-block hover:bg-destructive/10"}`}
-          data-film={`freeze-${agent.id}`}
-          disabled={busy || !canManage(state)}
-          title={canManage(state) ? undefined : manageHint}
-          onClick={() => void toggle()}
-          aria-label={`${frozen ? "Unfreeze" : "Freeze"} ${agent.name}`}
-          aria-pressed={frozen}
-          variant="outline"
-          type="button"
-        >
-          {frozen ? <Play size={13} /> : <Pause size={13} />}
-          {busy ? "Saving…" : frozen ? "Unfreeze" : "Freeze"}
-        </Button>
+  const lastAction = state.ledger.filter(entry => entry.agent_id === agent.id).sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)[0];
+  const freezeButton = <Button variant="outline" size="sm" data-film={`freeze-${agent.id}`} disabled={busy || !canManage(state)}
+    title={canManage(state) ? undefined : manageHint} onClick={() => void toggle()} aria-label={`${frozen ? "Unfreeze" : "Freeze"} ${agent.name}`} aria-pressed={frozen}>
+    {frozen ? <Play size={13} /> : <Pause size={13} />}{busy ? "Saving…" : frozen ? "Unfreeze" : "Freeze"}
+  </Button>;
+  return <Card className={`agent-card c2-agent ${compact ? "compact" : ""}`} data-film={`agent-${agent.id}`}>
+    <div className="agent-identity">
+      <div><h3>{agent.name}</h3><p>{agent.role}</p></div>
+      {!frozen && freezeButton}
+      {!compact && !isFilm() && <Button variant="outline" size="sm" disabled={!canManage(state)} title={canManage(state) ? undefined : manageHint} onClick={() => onEdit?.(agent)}>Edit agent</Button>}
+    </div>
+    {frozen && <div className="agent-freeze"><FreezeReason explanation={agent.freeze_explanation} />{freezeButton}</div>}
+    {!compact && <AgentTrust key={`${state.workspace?.id ?? "film"}:${agent.id}`} agent={agent} state={state} refresh={refresh} notify={notify} />}
+    <div className="agent-activity">
+      <div className="agent-budget">
+        {allowance ? <><div><strong>{money(agent.spent)}</strong> of {money(allowance.amount)} {typeof agent.budget === "number" ? "per" : "shared /"} {allowance.period} <span>{Math.round(percent)}%</span></div>
+          <Progress value={percent} aria-label={`${agent.name} allowance used`} className={`h-1.5 ${percent >= 100 ? "[&>div]:bg-destructive" : "[&>div]:bg-foreground"}`} /></>
+          : <p>No shared allowance assigned</p>}
       </div>
-      {frozen && (
-        <div className="frozen-banner rounded-lg border border-hold/20 bg-hold/10 px-3 py-2 text-xs font-medium text-hold">
-          Frozen — can't move money
-        </div>
-      )}
-      {!compact && (
-        <div className="permissions flex flex-wrap gap-5 [&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span]:text-xs [&>span]:text-muted-foreground">
-          <span>
-            Refunds{" "}
-            <span className="sr-only">
-              {agent.can_refund ? "allowed" : "not allowed"}
-            </span>{" "}
-            {agent.can_refund ? <Check size={13} /> : <X size={13} />}
-          </span>
-          <span>
-            Payouts{" "}
-            <span className="sr-only">
-              {agent.can_payout ? "allowed" : "not allowed"}
-            </span>{" "}
-            {agent.can_payout ? <Check size={13} /> : <X size={13} />}
-          </span>
-        </div>
-      )}
-      {!compact && !isFilm() && (
-        <p className="text-xs leading-6 text-muted-foreground">
-          {[
-            agent.max_per_action
-              ? `Up to ${money(agent.max_per_action)} per ${agent.can_refund && !agent.can_payout ? "refund" : "action"}`
-              : "Workspace action limits apply",
-            agent.expires_at
-              ? `until ${new Date(agent.expires_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`
-              : null,
-            agent.payees
-              ? `Payees: ${JSON.parse(agent.payees).join(", ")}`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-      )}
-      {allowance ? (
-        <div className="space-y-3 [&>div:first-child]:flex [&>div:first-child]:justify-between [&>div:first-child]:gap-2 [&>div:first-child]:text-xs [&>div:first-child]:text-muted-foreground [&_strong]:font-medium [&_strong]:text-foreground">
-          <div>
-            <span>
-              <strong>{money(agent.spent)}</strong> of {money(allowance.amount)}{" "}
-              {isFilm()
-                ? "this"
-                : typeof agent.budget === "number"
-                  ? "per"
-                  : "shared /"}{" "}
-              {allowance.period}
-            </span>
-            <span>{Math.round(percent)}%</span>
-          </div>
-          <Progress
-            value={percent}
-            aria-label={`${agent.name} allowance used`}
-            className={`h-2 ${percent >= 100 ? "[&>div]:bg-destructive" : "[&>div]:bg-allow"}`}
-          />
-        </div>
-      ) : (
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          No shared allowance assigned
-        </p>
-      )}
-      {!compact && (
-        <>
-          {!isFilm() && (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!canManage(state)}
-                title={canManage(state) ? undefined : manageHint}
-                onClick={() => onEdit?.(agent)}
-              >
-                Edit agent
-              </Button>
-              {canManage(state) && (
-                <Button
-                  variant="link"
-                  size="sm"
-                  disabled={!canManage(state)}
-                  asChild
-                >
-                  <a
-                    href={`/app#developers/keys/new/${encodeURIComponent(agent.id)}`}
-                  >
-                    Create a key for this agent
-                  </a>
-                </Button>
-              )}
-            </div>
-          )}
-          <div className="grid grid-cols-3 gap-2 border-t pt-4 [&_strong]:block [&_strong]:text-xl [&_strong]:font-medium [&_span]:mt-1 [&_span]:block [&_span]:text-xs [&_span]:text-muted-foreground">
-            <div>
-              <strong>{agent.metrics.funnel.auto}</strong>
-              <span>Done on its own</span>
-            </div>
-            <div>
-              <strong>{agent.metrics.funnel.approved}</strong>
-              <span>Approved by you</span>
-            </div>
-            <div>
-              <strong>{agent.metrics.funnel.blocked}</strong>
-              <span>Blocked</span>
-            </div>
-          </div>
-          <div className="text-xs leading-relaxed text-muted-foreground border-t pt-3">
-            Last activity · {relativeTime(agent.last)}
-          </div>
-        </>
-      )}
-    </Card>
-  );
+      <p>Last action · {lastAction ? <a href={`/app#ledger/${lastAction.id}`}>{STATUS_LABEL[lastAction.status]} · {money(amountOf(lastAction))} · {relativeTime(lastAction.created_at)}</a> : agent.last ? relativeTime(agent.last) : "No actions yet"}</p>
+    </div>
+    {!compact && <details className="agent-more"><summary>Permissions &amp; activity</summary>
+      <div><span>Refunds {agent.can_refund ? "allowed" : "not allowed"}</span> · <span>Payouts {agent.can_payout ? "allowed" : "not allowed"}</span></div>
+      <p>{agent.metrics.funnel.auto} done on its own · {agent.metrics.funnel.approved} approved by you · {agent.metrics.funnel.blocked} blocked</p>
+      {agent.expires_at && <p>Access expires {new Date(agent.expires_at).toLocaleString("en-US")}</p>}
+      {agent.payees && <p>Payees: {agent.payees}</p>}
+      {canManage(state) && !isFilm() && <Button variant="link" size="sm" asChild><a href={`/app#developers/keys/new/${encodeURIComponent(agent.id)}`}>Create a key for this agent</a></Button>}
+    </details>}
+  </Card>;
+
 }
 export function Agents(props: PageProps) {
   const [editing, setEditing] = useState<Agent | "new" | null>(null);
@@ -269,7 +146,7 @@ export function Agents(props: PageProps) {
         Each agent only gets the tools its job needs, and can never raise its
         own limits.
       </p>
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="agents-list">
         {props.state.agents.length ? (
           props.state.agents.map((agent) => (
             <AgentCard

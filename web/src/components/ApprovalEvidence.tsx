@@ -13,7 +13,7 @@ export function ApprovalEvidence({ entry }: { entry: LedgerEntry }) {
   const rules = entry.checks.filter(c => !["ai_review", "injection"].includes(c.id));
   const record = summarize(rules.filter(c => ["capture", "buyer"].includes(c.id)),
     entry.kind === "payout" ? "No recipient payment record is verified for this payout; see the payee rule below." : "No PayPal evidence was recorded for this request.");
-  const policy = summarize(rules, "No deterministic rule checks were recorded.");
+  const policy = summarize(rules.filter(c => !limits.has(c.id) && !["capture", "buyer"].includes(c.id)), "No other rule applies to this request.");
   const limit = summarize(rules.filter(c => limits.has(c.id)), "No amount or budget check was recorded.");
   const ai = entry.review ? {
     status: ({ approve: "pass", escalate: "hold", reject: "block" } as const)[entry.review.verdict],

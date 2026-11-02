@@ -1,4 +1,23 @@
 import { isFilm } from "./auth";
+// C1: policy lifecycle and quota views; existing API contracts are unchanged.
+export type PolicyStatus = {
+  version: number | null; effectiveAt: string | null; changedBy: string | null;
+  differences: { field: string; before: unknown; after: unknown }[];
+  waiting: number; waitingChanged: number; waitingUnknown: number;
+};
+export type ShadowView = {
+  draft: null | { policy: Policy; startedBy: string; startedAt: string; endsAt: string | null };
+  active: boolean; rulesOnly: true; caveat: string;
+  report: {
+    seen: number; wouldAutoActuallyHeld: number; wouldHoldActuallyAuto: number; wouldBlockNotBlocked: number;
+    tapsPer100: { before: number; after: number };
+    differences: { id: number; amount: number; counterparty: string | null; realDecision: Decision; shadowDecision: Decision }[];
+  };
+};
+export type BillingUsage = {
+  plan: string; planName: string; actionsUsed: number; monthlyLimit: number;
+  resetsAt: string; warning: string | null;
+};
 export type Decision = "allow" | "hold" | "block";
 export type Check = {
   id: string;
@@ -25,7 +44,7 @@ export type Ticket = {
   status: "open" | "handled";
   reply: string | null;
 };
-export type LedgerEntry = {
+export type LedgerEntry = ActionExplanationFields & {
   id: number;
   ticket_id: string | null;
   agent_id: string | null;
@@ -110,7 +129,7 @@ export type Metrics = {
     blocked: number;
   };
 };
-export type Agent = {
+export type Agent = AgentExplanationFields & {
   id: string;
   name: string;
   role: string;
@@ -471,3 +490,24 @@ export const canManage = (s: State) =>
 export const canApprove = (s: State) =>
   canManage(s) || roleOf(s).split(",").includes("approver");
 export const isOwner = (s: State) => roleOf(s).split(",").includes("owner");
+
+// C2: additive trust and recorded explanation fields (older film fixtures omit them).
+export type TrustLevel = "ask" | "small" | "rules";
+export type TrustPreview = {
+  agentId: string; days: 90; smallAmount: number;
+  levels: Record<TrustLevel, { tapsPer100: number; moves: number; taps: number; autoUsd: number }>;
+};
+export type FreezeExplanation = {
+  check: string;
+  evidence: { at?: string; changed_by?: string; incident_id?: number; paypal_ref?: string;
+    capture_id?: string | null; amount?: number; detected_by?: string; seen_at?: string;
+    status_changed_at?: string | null; source?: string };
+  next_step: string;
+};
+export type BlockExplanation = {
+  check: string; rule: string; evidence: string;
+  facts: null | { rules: unknown; paypal_capture: unknown };
+  freeze: FreezeExplanation | null; next_step: string;
+};
+export type AgentExplanationFields = { freeze_explanation?: FreezeExplanation | null };
+export type ActionExplanationFields = { block_explanations?: BlockExplanation[] };

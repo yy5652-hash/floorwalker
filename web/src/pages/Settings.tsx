@@ -1,3 +1,4 @@
+import { BillingUsageMeter } from "../components/BillingUsageMeter";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, Fingerprint, Plus, ShieldCheck } from "lucide-react";
@@ -105,7 +106,7 @@ export const publicPlans: Plan[] = [
   },
 ];
 const count = (n: number | null) =>
-  n == null ? "Unlimited" : n.toLocaleString();
+  n == null ? "Unlimited" : n.toLocaleString("en-US");
 function General({ state, refresh }: PageProps) {
   const settings = useResource<WorkspaceSettings>("/api/settings");
   const { busy, run } = useTask();
@@ -248,7 +249,7 @@ function PayPal({ state, refresh }: PageProps) {
                   {settings.data.paypal.verified_at
                     ? new Date(
                         settings.data.paypal.verified_at,
-                      ).toLocaleString()
+                      ).toLocaleString("en-US")
                     : "—"}
                 </p>
                 {settings.data.paypal.app && (
@@ -565,7 +566,7 @@ function Team({ state }: PageProps) {
                   {invite.email}{" "}
                   <Badge variant="secondary">{invite.role}</Badge>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Expires {new Date(invite.expiresAt).toLocaleString()}
+                    Expires {new Date(invite.expiresAt).toLocaleString("en-US")}
                   </p>
                 </div>
                 {editable && (
@@ -703,7 +704,7 @@ function Notifications({ state }: PageProps) {
                 {device.user_agent || "Browser device"}
               </p>
               <p className="text-xs text-muted-foreground">
-                Added {new Date(device.created_at).toLocaleString()}
+                Added {new Date(device.created_at).toLocaleString("en-US")}
               </p>
               <Confirm
                 title="Remove this push device?"
@@ -889,7 +890,7 @@ function Billing({ state, refresh }: PageProps) {
   return (
     <Resource query={billing}>
       {billing.data && (
-        <div className="space-y-6">
+        <div className="c1-billing space-y-6">
           <Card className="p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -897,7 +898,7 @@ function Billing({ state, refresh }: PageProps) {
                 <p className="mt-2 text-sm text-muted-foreground">
                   {billing.data.status || "Active"}
                   {billing.data.renews_or_ends_at &&
-                    ` · Renews or ends ${new Date(billing.data.renews_or_ends_at).toLocaleDateString()}`}
+                    ` · Renews or ends ${new Date(billing.data.renews_or_ends_at).toLocaleDateString("en-US")}`}
                 </p>
               </div>
               <Badge variant="outline">Monthly billing</Badge>
@@ -915,15 +916,11 @@ function Billing({ state, refresh }: PageProps) {
                 </a>
               </p>
             )}
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <BillingUsageMeter state={state} />
+            <div className="grid gap-5 sm:grid-cols-3">
               {(
                 [
                   ["agents", "agents", "Agents"],
-                  [
-                    "actions_this_month",
-                    "actionsPerMonth",
-                    "Actions this month",
-                  ],
                   ["members", "members", "Members"],
                   ["webhooks", "webhooks", "Webhooks"],
                 ] as const
@@ -935,7 +932,7 @@ function Billing({ state, refresh }: PageProps) {
                     <div className="flex justify-between gap-2 text-xs">
                       <span>{label}</span>
                       <strong>
-                        {used.toLocaleString()} / {count(limit)}
+                        {used.toLocaleString("en-US")} / {count(limit)}
                       </strong>
                     </div>
                     <Progress
@@ -1092,7 +1089,7 @@ function Security({ state }: PageProps) {
                 <p className="mt-1 text-xs text-muted-foreground">
                   Created{" "}
                   {key.createdAt
-                    ? new Date(key.createdAt).toLocaleString()
+                    ? new Date(key.createdAt).toLocaleString("en-US")
                     : "—"}
                 </p>
               </div>
@@ -1122,7 +1119,7 @@ function Security({ state }: PageProps) {
         <p className="text-sm text-muted-foreground">
           Signed in{" "}
           {state.me?.signedInAt
-            ? new Date(state.me.signedInAt).toLocaleString()
+            ? new Date(state.me.signedInAt).toLocaleString("en-US")
             : "on this device"}
           . End every other session while keeping this one open.
         </p>

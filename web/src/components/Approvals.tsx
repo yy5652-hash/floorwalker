@@ -512,6 +512,7 @@ export function ApprovalCard({
             <div><dt>Declined requests that would pass</dt><dd>{suggestion.impact.declinedLetThrough}</dd></div>
             <div><dt>Benchmark attacks stopped</dt><dd>{suggestion.impact.bench ? `${suggestion.impact.bench.stopped} / ${suggestion.impact.bench.attacks}` : "Not available"}</dd></div>
           </dl>
+          {entry.checks.some(c => c.id === "budget" && c.outcome === "hold") && <p>This request is also over this period's budget. This change doesn't raise the budget, so busy weeks can still come to you.</p>}
           <p>Future requests still go through PayPal checks, limits and AI review. This replay uses recorded evidence, not a guarantee.</p>
           {error && <p role="alert">{error}</p>}
           <Button disabled={!!busy || !!stepUp || frozen || expired || invalidDays} onClick={() => void decide("approve", undefined, false, suggestion)}>{busy ? "Approving…" : "Confirm approval and rule change"}</Button>
@@ -627,7 +628,9 @@ export function Approvals(props: PageProps & {
         const simulation = await api<Simulation>("/api/policy/simulate", "POST", { policy: change.draft }, signal);
         // Some older replay implementations do not preserve agent cap/budget checks.
         const agentHold = selected?.checks.some(c => c.id.startsWith("agent") && c.outcome !== "pass");
-        if (!agentHold && simulation.rows.some(r => r.id === selected?.id && r.before === "hold" && r.after === "allow")) return change;
+        // A request over the limit can also be over this week's budget. The change still answers the limit, and the dialog says the budget stays.
+        const overLimit = selected?.checks.some(c => c.id === "auto_limit" && c.outcome === "hold");
+        if (!agentHold && simulation.rows.some(r => r.id === selected?.id && r.before === "hold" && (r.after === "allow" || (overLimit && r.after === "hold" && /budget:/i.test(r.why))))) return change;
       }
       return null;
     },

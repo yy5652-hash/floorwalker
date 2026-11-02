@@ -318,7 +318,7 @@ function LedgerView({
         {["All", "Waiting", "Stopped", "Done by agents"].map(name => <button type="button" key={name} aria-pressed={view === name} onClick={() => chooseView(name)}>{name}</button>)}
         <span>Filters, columns and grouping are saved per view</span>
       </div>
-      <div className="h-[520px] min-w-0 w-full">
+      <div className="h-[max(520px,calc(100dvh-230px))] min-w-0 w-full">
         <AgGridReact<LedgerEntry>
           ref={grid}
           initialState={savedViews.All}

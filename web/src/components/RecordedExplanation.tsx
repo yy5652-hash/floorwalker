@@ -23,7 +23,7 @@ export function BlockReasons({ explanations }: { explanations?: BlockExplanation
   return <section className="block-explanations" aria-label="Why this request was blocked">
     <h4>Why it stopped</h4>
     {explanations.map((reason, i) => <div key={`${reason.check}-${i}`}>
-      <strong>{reason.rule}</strong><span className="text-xs text-muted-foreground">Check · {reason.check.replaceAll("_", " ")}</span>
+      <strong>{reason.rule}</strong>
       <p>{reason.evidence}</p>
       {reason.freeze && <FreezeReason explanation={reason.freeze} />}
       <p><strong>Next step</strong> {reason.next_step}</p>

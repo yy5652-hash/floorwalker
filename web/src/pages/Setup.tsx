@@ -31,7 +31,9 @@ function LegacySetup({
       label: "AI model ready",
       ready: state.configured.ai,
       detail: state.configured.ai
-        ? `${state.configured.provider ?? "AI"} · ${state.configured.agentModel} · reviewer ${state.configured.reviewModel}`
+        ? state.configured.usingFallback
+          ? `DeepSeek is standing in because ${state.configured.provider ?? "the AI provider"} is unavailable.`
+          : `${state.configured.provider ?? "AI"} · ${state.configured.agentModel} · reviewer ${state.configured.reviewModel}`
         : "Add an AI provider key to the server configuration.",
     },
     {

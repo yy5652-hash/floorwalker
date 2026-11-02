@@ -626,7 +626,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
               title={state.configured.agentModel}
             >
               {state.configured.ai
-                ? state.configured.agentModel
+                ? state.configured.usingFallback ? "DeepSeek standing in" : state.configured.agentModel
                 : "AI not configured"}
             </p>
             {demo && (

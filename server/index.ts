@@ -4,6 +4,7 @@ import express, { type Response } from "express";
 import helmet from "helmet";
 import { existsSync } from "node:fs";
 import { simulateHijack } from "./agent/attack.ts";
+import { aiRuntime } from "./llm.ts";
 import { handleTicket, type AgentEvent } from "./agent/run.ts";
 import { auth, refillDemoPool } from "./auth.ts";
 import { config, env, paypalConfigured } from "./config.ts";
@@ -157,7 +158,7 @@ app.get("/api/state", (req, res) => {
       id: ws.id, name: ws.name, demo: ws.demo, assistantContext: assistantContextAllowed(), plan: w.plan, seedStatus: w.seed_status,
       paypal: { connected: Boolean(ws.paypal), own: Boolean(w.paypal_client_id), clientIdHint: w.paypal_client_id ? `${w.paypal_client_id.slice(0, 6)}…${w.paypal_client_id.slice(-4)}` : null, verifiedAt: w.paypal_verified_at, merchant: w.paypal_merchant },
     },
-    configured: { paypal: paypalConfigured(), ai: config.ai.configured, provider: config.ai.provider, agentModel: config.ai.agentModel, reviewModel: config.ai.reviewModel },
+    configured: { paypal: paypalConfigured(), ai: config.ai.configured, provider: config.ai.provider, agentModel: config.ai.agentModel, reviewModel: config.ai.reviewModel, ...aiRuntime() },
     policy: p,
     tickets: store.tickets(),
     orders: store.allOrders(),

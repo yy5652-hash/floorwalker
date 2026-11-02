@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 process.env.FLOORWALKER_DB = ':memory:';
 process.env.FLOORWALKER_CORE_DB = ':memory:';
 process.env.ANTHROPIC_API_KEY = 'test';
+process.env.FLOORWALKER_AI_FALLBACK = '';
 process.env.PAYPAL_CLIENT_ID = 'test';
 process.env.PAYPAL_CLIENT_SECRET = 'test';
 const store = await import('../server/db.ts');

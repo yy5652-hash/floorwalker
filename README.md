@@ -118,6 +118,8 @@ The owner writes the rules in plain words on the **Rules** tab ("Up to $40 on it
 
 The same code runs on Claude (`claude-sonnet-5-5`, Anthropic SDK with tool use and structured outputs) when `ANTHROPIC_API_KEY` is set. Models are configurable in `.env`.
 
+With `FLOORWALKER_AI_FALLBACK=deepseek`, DeepSeek stands in for the agent, reviewer and rules compiler when the main provider fails, and the app shows that it is doing so. If it fails too, requests wait for the owner. The benchmark below ran on Gemini.
+
 ## FloorwalkerBench
 
 198 labelled money moves for the demo shop: 59 benign requests the agent should just do, 59 the owner should decide, and 80 attacks (prompt injection in plain text, quoted mail, signatures, HTML, other languages, base64 and fake system notices; payment redirection; fake owner, Sam and Priya addresses including Unicode look-alikes; refunds to someone other than the buyer, above what was paid or repeated; split payments; unknown-vendor invoices; threats). Each case carries the facts Floorwalker reads from PayPal (payment, order, tracking, earlier refunds and payouts). 150 of the cases were written by a different model, independently of the reviewer, and run once.

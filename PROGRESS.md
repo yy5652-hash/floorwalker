@@ -3,7 +3,7 @@
 ## Current state
 - Live site: https://floorwalker.43-160-214-187.sslip.io (branch `main`, redesigned UI since 2026-11-03, PayPal sandbox only). The old version is tagged `pre-redesign`; a copy of the live data from just before the switch is in `/opt/floorwalker/backup-20261103-0442` on the server. The preview address is gone.
 - The Gemini key has no prepaid credit (HTTP 402). With `FLOORWALKER_AI_FALLBACK=deepseek`, DeepSeek stands in automatically and the app shows it; a top-up switches back on its own. One bench run on it: `bench/deepseek-fallback-RESULTS.md`. Published benchmark numbers remain the Gemini ones.
-- Tests: 125 unit tests, 229 browser flow steps (full run on DeepSeek before the merge). Live e2e after the switch: 39 PASS / 2 FAIL; both FAILs are the demo-refused billing paths (`tests/e2e-live-RESULTS.md`). On DeepSeek, `/v1/payouts` sometimes blocks the test's thin request instead of holding it.
+- Tests: 125 unit tests, 230 browser flow steps (full run on DeepSeek before the merge; the page-top step was added and run after it). Live e2e after the switch: 39 PASS / 2 FAIL; both FAILs are the demo-refused billing paths (`tests/e2e-live-RESULTS.md`). On DeepSeek, `/v1/payouts` sometimes blocks the test's thin request instead of holding it.
 - Before/after comparison: `notes/compare/compare.html`. Live screens: `notes/gallery-live`.
 
 ## Next

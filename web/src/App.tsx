@@ -300,6 +300,11 @@ function Workspace({ mobile }: { mobile: boolean }) {
       window.removeEventListener("keydown", keydown);
     };
   }, []);
+  // Each page starts at its top; moving within a page (a ledger row, a settings tab) keeps the place.
+  const section = route.split("/")[0];
+  useEffect(() => {
+    if (!isFilm()) window.scrollTo(0, 0);
+  }, [section]);
   async function reset() {
     if (!state || !canManage(state) || (!state.workspace?.demo && !isFilm()))
       return;

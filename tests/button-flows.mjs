@@ -1426,6 +1426,10 @@ flow('mobile', async () => {
 // ---- console errors on every page ----
 flow('pages', async () => {
   await ensureDemo(); await viewport(1440, 900);
+  await step('Navigation: moving to another page starts at its top', async () => {
+    await openApp('rules'); await ev(`scrollTo(0, 500)`); expect((await ev(`scrollY`)) > 0, 'the rules page did not scroll');
+    await click({ sel: 'a', text: 'Ledger', exact: true }); await waitFor(() => ev(`location.hash === '#ledger'`), { what: 'the ledger to open' }); await settle(); expect((await ev(`scrollY`)) === 0, 'the ledger opened part way down');
+  });
   const visit = (name, path, after) => step(`Console: ${name} loads without console errors`, async () => {
     const n = consoleMsgs.length; await (path.startsWith('/app#') ? openApp(path.slice(5)) : goto(path)); await sleep(1500); if (after) await after();
     const errs = consoleErrorsSince(n); expect(!errs.length, errs.slice(0, 3).map(m => `${m.type}: ${m.text}`).join(' || '));

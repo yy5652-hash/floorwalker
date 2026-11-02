@@ -29,6 +29,8 @@ export async function structured<S extends z.ZodType>(opts: {
   prompt: string;
   schema: S;
   effort?: "low" | "medium" | "high";
+  /** Gemini only: spend little time thinking. For small text edits; never for decisions. */
+  quick?: boolean;
 }): Promise<z.infer<S>> {
   requireModel();
   if (config.ai.provider === "anthropic") {
@@ -50,6 +52,7 @@ export async function structured<S extends z.ZodType>(opts: {
       systemInstruction: opts.system,
       responseMimeType: "application/json",
       responseJsonSchema: z.toJSONSchema(opts.schema),
+      ...(opts.quick ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
     },
   });
   if (!res.text) throw new Error(`Model returned no output (${res.candidates?.[0]?.finishReason ?? "unknown"})`);

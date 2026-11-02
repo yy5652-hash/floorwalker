@@ -784,7 +784,7 @@ flow('approvals', async () => {
   if ((await ticketOf('Daniel')).status !== 'handled') await runTicket('Daniel');
   if ((await ticketOf('Elena', 'photo')).status !== 'handled') await runTicket('Elena', "Priya's photo shoot");
   await step('Setup (not under test): put capped refunds and a capped payout from an API agent into the queue', async () => {
-    fx = await disposableAgent(`Flow cap agent ${run}`, {}); const st = await stateNow(); const orders = st.orders.filter(o => o.capture_id); expect(orders.length >= 3, 'the demo shop has fewer than three orders');
+    fx = await disposableAgent(`Flow cap agent ${run}`, {}); const st = await stateNow(); const orders = st.orders.filter(o => o.capture_id && !o.customer_name.startsWith('Tessa')); expect(orders.length >= 3, 'the demo shop has fewer than three orders'); // Tessa's order stays untouched for the learned-rule step
     ids.key = await heldRefundFor(fx, orders[0], 3, 'k'); ids.palette = await heldRefundFor(fx, orders[1], 4, 'pal'); ids.other = await heldRefundFor(fx, orders[2 % orders.length], 5, 'o'); ids.phone = await heldRefundFor(fx, orders[0], 6, 'ph'); ids.spare = await heldRefundFor(fx, orders[1], 7, 'sp');
     heldRefund = { id: `act_${ids.other}` };
     // A $50 refund from an agent with no cap of its own waits only because the shop's $40 limit is lower: the case the learned "up to $60" suggestion covers.
@@ -866,13 +866,16 @@ flow('approvals', async () => {
     await selectReq(ids.palette); await press('k', { ctrl: true }); await waitText('Selected request'); await click({ sel: '[cmdk-item]', text: 'Approve selected request' });
     await decided(ids.palette); return `#${ids.palette} ${(await ledgerRow(ids.palette)).status}`;
   }, { ok4xx: true });
-  await step('Approvals: "Approve and stop asking about these" (when offered) shows the backtest first, then approves and applies the rule', async () => {
-    let offered = null;
-    for (const who of [{ n: 'the $50 refund', id: ids.learn }, { n: 'the $39 refund', id: ids.learn2 }, { n: 'Daniel', a: 86 }]) {
-      const e = (await held()).find(x => who.id ? String(x.id) === String(who.id) : x.amount === who.a); if (!e) continue; await selectReq(e.id);
-      const there = await waitFor(() => ev(`!!__f.one({ sel: 'button', text: 'Approve and stop asking' })`), { timeout: 8000, what: 'x' }).catch(() => false); if (there) { offered = e; break; }
-    }
-    if (!offered) { notes.push('"Approve and stop asking about these" was not offered for any waiting request (it appears only when a tested suggestion would have let that exact request through; the recorded AI review and the per-customer refund rule still held the demo requests), so its dialog and confirm path were not verified.'); return 'not offered for the waiting requests'; }
+  await step('Inbox T7: the $52 teapot refund waits only because of the $40 limit', async () => {
+    const r = await runTicket('Tessa'); const e = r.entries.find(x => x.status === 'awaiting_approval'); expect(e?.amount === 52, `expected a held $52 refund, got: ${summary(r)}`);
+    const holds = (typeof e.checks === 'string' ? JSON.parse(e.checks) : e.checks).filter(c => c.outcome === 'hold').map(c => c.id); expect(holds.includes('auto_limit') && holds.every(h => ['auto_limit', 'ai_review'].includes(h)), `held by ${holds.join()}, not only the limit`); ids.tessa = e.id; return summary(r);
+  });
+  await step('Approvals: "Approve and stop asking about these" shows the backtest first, then approves and applies the rule', async () => {
+    await openApp('approvals'); await selectReq(ids.tessa);
+    await waitControl({ sel: 'button', text: 'Approve and stop asking' }, { timeout: 30000 });
+    for (const id of [ids.other, heldPayout.id.replace('act_', '')]) { await selectReq(id); expect(!(await ev(`!!__f.one({ sel: 'button', text: 'Approve and stop asking' })`)), `offered on #${id}, which the change does not cover`); }
+    await selectReq(ids.tessa); await waitControl({ sel: 'button', text: 'Approve and stop asking' }, { timeout: 30000 });
+    const offered = { id: ids.tessa };
     const v0 = (await stateNow()).policy.id; await click({ sel: 'button', text: 'Approve and stop asking' }); await waitText('Approve and update your rules?');
     const t = await pageText(); expect(/Taps per 100 moves/.test(t) && /Declined requests that would pass/.test(t) && /Benchmark attacks stopped/.test(t), 'the backtest numbers are missing');
     await key('Escape'); await waitGone({ sel: '[role=dialog]', page: true }); expect((await ledgerRow(offered.id)).status === 'awaiting_approval', 'closing the dialog approved it');

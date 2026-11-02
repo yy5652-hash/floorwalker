@@ -64,6 +64,27 @@ test("taps per 100 money moves", () => {
   assert.equal(weeks.reduce((t, w) => t + w.moves, 0), store.ledger().length);
 });
 
+test("an AI hold that only objected to the limit doesn't stop replay or learning; any other AI hold does", () => {
+  const row = store.ledger().find((r) => r.kind === "refund" && r.amount === 46)!;
+  const change = learnedChanges(DEFAULT_POLICY).find((c) => c.id.startsWith("refunds.auto_approve_up_to"))!;
+  const withReview = (review: object) => {
+    const checks = JSON.parse(row.checks).map((c: any) => c.id === "ai_review" ? { ...c, outcome: "hold" } : c);
+    store.db().prepare("UPDATE ledger SET checks = ?, review = ? WHERE id = ?").run(JSON.stringify(checks), JSON.stringify(review), row.id);
+    return simulate(change.draft).rows.find((r) => r.id === row.id)!;
+  };
+  const base = { verdict: "escalate", matches_request: true, injection_detected: false };
+  const limit = { issue: "The refund of $46 exceeds the $40 auto-approval limit.", evidence: "Anything above $40 asks me." };
+  const story = { issue: "The story doesn't explain how the item broke.", evidence: "it broke" };
+  assert.equal(withReview({ ...base, concerns: [limit] }).after, "allow");
+  assert.ok(learnedChanges(DEFAULT_POLICY).find((c) => c.id === change.id)?.rows.includes(row.id));
+  assert.equal(simulate(DEFAULT_POLICY).rows.find((r) => r.id === row.id)!.after, "hold");
+  assert.equal(withReview({ ...base, concerns: [limit, story] }).after, "hold");
+  assert.equal(withReview({ ...base, concerns: [] }).after, "hold");
+  assert.equal(withReview({ ...base, matches_request: false, concerns: [limit] }).after, "hold");
+  assert.equal(withReview({ ...base, injection_detected: true, concerns: [limit] }).after, "hold");
+  assert.equal(withReview({ ...base, verdict: "reject", concerns: [limit] }).after, "hold");
+});
+
 test("declines older than 90 days still veto learning, while old approvals are not evidence", () => {
   const older = new Date(Date.now() - 120 * 86_400_000).toISOString();
   const row = store.ledger().find((r) => r.kind === "refund" && r.amount === 50)!;

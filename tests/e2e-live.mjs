@@ -79,8 +79,8 @@ try {
     assert.equal(compiled.policy.refunds.auto_approve_up_to, 20);
     const backtest = await post('/api/policy/simulate', { policy: compiled.policy }); assert.ok(backtest.rows.length > 0); assert.ok(backtest.changed > 0); return `${backtest.rows.length} past moves replayed; ${backtest.changed} changed`;
   });
-  const expected = { T1: ['executed', 24, 'refund'], T2: ['awaiting_approval', 86, 'refund'], T3: ['executed', 35, 'payout'], T5: ['blocked', 64, 'refund'], T6: ['awaiting_approval', 180, 'payout'] };
-  for (const id of ['T1', 'T2', 'T3', 'T4', 'T5', 'T6']) await step(`Inbox ${id} expected outcome`, async () => {
+  const expected = { T1: ['executed', 24, 'refund'], T2: ['awaiting_approval', 86, 'refund'], T3: ['executed', 35, 'payout'], T5: ['blocked', 64, 'refund'], T6: ['awaiting_approval', 180, 'payout'], T7: ['awaiting_approval', 52, 'refund'] };
+  for (const id of ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']) await step(`Inbox ${id} expected outcome`, async () => {
     ready(); const stream = await post(`/api/tickets/${id}/run`); assert.equal(typeof stream, 'string');
     const events = stream.split('\n').filter(l => l.startsWith('data:')).map(l => { try { return JSON.parse(l.slice(5)); } catch { return {}; } });
     assert.ok(!events.some(e => e.type === 'error'), `SSE error: ${events.filter(e => e.type === 'error').map(e => e.message ?? e.error).join('; ')}`);

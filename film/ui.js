@@ -10,11 +10,12 @@
     #film-ui { position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; z-index: 2147483000; pointer-events: none; font-family: Inter, -apple-system, sans-serif; overflow: hidden; }
     #film-ui > div { position: absolute; }
     #film-fade { inset: 0; background: #fff; opacity: 0; }
+    #film-spot { inset: 0; opacity: 0; }
     #film-cursor { width: 46px; height: 46px; left: 0; top: 0; opacity: 0; transform-origin: 4px 4px; filter: drop-shadow(0 4px 8px rgba(40,60,90,.35)); }
     #film-ripple { width: 92px; height: 92px; margin: -46px 0 0 -46px; border-radius: 50%; border: 2.5px solid #6d3df5; opacity: 0; }
-    #film-caption { left: 50%; bottom: 58px; transform: translateX(-50%); max-width: 1660px; width: max-content; font-family: 'Space Grotesk', Inter, sans-serif; font-weight: 500; font-size: 35px; line-height: 1.32; color: #0b1220; text-align: center;
+    #film-caption { left: 50%; bottom: 58px; transform: translateX(-50%); max-width: 1660px; width: max-content; font-family: 'Space Grotesk', Inter, sans-serif; font-weight: 500; font-size: 44px; line-height: 1.28; color: #0b1220; text-align: center;
       background: rgba(255, 255, 255, .94); padding: 12px 32px 13px; border: 1.5px solid transparent; border-image: linear-gradient(90deg, #00b8d9, #6d3df5, #f0268f, #f59300) 1; opacity: 0; box-shadow: 0 12px 34px rgba(40,60,90,.16); }
-    #film-caption.on-art { background: transparent; border: 0; box-shadow: none; font-size: 38px; bottom: 60px; text-shadow: 0 0 14px #fff, 0 0 14px #fff, 0 0 30px #fff, 0 0 30px #fff; }
+    #film-caption.on-art { background: transparent; border: 0; box-shadow: none; font-size: 44px; bottom: 56px; text-shadow: 0 0 14px #fff, 0 0 14px #fff, 0 0 30px #fff, 0 0 30px #fff; }
     #film-key { left: 0; top: 0; font-weight: 600; font-size: 28px; color: #ffffff; background: #12233f; padding: 8px 18px; border-radius: 12px; opacity: 0; box-shadow: 0 10px 24px rgba(18,35,63,.3); letter-spacing: .02em; }
     #film-stat { left: 48px; top: 40px; font-weight: 600; font-size: 26px; color: #ffffff; background: rgba(18, 35, 63, 0.92); padding: 10px 22px 11px; border-radius: 14px; opacity: 0; box-shadow: 0 10px 26px rgba(18,35,63,.25); }
     #film-stat b { color: #8ee0ae; font-weight: 700; }
@@ -31,7 +32,7 @@
   document.head.appendChild(style);
   const ui = document.createElement('div');
   ui.id = 'film-ui';
-  ui.innerHTML = `<div class="film-c" style="left:28px;top:28px;border-width:2px 0 0 2px"></div><div class="film-c" style="right:28px;top:28px;border-width:2px 2px 0 0"></div>
+  ui.innerHTML = `<div id="film-spot"></div><div class="film-c" style="left:28px;top:28px;border-width:2px 0 0 2px"></div><div class="film-c" style="right:28px;top:28px;border-width:2px 2px 0 0"></div>
     <div class="film-c" style="left:28px;bottom:28px;border-width:0 0 2px 2px"></div><div class="film-c" style="right:28px;bottom:28px;border-width:0 2px 2px 0"></div>
     <div id="film-ripple"></div>
     <div id="film-cursor"><svg viewBox="0 0 46 46" width="46" height="46"><path d="M4 3 L4 31 L11.5 24 L17 36 L22.5 33.6 L17 22 L28 22 Z" fill="#fff" stroke="#0b1220" stroke-width="2.4" stroke-linejoin="round"/></svg></div>
@@ -54,6 +55,7 @@
     r.style.left = `${sx}px`; r.style.top = `${sy}px`;
     r.style.opacity = press > 0 && press < 1 ? 0.8 * (1 - press) : 0;
     r.style.transform = `scale(${0.4 + press * 1.1})`;
+    $('film-spot').style.background = `radial-gradient(circle 420px at ${sx}px ${sy}px, rgba(12, 24, 40, 0) 45%, rgba(12, 24, 40, .1) 100%)`;
   };
   // A target is a selector string, or {sel, i, text, line}: the i-th match, optionally only the given text inside it
   // (its bounding box), or only its `line`-th line box (for an inline element that wraps).
@@ -106,6 +108,7 @@
   window.film = {
     setCam(x, y, w) { cam = { x, y, w }; layout(); placeRings(); return true; },
     getCam() { return cam; },
+    spot(a) { $('film-spot').style.opacity = a; return true; },
     label(text) { label = text; return true; },
     frame(t) {
       window.__flow?.(t);

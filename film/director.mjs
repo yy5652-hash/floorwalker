@@ -18,6 +18,7 @@ const PORT = 3190, DEBUG = 9352, FPS = 30, VW = 1440, VH = 810, DSF = 2;
 const arg = name => process.argv.find(a => a.startsWith(`--${name}=`))?.split('=')[1];
 const ONLY = arg('only')?.split(',');
 const EVERY = Number(arg('every') || 1);
+const NOCAP = process.argv.includes('--nocap');   // no burned-in captions: the vertical cut sets its own
 const PATCH = process.argv.includes('--patch');   // with --only: re-render those scenes in place in work/frames
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
@@ -27,7 +28,7 @@ const ease = p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
 const timeline = JSON.parse(readFileSync(join(HERE, 'work/timeline.json'), 'utf8'));
 const run = JSON.parse(readFileSync(join(HERE, 'data/run.json'), 'utf8'));
 const stepOf = id => run.steps.find(s => s.id === id) ?? (() => { throw new Error(`no recorded step ${id}`); })();
-const framesDir = join(HERE, ONLY && !PATCH ? 'work/preview' : 'work/frames');
+const framesDir = join(HERE, NOCAP ? 'work/frames-nocap' : ONLY && !PATCH ? 'work/preview' : 'work/frames');
 if (!PATCH) rmSync(framesDir, { recursive: true, force: true });
 const frameOffset = id => { let n = 0; for (const sc of timeline.scenes) { if (sc.id === id) break; n += Math.round((sc.end - sc.start) * FPS); } return n; };
 mkdirSync(framesDir, { recursive: true });
@@ -99,6 +100,7 @@ async function open(url, ready) {
   await js(UI);
 }
 const captionAt = (sc, t) => {
+  if (NOCAP) return { text: '', a: 0 };
   const line = sc.lines.find(l => t >= l.start - sc.start - 0.12 && t <= l.end - sc.start + 0.4);
   if (!line) return { text: '', a: 0 };
   const a = Math.min(1, (t - (line.start - sc.start - 0.12)) / 0.18, (line.end - sc.start + 0.4 - t) / 0.2);
@@ -166,6 +168,8 @@ function click(B, at, spec, sceneStart) {
     if (to !== from) await js(`window.scrollTo(0, ${lerp(from, to, ease(p))}); true`);
   });
   cursorTo(B, at - 0.7, 0.65, spec);
+  B.span(at - 0.7, 1.4, async p => { await js(`film.spot(${Math.min(1, p / 0.25, (1 - p) / 0.25)})`); });
+  B.do(at + 0.75, async () => { await js(`film.spot(0)`); });
   B.span(at, 0.35, async p => { await js(`film.press(${p})`); });
   B.do(at, async () => {
     const r = await rect(spec);
@@ -214,11 +218,11 @@ const scrollToShow = spec => async () => {
 };
 
 // Keeps the newest line of the agent's trace in view, the way a person watching it would scroll.
-function follow(B, at, dur, spec = { sel: '.trace > *', last: true }) {
+function follow(B, at, dur, spec = { sel: '.trace > *', last: true }, keep = 0.62) {
   B.span(at, dur, async () => {
     const target = await js(`(() => { const els = document.querySelectorAll(${JSON.stringify(spec.sel)}); const el = els[els.length - 1]; if (!el) return null;
       const r = el.getBoundingClientRect(); const max = document.documentElement.scrollHeight - innerHeight;
-      return Math.max(0, Math.min(max, scrollY + r.bottom - innerHeight * 0.78)); })()`);
+      return Math.max(0, Math.min(max, scrollY + r.bottom - innerHeight * ${keep})); })()`);
     if (target === null) return;
     const y = await js('window.scrollY');
     await js(`window.scrollTo(0, ${y + (target - y) * 0.12}); true`);
@@ -234,6 +238,9 @@ async function appScene(sc, script) {
   sceneStart = sc.start;
   const B = beats();
   await script(B);
+  // The product settles from a slight tilt to face-on before anything is clicked.
+  B.span(0, 0.45, async p => { const e = 1 - ease(p); await js(`document.body.style.transform = ${JSON.stringify(`perspective(1800px) rotateX(${(5 * e).toFixed(2)}deg) scale(${(1 - 0.03 * e).toFixed(4)})`)}; true`); });
+  B.do(0.46, async () => { await js(`document.body.style.transform = ''; true`); });
   await js(`film.label(${JSON.stringify(LABELS[sc.id] ?? '')}); true`);
   const n = Math.round((sc.end - sc.start) * FPS);
   B.list.sort((a, b) => a.at - b.at);
@@ -262,7 +269,7 @@ const setInit = async (state, streams = {}, responses = {}) => {
   initScript = (await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__filmInit = ${JSON.stringify({ state, streams, responses })};` })).identifier;
 };
 const prime = async (state, streams = {}, responses = {}, page = 'inbox') => {
-  await setInit(state, streams, responses);
+  await setInit(state, streams, { ...stepOf('learned').extras, ...responses });
   // A fresh query string per scene forces a full load (a hash-only change would keep the previous scene's data).
   await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/app?take=${++takes}#${page}` });
   await until(() => js(`document.readyState === 'complete' && !!document.querySelector('[data-slot="sidebar"]') && !!document.querySelector('main')`), 'app');
@@ -274,6 +281,7 @@ const prime = async (state, streams = {}, responses = {}, page = 'inbox') => {
   await wait(300);
 };
 
+const ZOOM = { x: 440, y: 50, w: 1000 };
 const item = name => ({ sel: '.item', has: name });
 const film = id => `[data-film="${id}"]`;
 const S = {};
@@ -293,6 +301,7 @@ S.maya = async (B, sc) => {
   click(B, 0.5, item('Maya Chen'), sc.start);
   click(B, 1.6, film('run'), sc.start);
   const end = lineAt(sc, 'm2') + 0.5, speed = st.events.at(-1).t / Math.max(1, end - 1.8);
+  camTo(B, 1.9, 0.9, ZOOM);
   replay(B, 1.8, end - 1.8, 'T1', speed, () => setState(st.after));
   follow(B, 1.8, end - 1.8 + 1.0);
   follow(B, end + 0.8, 1.2, { sel: '.verdict' });
@@ -307,6 +316,7 @@ S.daniel = async (B, sc) => {
   click(B, 0.5, item('Daniel Okafor'), sc.start);
   click(B, 1.4, film('run'), sc.start);
   const end = sc.end - sc.start - 1.0;
+  camTo(B, 1.7, 0.9, ZOOM);
   replay(B, 1.6, end - 1.6, 'T2', st.events.at(-1).t / Math.max(1, end - 1.6), () => setState(st.after));
   follow(B, 1.6, end - 1.6 + 0.8);
 };
@@ -380,17 +390,19 @@ S.jordan = async (B, sc) => {
   await prime(st.before, { T5: st.events });
   cam = { ...WIDE };
   // Jordan's email is below the fold of the message list, which scrolls on its own.
-  B.span(0.1, 0.6, async p => { await js(`(() => { const e = [...document.querySelectorAll('.item')].find(x => x.textContent.includes('Jordan Blake')), l = e.parentElement; l.scrollTop = ${ease(p)} * (e.offsetTop - l.offsetTop); return true; })()`); });
-  click(B, 2.1, item('Jordan Blake'), sc.start);
-  scrollTo(B, 2.3, 0.4, 0);
-  click(B, 3.0, film('run'), sc.start);
-  const end = lineAt(sc, 'j2') + 0.6;
-  replay(B, 3.2, end - 3.2, 'T5', st.events.at(-1).t / Math.max(1, end - 3.2), () => setState(st.after));
-  follow(B, 3.2, end - 3.2 + 0.4);
-  follow(B, end + 0.3, 1.0, { sel: '.verdict' });
-  camTo(B, end + 1.4, 1.1, async () => fit(await rect('.verdict .review'), { pad: 30, minW: 900 }));
-  hit(B, end + 1.6);
-  ring(B, end + 2.4, sc.end - sc.start - end - 2.6, 'inj', '.verdict .injection', '#dc2626');
+  B.span(0.1, 0.5, async p => { await js(`(() => { const e = [...document.querySelectorAll('.item')].find(x => x.textContent.includes('Jordan Blake')), l = e.parentElement; l.scrollTop = ${ease(p)} * (e.offsetTop - l.offsetTop); return true; })()`); });
+  click(B, 2.0, item('Jordan Blake'), sc.start);
+  camTo(B, 2.4, 0.7, async () => fit(await rect('.message'), { pad: 30, minW: 960, ay: 0.45 }));
+  ring(B, 2.9, 0.9, 'hidden', '.hidden-part', '#dc2626');
+  click(B, 5.2, film('run'), sc.start);
+  const end = Math.max(lineAt(sc, 'j2') + 1.6, 7.2);
+  camTo(B, 5.3, 0.6, ZOOM);
+  replay(B, 5.4, end - 5.4, 'T5', st.events.at(-1).t / Math.max(1, end - 5.4), () => setState(st.after));
+  follow(B, 5.4, end - 5.4 + 0.2);
+  follow(B, end + 0.1, 0.5, { sel: '.verdict .injection' }, 0.4);
+  camTo(B, end + 0.3, 0.7, async () => fit(await rect('.verdict .injection'), { pad: 40, minW: 960, ay: 0.4 }));
+  hit(B, end + 0.5);
+  ring(B, end + 0.8, Math.max(0.6, sc.end - sc.start - end - 1.0), 'inj', '.verdict .injection', '#dc2626');
 };
 S.hijack = async (B, sc) => {
   const st = stepOf('attack');
@@ -399,6 +411,7 @@ S.hijack = async (B, sc) => {
   scrollTo(B, 0.1, 0.5, scrollToShow(film('hijack')));
   click(B, 1.3, film('hijack'), sc.start);
   const end = lineAt(sc, 'x1', true) - 0.2;
+  camTo(B, 1.6, 0.8, ZOOM);
   replay(B, 1.5, end - 1.5, 'ATTACK', st.events.at(-1).t / Math.max(1, end - 1.5), () => setState(st.after));
   follow(B, 1.6, end - 1.6 + 0.4);
 };
@@ -406,19 +419,21 @@ S.freeze = async (B, sc) => {
   const st = stepOf('freeze');
   await prime(st.before, {}, {}, 'agents');
   cam = { ...WIDE };
-  ring(B, 0.4, 1.6, 'perm', `${film('agent-support')} .permissions`, '#2563eb');
+  ring(B, 0.5, 1.5, 'agent', film('agent-support'), '#2563eb');
   // The recorded frozen state is in place before the click, so the page's refresh after the click shows it.
   B.do(lineAt(sc, 'f1', true) - 0.65, () => setState(st.after));
   click(B, lineAt(sc, 'f1', true) - 0.6, film('freeze-support'), sc.start);
   hit(B, lineAt(sc, 'f1', true) - 0.4);
-  ring(B, lineAt(sc, 'f1', true) + 0.2, sc.end - sc.start - lineAt(sc, 'f1', true) - 0.3, 'frozen', '.frozen-banner', '#dc2626');
+  ring(B, lineAt(sc, 'f1', true) + 0.3, sc.end - sc.start - lineAt(sc, 'f1', true) - 0.4, 'frozen', '.freeze-explanation', '#dc2626');
 };
 // An outside agent: its key on the Developers page, then the quickstart (REST and MCP).
 S.api = async (B, sc) => {
   const st = stepOf('agent');
   await prime(st.after, {}, { keys: st.response.keys }, 'developers/keys');
   cam = { ...WIDE };
-  ring(B, 0.4, 1.8, 'key', { sel: 'tr', has: 'Help desk' }, '#2563eb');
+  // A generic MCP config is shown; the one-line command for a named client stays out of the frame (no third-party marks).
+  B.do(2.7, async () => { await js(`(() => { const p = [...document.querySelectorAll('pre')].find(e => e.textContent.includes('mcp add')); (p?.parentElement ?? p)?.style.setProperty('display', 'none'); for (const e of document.querySelectorAll('main h2, main h3, main h4, main p')) if (/Claude/.test(e.textContent)) e.style.visibility = 'hidden'; return true; })()`); });
+  ring(B, 0.5, 1.5, 'key', { sel: 'tr', has: 'Help desk' }, '#2563eb');
   // The tab is a link to /app#developers/quickstart; following it would reload the page without the film's
   // query string, so the drawn click switches the tab by its hash, as the link does.
   cursorTo(B, 1.8, 0.65, { sel: 'a', has: 'Quickstart' });
@@ -427,9 +442,9 @@ S.api = async (B, sc) => {
   camTo(B, 2.9, 1.0, async () => fit(await rect({ sel: 'pre', has: '/v1/refunds' }), { pad: 40, minW: 1000, ay: 0.4 }));
   ring(B, 3.2, 2.4, 'curl', { sel: 'pre', has: '/v1/refunds' }, '#2563eb');
   camTo(B, 5.5, 0.6, { ...WIDE });
-  scrollTo(B, 5.6, 0.9, scrollToShow({ sel: 'pre', has: 'claude mcp add' }));
-  camTo(B, 6.5, 0.9, async () => fit(await rect({ sel: 'pre', has: 'claude mcp add' }), { pad: 60, minW: 1000, ay: 0.4 }));
-  ring(B, 6.7, sc.end - sc.start - 6.9, 'mcp', { sel: 'pre', has: 'claude mcp add' }, '#2563eb');
+  scrollTo(B, 5.6, 0.9, scrollToShow({ sel: 'pre', has: 'mcpServers' }));
+  camTo(B, 6.5, 0.9, async () => fit(await rect({ sel: 'pre', has: 'mcpServers' }), { pad: 60, minW: 960, ay: 0.4 }));
+  ring(B, 6.7, sc.end - sc.start - 6.9, 'mcp', { sel: 'pre', has: 'mcpServers' }, '#2563eb');
 };
 // The bot's API request, held by its own cap, waiting in Approvals next to the inbox's requests.
 S.apiheld = async (B, sc) => {
@@ -473,30 +488,38 @@ S.overview = async (B, sc) => {
   ring(B, 4.0, sc.end - sc.start - 4.2, 'stopped', film('metric-stopped'), '#dc2626');
 };
 
-// What Floorwalker learned from the owner's decisions: the taps on the Overview, the suggested change on Rules, Apply.
+// What Floorwalker learned from the owner's decisions: the taps on the Overview, then Tessa's refund in Approvals,
+// where the tested change is offered next to the decision. The dialog's numbers are the recorded replay.
 S.learn = async (B, sc) => {
   const seen = stepOf('learned'), st = stepOf('learnApply');
-  await prime(seen.before, {}, { learned: seen.response, learnApply: st.response }, 'overview');
+  // The recorded replay is of the limit change, the suggestion that covers Tessa's refund: the page asks about it first here.
+  const offered = { ...seen.response, changes: [...seen.response.changes].sort((a, b) => Number(b.id === st.change) - Number(a.id === st.change)) };
+  await prime(seen.before, {}, { learned: offered, coverage: st.coverage, approve: st.approve, learnApply: st.response }, 'overview');
   cam = { ...WIDE };
-  const taps = { sel: '[data-slot="card"]', has: 'How often agents need you' };
-  scrollTo(B, 0.1, 0.6, scrollToShow(taps));
-  ring(B, 0.8, lineAt(sc, 'l2') - 1.1, 'taps', taps, '#b45309');
-  const card = '[data-film="learned-refunds.auto_approve_up_to"]';
-  B.do(lineAt(sc, 'l2') - 0.2, async () => { await js(`location.hash = 'rules'; true`); });
-  scrollTo(B, lineAt(sc, 'l2') + 0.4, 0.6, scrollToShow(card));
-  camTo(B, lineAt(sc, 'l2') + 0.9, 1.0, async () => fit(await rect(card), { pad: 40, minW: 1100, ay: 0.45 }));
-  ring(B, lineAt(sc, 'l2') + 1.6, 3.2, 'evidence', { sel: card, text: 'You approved all' }, '#059669');
-  ring(B, lineAt(sc, 'l2') + 4.9, lineAt(sc, 'l3') - lineAt(sc, 'l2') - 4.9, 'line', { sel: card, text: 'declined a $72' }, '#dc2626');
-  ring(B, lineAt(sc, 'l3') + 2.2, 2.6, 'declined', { sel: card, text: 'requests you declined would' }, '#059669');
-  ring(B, lineAt(sc, 'l3') + 4.9, lineAt(sc, 'l4') - lineAt(sc, 'l3') - 4.9, 'bench', { sel: card, text: 'Benchmark attacks still stopped' }, '#059669');
-  // The recorded state after the change goes in right after the click, so the page's refresh shows the new rules.
-  click(B, lineAt(sc, 'l4') + 0.6, `${card} [data-film="apply"]`, sc.start);
-  B.do(lineAt(sc, 'l4') + 0.7, () => js(`window.__film.responses.learned = ${JSON.stringify(st.learned)}; window.__film.state = ${JSON.stringify({ ...st.after, appUrl: LIVE })}; true`));
-  B.do(lineAt(sc, 'l4') + 1.2, () => js(`__film.release('learnApply')`));
-  hit(B, lineAt(sc, 'l4') + 0.8);
-  camTo(B, lineAt(sc, 'l4') + 1.6, 0.8, { ...WIDE });
-  scrollTo(B, lineAt(sc, 'l4') + 1.8, 0.9, scrollToShow({ sel: '[data-slot="card"]', has: 'Active rules' }));
-  ring(B, lineAt(sc, 'l4') + 2.8, sc.end - sc.start - lineAt(sc, 'l4') - 3.0, 'new', { sel: 'main', text: '$60.00' }, '#059669');
+  const taps = { sel: 'h2', has: 'How often agents need you' };
+  camTo(B, 0.6, 0.9, async () => fit(await rect(taps), { pad: 30, minW: 960, ay: 0.14 }));
+  const l2 = lineAt(sc, 'l2'), l3 = lineAt(sc, 'l3'), l3b = lineAt(sc, 'l3b'), l4 = lineAt(sc, 'l4');
+  B.do(l2 - 0.4, async () => { cam = { ...WIDE }; await js(`location.hash = 'approvals'; window.scrollTo(0, 0); true`); });
+  const row = { sel: '.approval-queue button', has: 'Tessa' };
+  click(B, l2 + 0.5, row, sc.start);
+  const limits = { sel: '.approval-evidence > div', has: 'Limits' };
+  camTo(B, l2 + 1.0, 0.9, async () => fit(await rect('.approval-detail'), { pad: 16, minW: 1080, ay: 0.46 }));
+  ring(B, l2 + 1.6, l3 - l2 - 2.2, 'limit', limits, '#b45309');
+  camTo(B, l3 - 0.7, 0.5, { ...WIDE });
+  click(B, l3 + 0.5, '.learn-approve', sc.start);
+  camTo(B, l3 + 1.0, 0.8, async () => fit(await rect('[role="dialog"]'), { pad: 20, minW: 1240, ay: 0.46 }));
+  ring(B, l3b + 0.1, 1.5, 'taps', { sel: '.learning-backtest > div', has: 'Taps per 100' }, '#059669');
+  ring(B, l3b + 1.8, 2.0, 'declined', { sel: '.learning-backtest > div', has: 'Declined requests' }, '#059669');
+  ring(B, l3b + 4.0, Math.max(1.0, l4 - l3b - 4.2), 'bench', { sel: '.learning-backtest > div', has: 'Benchmark attacks' }, '#059669');
+  // The recorded state after both actions goes in with the click, so the page's refresh shows the new rules.
+  click(B, l4 + 0.6, { sel: '[role="dialog"] button', has: 'Confirm approval' }, sc.start);
+  B.do(l4 + 0.7, () => js(`window.__film.responses.learned = ${JSON.stringify(st.learned)}; window.__film.state = ${JSON.stringify({ ...st.after, appUrl: LIVE })}; true`));
+  B.do(l4 + 0.9, () => js(`__film.release('approve')`));
+  B.do(l4 + 1.2, () => js(`__film.release('learnApply')`));
+  hit(B, l4 + 0.8);
+  B.do(l4 + 1.9, async () => { cam = { ...WIDE }; await js(`location.hash = 'rules'; window.scrollTo(0, 0); true`); });
+  camTo(B, l4 + 2.2, 0.7, async () => fit(await rect('textarea'), { pad: 40, minW: 960, ay: 0.45 }));
+  ring(B, l4 + 2.5, sc.end - sc.start - l4 - 2.7, 'new', 'textarea', '#059669');
 };
 // A refund straight through the PayPal API: the Watch page, the incident, and the owner saying it was her.
 S.watch = async (B, sc) => {
@@ -513,11 +536,10 @@ S.watch = async (B, sc) => {
   B.do(lineAt(sc, 'w3') - 0.4, () => js(`window.__film.responses.incidents = ${JSON.stringify(st.incidents)}; window.__film.state = ${JSON.stringify({ ...st.after, appUrl: LIVE })}; true`));
   B.do(lineAt(sc, 'w3') - 0.2, () => js(`__film.release('bypass')`));
   hit(B, lineAt(sc, 'w3'));
-  scrollTo(B, lineAt(sc, 'w3') + 0.3, 0.6, 0);
-  ring(B, lineAt(sc, 'w3') + 0.6, 2.2, 'row', { sel: '.ag-center-cols-container .ag-row', has: 'Refund' }, '#dc2626');
-  B.do(lineAt(sc, 'w3') + 2.9, async () => { await js(`location.hash = 'overview'; true`); });
-  ring(B, lineAt(sc, 'w3') + 3.4, 2.4, 'incident', '[data-film="incident"]', '#dc2626');
-  // The recorded outcome goes in only after the click: the banner (and its button) leaves with the open incident.
+  scrollTo(B, lineAt(sc, 'w3') + 0.3, 0.6, scrollToShow('[data-film="incident"]'));
+  camTo(B, lineAt(sc, 'w3') + 0.9, 0.8, async () => fit(await rect('[data-film="incident"]'), { pad: 20, minW: 1040, ay: 0.46 }));
+  ring(B, lineAt(sc, 'w3') + 1.2, lineAt(sc, 'w3', true) - lineAt(sc, 'w3') - 1.2, 'incident', '[data-film="incident"]', '#dc2626');
+  // The recorded outcome goes in only after the click: the timeline (and its button) leaves with the open incident.
   click(B, lineAt(sc, 'w3', true) + 0.2, '[data-film="incident-mine"]', sc.start);
   B.do(lineAt(sc, 'w3', true) + 0.3, () => js(`window.__film.responses.incidents = ${JSON.stringify(rs.incidents)}; window.__film.state = ${JSON.stringify({ ...rs.after, appUrl: LIVE })}; true`));
   B.do(lineAt(sc, 'w3', true) + 0.5, () => js(`__film.release('resolve')`));
@@ -530,7 +552,9 @@ S.ask = async (B, sc) => {
   cam = { ...WIDE };
   await js(`Object.assign(document.getElementById('film-caption').style, { left: '60px', transform: 'none', width: 'auto', maxWidth: '1180px', textAlign: 'left' }); true`);
   B.do(0, () => { hud = ''; });
-  click(B, 1.0, '.assistant-launcher', sc.start);
+  // The provider's name in the panel's small print stays out of the frame: the rules ask for no third-party marks.
+  await js(`(() => { const st = document.createElement('style'); st.textContent = '.assistant-disclosure { visibility: hidden; }'; document.head.appendChild(st); return true; })()`);
+  click(B, 1.0, '.assistant-toolbar-trigger', sc.start);
   // The panel grows as the answer arrives, so the camera is set for its full height, and the caption stays clear of it.
   camTo(B, 1.4, 1.0, { x: VW - 1384, y: VH - 778, w: 1384 });
   click(B, 2.6, '.assistant-suggestions button', sc.start);

@@ -69,7 +69,7 @@ All **125 automated tests pass, with none skipped**, including failure injection
 
 See [simulation results](../bench/longitudinal-RESULTS.md) and [engineering / live-check evidence](../tests/experiments-REPORT.md).
 
-In the demo shop's history, accepting the learned refund-limit change takes the owner from 66 to 50 taps per 100 money moves, with nothing she declined becoming automatic.
+In the demo shop's history, accepting the learned refund-limit change takes the owner from 55 to 41 taps per 100 money moves, with nothing she declined becoming automatic.
 
 ## Challenges we ran into
 

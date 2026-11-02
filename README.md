@@ -42,7 +42,7 @@ Every request that waited for the owner, and what she did with it, is evidence. 
 - on her own history: taps saved, the money that would now move without her, and **no request she declined may become automatic** (a change that would let one through is never shown);
 - on FloorwalkerBench: every attack must still be stopped, and the card shows how many the rules alone still catch, so she can see the defense in depth that remains.
 
-One click applies it: the AI rewrites her plain-English rules in her own words with the new number, and a new version is saved (any version can be restored). When two or more of her declines share a reason her reviewer notes don't cover, the AI proposes a note for the reviewer. The Overview tracks **taps per 100 money moves** week by week; in the demo shop, two months of earlier activity (simulated, labelled and never sent to PayPal) start it at 66.
+One click applies it: the AI rewrites her plain-English rules in her own words with the new number, and a new version is saved (any version can be restored). When two or more of her declines share a reason her reviewer notes don't cover, the AI proposes a note for the reviewer. The Overview tracks **taps per 100 money moves** week by week; in the demo shop, two months of earlier activity (simulated, labelled and never sent to PayPal) start it at 55.
 
 ### It watches PayPal for money that skipped it
 

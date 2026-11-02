@@ -7,24 +7,24 @@
    "id": "hook",
    "kind": "art",
    "page": "art/hook.html",
-   "lead": 0.7,
+   "lead": 0.15,
    "tail": 1.0,
    "lines": [
     {
+     "id": "h3",
+     "gap": 0.0,
+     "text": "One hidden sentence in an email can send $150 to a stranger.",
+     "spoken": "One hidden sentence in an email can send a hundred and fifty dollars to a stranger."
+    },
+    {
      "id": "h1",
-     "text": "AI agents can now refund customers and pay people through PayPal.",
-     "gap": 0.0
+     "gap": 0.5,
+     "text": "AI agents can now refund customers and pay people through PayPal."
     },
     {
      "id": "h2",
-     "text": "Make the agent ask about everything, and the owner starts approving without reading.",
-     "gap": 0.35
-    },
-    {
-     "id": "h3",
-     "text": "Ask about nothing, and one email can tell it to send $150 to a stranger.",
      "gap": 0.35,
-     "spoken": "Ask about nothing, and one email can tell it to send a hundred and fifty dollars to a stranger."
+     "text": "Make the agent ask about everything, and the owner starts approving without reading."
     }
    ]
   },
@@ -122,7 +122,7 @@
    "id": "jordan",
    "kind": "app",
    "lead": 0.6,
-   "tail": 1.0,
+   "tail": 2.0,
    "lines": [
     {
      "id": "j1",
@@ -132,7 +132,7 @@
     {
      "id": "j2",
      "text": "The AI review flags the injection and quotes it. Nothing reaches PayPal.",
-     "gap": 0.3
+     "gap": 1.6
     }
    ]
   },
@@ -140,7 +140,7 @@
    "id": "hijack",
    "kind": "app",
    "lead": 0.6,
-   "tail": 2.4,
+   "tail": 1.6,
    "lines": [
     {
      "id": "x1",
@@ -170,26 +170,31 @@
    "lines": [
     {
      "id": "l1",
-     "text": "Safe, but Elena still had to tap on 53 of every 100 money moves.",
      "gap": 0.0,
-     "spoken": "Safe, but Elena still had to tap on fifty-three of every hundred money moves."
+     "text": "Safe, but Elena still had to tap on 55 of every 100 money moves.",
+     "spoken": "Safe, but Elena still had to tap on fifty-five of every hundred money moves."
     },
     {
      "id": "l2",
-     "text": "Floorwalker learns from her decisions. She approved every refund between $40 and $60, and declined one at $72.",
      "gap": 0.35,
-     "spoken": "Floorwalker learns from her decisions. She approved every refund between forty and sixty dollars, and declined one at seventy-two."
+     "text": "Tessa's teapot: $52, above the limit. Elena has approved every refund between $40 and $60, and declined one at $72.",
+     "spoken": "Tessa's teapot: fifty-two dollars, above the limit. Elena has approved every refund between forty and sixty dollars, and declined one at seventy-two."
     },
     {
      "id": "l3",
-     "text": "So it suggests $60, tested on her history first: nothing she declined would go through, and every benchmark attack is still stopped.",
      "gap": 0.3,
-     "spoken": "So it suggests sixty dollars, tested on her history first: nothing she declined would go through, and every benchmark attack is still stopped."
+     "text": "So Floorwalker offers to stop asking, tested on her history first:"
+    },
+    {
+     "id": "l3b",
+     "gap": 0.1,
+     "text": "55 taps drop to 41, nothing she declined would pass, and every benchmark attack is still stopped.",
+     "spoken": "fifty-five taps drop to forty-one, nothing she declined would pass, and every benchmark attack is still stopped."
     },
     {
      "id": "l4",
-     "text": "One click, and the AI rewrites her rule in her own words.",
-     "gap": 0.3
+     "gap": 0.3,
+     "text": "One click approves Tessa and rewrites the rule in Elena's own words."
     }
    ]
   },
@@ -248,7 +253,7 @@
    "kind": "art",
    "page": "art/bench.html",
    "lead": 0.6,
-   "tail": 1.2,
+   "tail": 3.4,
    "lines": [
     {
      "id": "b1",
@@ -275,7 +280,7 @@
    "kind": "art",
    "page": "art/end.html",
    "lead": 0.6,
-   "tail": 2.4,
+   "tail": 1.8,
    "lines": [
     {
      "id": "e1",

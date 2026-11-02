@@ -71,7 +71,7 @@ export function Landing() {
       <section className="site-section difference-story">
         <p className="section-index">What is different</p><h2>Less asking. Evidence you can inspect.</h2>
         <div className="how-steps">
-          <article><h3>Taps per 100 money moves</h3><p>See how often agents need you. Suggested rule changes show their effect on past requests before you apply them. In the demo history, the refund-limit suggestion takes taps from 66 to 50 per 100 moves.</p><a href="/app#rules">See the reasoning <ArrowRight size={16} /></a></article>
+          <article><h3>Taps per 100 money moves</h3><p>See how often agents need you. Suggested rule changes show their effect on past requests before you apply them. In the demo history, the refund-limit suggestion takes taps from 55 to 41 per 100 moves.</p><a href="/app#rules">See the reasoning <ArrowRight size={16} /></a></article>
           <article><h3>Facts from PayPal</h3><p>The agent's description is a claim. Floorwalker checks the capture, buyer and refundable amount against PayPal's own records.</p></article>
           <article><h3>Money moved outside Floorwalker</h3><p>Webhooks and order sweeps look for money the ledger cannot account for. An incident alerts you and freezes agents until you review it. This detects bypasses; it cannot prevent money moving elsewhere.</p><a href="/app#watch">Explore PayPal watch <ArrowRight size={16} /></a></article>
         </div>

@@ -63,22 +63,40 @@ for (let i = 0; ; i++) {
   await new Promise((r) => setTimeout(r, 1000));
 }
 console.log('demo workspace ready:', (await state()).workspace.name);
-// The same order as the film: Daniel's held refund is approved right after it is held.
-for (const t of ['T1', 'T2', 'approve', 'T3', 'T4', 'T5', 'T6']) {
+// Daniel's held refund is approved right after it is held. Tessa's comes before that approval, so her refund waits
+// only because of the limit, not also because his used up the week's budget.
+for (const t of ['T1', 'T7', 'T2', 'approve', 'T3', 'T4', 'T5', 'T6']) {
   if (t !== 'approve') { await step(t, async () => ({ events: await stream(`/api/tickets/${t}/run`) })); continue; }
-  const held = (await state()).ledger.filter(l => l.status === 'awaiting_approval' && l.tool === 'create_refund');
-  if (held.length) await step('approve', async () => ({ ledgerId: held[0].id, response: (await post(`/api/ledger/${held[0].id}/approve`)).data }));
+  const held = (await state()).ledger.find(l => l.status === 'awaiting_approval' && l.ticket_id === 'T2');
+  if (held) await step('approve', async () => ({ ledgerId: held.id, response: (await post(`/api/ledger/${held.id}/approve`)).data }));
 }
 await step('attack', async () => ({ events: await stream('/api/attack') }));
-await step('freeze', async () => ({ response: (await post('/api/agents/support/freeze')).data }));
+// The assistant, answering for real from this workspace's activity.
+await step('assistant', async () => {
+  const question = 'Why was the last request blocked?';
+  const r = await fetch(`${BASE}/api/assistant`, { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: question }) });
+  let answer = '';
+  for (const line of (await r.text()).split('\n')) { try { const e = JSON.parse(line); answer += e.text ?? e.token ?? e.delta ?? e.content ?? ''; } catch {} }
+  return { response: { question, answer } };
+});
 
-// What Floorwalker learned from the owner's earlier decisions, and the owner accepting the refund-limit change.
-await step('learned', async () => ({ response: await get('/api/rules/learned') }));
+await step('freeze', async () => ({ response: (await post('/api/agents/support/freeze')).data }));
+await step('unfreeze', async () => ({ response: (await post('/api/agents/support/unfreeze')).data }));
+
+// What Floorwalker learned from the owner's earlier decisions, and the owner approving Tessa's refund and accepting the
+// refund-limit change in one step ("Approve and stop asking about these"): the same two calls the page makes.
+await step('learned', async () => ({
+  response: await get('/api/rules/learned'),
+  extras: { trust: { support: await get('/api/agents/support/trust-preview'), ops: await get('/api/agents/ops/trust-preview') }, shadow: await get('/api/policy/shadow'), status: await get('/api/policy/status') },
+}));
 await step('learnApply', async () => {
   const before = await get('/api/rules/learned');
   const change = before.changes.find((c) => c.id.startsWith('refunds.auto_approve_up_to'));
+  const coverage = (await post('/api/policy/simulate', { policy: change.draft })).data;
+  const held = (await state()).ledger.find(l => l.status === 'awaiting_approval' && l.ticket_id === 'T7');
+  const approve = (await post(`/api/ledger/${held.id}/approve`)).data;
   const r = await post('/api/rules/learned/apply', { id: change.id });
-  return { change: change.id, ms: r.ms, response: r.data, learned: await get('/api/rules/learned') };
+  return { change: change.id, ledgerId: held.id, coverage, approve, ms: r.ms, response: r.data, learned: await get('/api/rules/learned') };
 });
 
 // A refund made straight through the PayPal API, skipping Floorwalker; the sweep catches it and the owner says it was her.
@@ -120,15 +138,6 @@ await step('api', async () => {
 });
 
 await step('audit', async () => ({ response: { log: await get('/api/audit?limit=100'), verify: await get('/api/audit/verify') } }));
-
-// The assistant, answering for real from this workspace's activity.
-await step('assistant', async () => {
-  const question = 'Why was the last request blocked?';
-  const r = await fetch(`${BASE}/api/assistant`, { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: question }) });
-  let answer = '';
-  for (const line of (await r.text()).split('\n')) { try { const e = JSON.parse(line); answer += e.text ?? e.token ?? e.delta ?? e.content ?? ''; } catch {} }
-  return { response: { question, answer } };
-});
 
 mkdirSync(join(HERE, 'data'), { recursive: true });
 writeFileSync(join(HERE, 'data/run.json'), JSON.stringify(run, null, 1));

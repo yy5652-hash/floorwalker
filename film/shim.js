@@ -51,6 +51,8 @@
     if (method === 'GET') {
       const reads = {
         '/api/keys': () => F.responses.keys ?? [],
+        '/api/policy/status': () => F.responses.status ?? {},
+        '/api/policy/shadow': () => F.responses.shadow ?? { draft: null, report: null },
         '/api/rules/learned': () => F.responses.learned ?? { changes: [], note: null, weeks: [] },
         '/api/incidents': () => F.responses.incidents ?? { incidents: [], watch: { webhook: true, webhook_error: null, last_sweep: null, last_event: null, freeze: true } },
         '/api/audit': () => F.responses.audit ?? [],
@@ -65,6 +67,8 @@
       const read = reads[url.pathname];
       if (read) return Promise.resolve(json(read()));
     }
+    const trust = url.pathname.match(/^\/api\/agents\/([^/]+)\/trust-preview$/);
+    if (trust && F.responses.trust?.[trust[1]]) return Promise.resolve(json(F.responses.trust[trust[1]]));
     if (method === 'POST' && /^\/api\/agents\/[^/]+\/(freeze|unfreeze)$/.test(url.pathname)) return Promise.resolve(json({ ok: true }));
     const run = url.pathname.match(/^\/api\/tickets\/([^/]+)\/run$/);
     if (method === 'POST' && (run || url.pathname === '/api/attack')) {
@@ -74,6 +78,7 @@
       const stream = new ReadableStream({ start(ctl) { F.open[key] = { ctl, events, sent: 0, enc: new TextEncoder() }; } });
       return Promise.resolve(new Response(stream, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } }));
     }
+    if (method === 'POST' && url.pathname === '/api/policy/simulate' && F.responses.coverage) return Promise.resolve(json(F.responses.coverage));
     const hold = url.pathname.match(/\/approve$/) ? 'approve' : url.pathname === '/api/policy/compile' ? 'compile' : url.pathname === '/api/policy/simulate' ? 'simulate'
       : url.pathname === '/api/rules/learned/apply' ? 'learnApply' : url.pathname === '/api/demo/bypass' ? 'bypass' : /^\/api\/incidents\/\d+\/resolve$/.test(url.pathname) ? 'resolve' : null;
     if (method === 'POST' && hold) return new Promise(resolve => { F.waiting[hold] = () => resolve(json(F.responses[hold])); });

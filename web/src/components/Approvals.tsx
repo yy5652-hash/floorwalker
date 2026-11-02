@@ -621,7 +621,7 @@ export function Approvals(props: PageProps & {
   // Replay the actual draft against this request, rather than guessing coverage from the title.
   const coverage = useQuery({
     queryKey: ["approval-coverage", props.state.workspace?.id, props.state.policy.id, selected?.id, selected?.status, selected?.checks, learned.data?.changes],
-    enabled: !!selected && canManage(props.state) && !!learned.data?.changes.length && !isFilm(),
+    enabled: !!selected && canManage(props.state) && !!learned.data?.changes.length,
     retry: false,
     queryFn: async ({ signal }) => {
       for (const change of learned.data?.changes ?? []) {

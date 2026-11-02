@@ -1,3 +1,4 @@
+import { agentView, blockExplanations } from "./explanations.ts";
 import { createAssistant, assistantContextAllowed } from "./assistant.ts";
 import { toNodeHandler } from "better-auth/node";
 import express, { type Response } from "express";
@@ -85,6 +86,7 @@ app.use(["/api/tickets", "/api/attack", "/api/demo/reset", "/api/policy/compile"
 function parseRow(r: store.LedgerRow) {
   return {
     ...r,
+    block_explanations: blockExplanations(r),
     params: JSON.parse(r.params),
     checks: JSON.parse(r.checks),
     review: r.review ? JSON.parse(r.review) : null,
@@ -122,7 +124,7 @@ function agentsWithStats(rows: store.LedgerRow[], policy: ReturnType<typeof stor
     const days = budget ? ({ day: 1, week: 7, month: 30 } as const)[period] : 7;
     const since = Date.now() - days * 86_400_000;
     const spent = sum(mine.filter((r) => (r.status === "executed" || r.status === "approved") && Date.parse(r.decided_at ?? r.created_at) >= since));
-    return { ...a, budget, spent, metrics: metrics(mine), last: mine[0]?.created_at ?? null };
+    return { ...agentView(a), budget, spent, metrics: metrics(mine), last: mine[0]?.created_at ?? null };
   });
 }
 

@@ -1,3 +1,4 @@
+import { agentView } from "./explanations.ts";
 import { audit } from "./audit.ts";
 import { config } from "./config.ts";
 import { ctx, inWorkspace, type PayPalCreds, type Workspace } from "./context.ts";
@@ -56,8 +57,8 @@ function raise(i: Omit<Incident, "id" | "created_at" | "frozen_agents" | "resolv
   if (store.setting<boolean>("incident_freeze", true)) {
     frozen = store.agents().filter((a) => a.status === "active").map((a) => a.id);
     for (const a of frozen) {
-      store.setAgentStatus(a, "frozen");
-      publish("agent.frozen", { id: a, object: "agent", status: "frozen", reason: `incident ${id}` });
+      store.setAgentStatus(a, "frozen", { check: "unaccounted_paypal_transaction", evidence: { incident_id: id, paypal_ref: i.paypal_ref, capture_id: i.capture_id, amount: i.amount, detected_by: i.detected_by, seen_at: incident_(id)!.created_at }, next_step: "Review the Watch incident. Mark it as yours to unfreeze affected agents, or rotate the PayPal app secret if it was not yours, then unfreeze reviewed agents." });
+      publish("agent.frozen", { id: a, object: "agent", status: "frozen", reason: `incident ${id}`, freeze_explanation: agentView(store.agent(a)!).freeze_explanation });
     }
     store.db().prepare("UPDATE incidents SET frozen_agents = ? WHERE id = ?").run(JSON.stringify(frozen), id);
   }

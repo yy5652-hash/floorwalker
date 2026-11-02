@@ -1,8 +1,11 @@
 import { isFilm } from "../auth";
+import { AgGridReact } from "ag-grid-react";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { useTheme } from "../components/theme-provider";
+import { lightTheme, darkTheme } from "../components/grid-theme";
+import { IncidentBanner, frozenAgentIds } from "../components/IncidentBanner";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { AgGridReact } from "ag-grid-react";
-import type { ColDef } from "ag-grid-community";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -11,14 +14,13 @@ import {
 } from "../api";
 import { useIncidents, useRefreshIncidents } from "../hooks/use-incidents";
 import { Confirm, Resource, Toggle } from "../components/Management";
-import { useTheme } from "../components/theme-provider";
-import { lightTheme, darkTheme } from "../components/grid-theme";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
+
 const columns: ColDef<Incident>[] = [
   { field: "created_at", headerName: "Opened", width: 170,
-    valueFormatter: ({ value }) => new Date(value).toLocaleString() },
+    valueFormatter: ({ value }) => new Date(value).toLocaleString("en-US") },
   { field: "kind", headerName: "Kind", width: 100,
     valueFormatter: ({ value }) => value === "refund" ? "Refund" : "Payout" },
   { field: "amount", headerName: "Amount", width: 115,
@@ -37,10 +39,11 @@ const defaultColDef: ColDef<Incident> = {
   sortable: true, resizable: true, tooltipValueGetter: ({ valueFormatted, value }) => valueFormatted ?? value,
 };
 
+
 export function Watch({ state }: { state: State }) {
   const query = useIncidents(state);
-  const refresh = useRefreshIncidents();
   const { resolvedTheme } = useTheme();
+  const refresh = useRefreshIncidents();
   const [checking, setChecking] = useState(false);
   const onError = (error: unknown) => toast.error(errorMessage(error));
   const sweep = useMutation({
@@ -63,6 +66,9 @@ export function Watch({ state }: { state: State }) {
   const busy = sweep.isPending || settings.isPending || bypass.isPending;
   const manageable = canManage(state);
   const watch = query.data?.watch;
+  // An open incident, or one the owner marked "not me" while its agents are still frozen: the next step stays on screen.
+  const attention = (query.data?.incidents ?? []).filter(incident => !incident.resolved_at
+    || (incident.resolution === "not_mine" && frozenAgentIds(incident.frozen_agents).some(id => state.agents.find(agent => agent.id === id)?.status === "frozen")));
   return (
     <div className="watch-page space-y-6">
       <Resource query={query}>
@@ -85,7 +91,7 @@ export function Watch({ state }: { state: State }) {
                     <h2 className="text-sm font-medium">Order check</h2>
                     {watch.last_sweep ? (
                       <p className="text-xs text-muted-foreground">
-                        <time dateTime={watch.last_sweep.at} title={new Date(watch.last_sweep.at).toLocaleString()}>{relativeTime(watch.last_sweep.at)}</time>
+                        <time dateTime={watch.last_sweep.at} title={new Date(watch.last_sweep.at).toLocaleString("en-US")}>{relativeTime(watch.last_sweep.at)}</time>
                         {` · ${watch.last_sweep.orders} orders, ${watch.last_sweep.refunds} refunds checked`}
                       </p>
                     ) : <p className="text-xs text-muted-foreground">Not checked yet</p>}
@@ -101,7 +107,7 @@ export function Watch({ state }: { state: State }) {
                   <h2 className="text-sm font-medium">Last PayPal event</h2>
                   <p className="break-all text-sm text-muted-foreground">
                     {watch.last_event ? <>{watch.last_event.type}{" · "}
-                      <time dateTime={watch.last_event.at} title={new Date(watch.last_event.at).toLocaleString()}>{relativeTime(watch.last_event.at)}</time>
+                      <time dateTime={watch.last_event.at} title={new Date(watch.last_event.at).toLocaleString("en-US")}>{relativeTime(watch.last_event.at)}</time>
                     </> : "None yet"}
                   </p>
                 </div>
@@ -117,20 +123,27 @@ export function Watch({ state }: { state: State }) {
                 checked={watch.freeze} disabled={!manageable || busy}
                 onChange={(freeze) => settings.mutate(freeze)} />
             </Card>
-            <Card className="mt-6 min-w-0 gap-0 overflow-hidden py-0">
-              <CardHeader className="p-5"><CardTitle>Incidents</CardTitle></CardHeader>
-              <div className="h-[300px] w-full min-w-0">
+            <section className="watch-incidents" aria-label="Incidents">
+              <h2>Incidents</h2>
+              {attention.length ? attention.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id).map(incident => <IncidentBanner key={`${state.workspace?.id ?? "film"}:${incident.id}`} incident={incident} state={state} />)
+                : <div className="watch-empty"><h3>{query.data?.incidents.length ? "No open incidents" : "No incidents recorded"}</h3><p>Watching for PayPal refunds and payout events that have no matching Floorwalker action. Order checks compare refunds on tracked PayPal orders; connected webhooks report PayPal events.</p><p>{watch.last_sweep ? `Last order check: ${new Date(watch.last_sweep.at).toLocaleString("en-US")}. ${watch.last_sweep.orders} orders and ${watch.last_sweep.refunds} refunds checked.` : "No order check has completed yet."}</p>{watch.last_event && <p>Last PayPal event: {new Date(watch.last_event.at).toLocaleString("en-US")}.</p>}</div>}
+            </section>
+            <details className="watch-history" open>
+              <summary>Incident history · expand a row for its timeline</summary>
+              <div className="h-[300px] w-full min-w-0 mt-4">
                 <AgGridReact<Incident>
                   theme={resolvedTheme === "dark" ? darkTheme : lightTheme}
-                  animateRows={!isFilm()}
-                  columnDefs={columns} defaultColDef={defaultColDef}
+                  animateRows={!isFilm() && !window.matchMedia("(prefers-reduced-motion: reduce)").matches}
+                  columnDefs={[{ field: "id", headerName: "#", width: 85, cellRenderer: "agGroupCellRenderer" }, ...columns]} defaultColDef={defaultColDef}
                   rowData={query.data?.incidents ?? []}
+                  masterDetail detailRowAutoHeight
+                  detailCellRenderer={({ data }: ICellRendererParams<Incident>) => data ? <IncidentBanner key={`${state.workspace?.id ?? "film"}:${data.id}`} incident={data} state={state} /> : null}
                   getRowId={({ data }) => String(data.id)} rowHeight={64} headerHeight={48}
-                  overlayNoRowsTemplate="Nothing has moved outside Floorwalker."
+                  overlayNoRowsTemplate="No incidents recorded. Order checks and PayPal events appear above."
                   tooltipShowDelay={250}
                 />
               </div>
-            </Card>
+            </details>
           </>
         )}
       </Resource>

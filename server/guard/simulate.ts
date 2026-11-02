@@ -14,9 +14,20 @@ export type SimRow = {
 };
 
 /**
+ * The AI reviewer sees the owner's limits, so it often escalates a sound request only because the request is over one.
+ * That hold says nothing a limit change wouldn't answer, so learning and replay don't treat it as an objection of its own.
+ */
+export function onlyObjectsToLimit(reviewJson: string | null): boolean {
+  if (!reviewJson) return false;
+  const review = JSON.parse(reviewJson) as { verdict?: string; matches_request?: boolean; injection_detected?: boolean; concerns?: { issue: string; evidence?: string }[] };
+  if (review.verdict !== "escalate" || review.matches_request !== true || review.injection_detected !== false || !review.concerns?.length) return false;
+  return review.concerns.every((c) => /\b(limits?|budgets?|thresholds?|authority|auto-?approv\w*|on its own)\b/i.test(`${c.issue} ${c.evidence ?? ""}`));
+}
+
+/**
  * Replays every past money move under a draft policy: the rule engine runs again on the facts stored with each
- * ledger row (as of that moment), while the agent check and the AI review keep their original results.
- * Nothing is sent to PayPal or to the model.
+ * ledger row (as of that moment), while the agent check and the AI review keep their original results, except an AI
+ * hold that only objected to a limit. Nothing is sent to PayPal or to the model. A real request is reviewed again.
  */
 export function simulate(draft: Policy): { rows: SimRow[]; changed: number; counts: Record<"before" | "after", Record<Decision, number>> } {
   const all = store.ledger().slice().reverse();
@@ -32,7 +43,9 @@ export function simulate(draft: Policy): { rows: SimRow[]; changed: number; coun
     const rules = r.kind === "refund"
       ? checkRefund(action, facts as RefundFacts, draft, history, now)
       : checkPayout(action, facts as PayoutFacts, draft, history, now);
-    const kept = original.filter((c) => c.id === "agent" || c.id === "injection" || c.id === "ai_review");
+    const stillLimited = rules.some((c) => c.outcome !== "pass");
+    const kept = original.filter((c) => c.id === "agent" || c.id === "injection" || c.id === "ai_review")
+      .filter((c) => c.id !== "ai_review" || c.outcome !== "hold" || stillLimited || !onlyObjectsToLimit(r.review));
     const checks = [...kept.filter((c) => c.id === "agent"), ...rules, ...kept.filter((c) => c.id !== "agent")];
     const after = decide(checks);
     const hit = checks.find((c) => c.outcome === "block") ?? checks.find((c) => c.outcome === "hold");

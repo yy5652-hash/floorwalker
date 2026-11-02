@@ -4,7 +4,6 @@ import { TapsChart } from "../components/TapsChart";
 import { isFilm } from "../auth";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   ArrowDownLeft,
   ArrowRight,
@@ -25,7 +24,7 @@ import {
   personName,
   plural,
 } from "../api";
-import { ApprovalCard } from "../components/Approvals";
+import { useIncidents } from "../hooks/use-incidents";
 import { EmptyState, OutcomeIcon, Money } from "../components/UI";
 import { AgentCard } from "./Agents";
 const outcomes: {
@@ -64,6 +63,8 @@ export function Overview(
   const { state } = props,
     m = state.metrics;
   const waiting = state.ledger.filter((e) => e.status === "awaiting_approval");
+  const incidentsQuery = useIncidents(state);
+  const incidents = (incidentsQuery.data?.incidents ?? state.incidents ?? []).filter(i => !i.resolved_at);
   const total = Object.values(m.funnel).reduce((a, b) => a + b, 0);
   const metrics = [
     {
@@ -107,6 +108,18 @@ export function Overview(
   ];
   return (
     <div className="flex flex-col gap-6 overview">
+      <section className="overview-attention" aria-labelledby="attention-title">
+        <div className="section-heading"><h2 id="attention-title">What needs you now</h2><span>{waiting.length + incidents.length ? "Your next decisions" : "All caught up"}</span></div>
+        <div className="attention-links">
+          <a href="/app#approvals"><strong>{waiting.length}</strong><span>requests waiting <ArrowRight size={16} /></span></a>
+          <a href="/app#watch"><strong>{incidents.length}</strong><span>active incidents <ArrowRight size={16} /></span></a>
+        </div>
+        {incidentsQuery.isError && <p role="status">Couldn't refresh incidents. Showing the last available records.</p>}
+        {!!incidents.length && <div className="attention-incidents">{incidents.slice(0, 2).map(incident => <a key={incident.id} href="/app#watch"><span className="text-block">Needs review</span> {incident.detail} <ArrowRight size={14} /></a>)}</div>}
+        {!!waiting.length && <div className="attention-requests">{waiting.slice(0, 3).map(entry => <a key={entry.id} href={`/app#approvals/${entry.id}`}><span>{personName(entry.counterparty)}</span><strong>{money(entry.amount)}</strong><span>{agentName(state, entry.agent_id)}</span><ArrowRight size={14} /></a>)}</div>}
+      </section>
+      <TapsChart state={state} />
+      <section className="overview-money" aria-label="Money moved and stopped">
       <div className="overview-metrics">
         {metrics.map(({ key, label, value, sub, icon: Icon, tone }) => (
           <Card
@@ -139,6 +152,7 @@ export function Overview(
           </Card>
         ))}
       </div>
+      </section>
       <Card className="overview-funnel min-w-0 gap-0">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
           <h2>Every request, accounted for</h2>
@@ -176,10 +190,6 @@ export function Overview(
           ))}
         </div>
       </Card>
-      <div className="overview-charts grid min-w-0 gap-7 xl:grid-cols-2">
-        <TapsChart state={state} />
-        <MoneyChart state={state} />
-      </div>
       {!state.tickets.length && (state.workspace?.demo || isFilm()) && (
         <Card className="min-w-0 gap-0 py-0 shadow-xs flex flex-wrap items-center gap-4 p-5 [&>div]:flex-1 [&_p]:mt-2 [&_p]:text-muted-foreground">
           <div>
@@ -208,40 +218,8 @@ export function Overview(
           </a>
         </Card>
       )}
+      <MoneyChart state={state} />
       <div className="overview-workbench">
-      <section>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
-          <h2>
-            Needs you{" "}
-            <Badge variant="secondary">
-              {waiting.length}
-            </Badge>
-          </h2>
-          <a
-            className="inline-flex items-center gap-1.5 text-xs font-medium underline-offset-4 hover:underline"
-            href="/app#approvals"
-          >
-            All approvals <ArrowRight size={14} />
-          </a>
-        </div>
-        {waiting.length ? (
-          <div className="grid grid-cols-1 items-start gap-4">
-            {waiting.slice(0, 3).map((entry) => (
-              <ApprovalCard key={entry.id} {...props} entry={entry} compact />
-            ))}
-          </div>
-        ) : (
-          <Card className="min-w-0 gap-0 py-0 shadow-xs flex flex-row items-center gap-4 p-5 [&>svg]:text-allow [&_strong]:block [&_span]:mt-1 [&_span]:block [&_span]:text-xs [&_span]:text-muted-foreground">
-            <ShieldCheck size={23} />
-            <div>
-              <strong>You're all caught up</strong>
-              <span>
-                Your agents will ask when a request needs your attention.
-              </span>
-            </div>
-          </Card>
-        )}
-      </section>
       <section>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
           <h2>Your agents</h2>

@@ -1,3 +1,5 @@
+import { observeShadow } from "./observe.ts";
+import { agentView, blockExplanations } from "../explanations.ts";
 import { audit } from "../audit.ts";
 import { config, paypalConfigured } from "../config.ts";
 import { ctx as current } from "../context.ts";
@@ -216,6 +218,7 @@ export function actionView(row: store.LedgerRow) {
     review: review && { verdict: review.verdict, summary: review.summary, cited_rule: review.cited_rule ?? "", injection_detected: review.injection_detected },
     paypal_ref: row.paypal_ref,
     decline_reason: row.decline_reason,
+    block_explanations: blockExplanations(row),
     source: row.source,
     created_at: row.created_at,
     decided_at: row.decided_at,
@@ -272,11 +275,12 @@ export async function guard(tool: string, input: unknown, ctx: GuardContext): Pr
   const id = store.recordProposal({
     ticketId: ctx.ticket?.id, agentId: ctx.agentId, tool, kind: prepared.action.kind, params: prepared.action, amount, counterparty: prepared.counterparty,
     justification: ctx.justification, decision, checks, review: review ?? undefined, policyId,
-    facts: prepared.ruleFacts ? { rules: prepared.ruleFacts, review: prepared.facts } : undefined,
+    facts: prepared.ruleFacts ? { rules: prepared.ruleFacts, review: prepared.facts, ...(agent?.status === "frozen" ? { freeze: agentView(agent).freeze_explanation } : {}) } : undefined,
     status: decision === "allow" ? "executing" : decision === "hold" ? "awaiting_approval" : "blocked",
     expiresAt: decision === "hold" ? new Date(Date.now() + approvalTtlHours() * 3_600_000).toISOString() : undefined,
     idempotencyKey: ctx.idempotencyKey, source: ctx.source ?? "inbox",
   });
+  observeShadow(id, prepared.action, prepared.ruleFacts, prepared.checks.filter(c => c.id.startsWith("agent")));
   const as = agent ? { kind: "agent" as const, id: agent.id, name: agent.name } : undefined;
   audit(`action.${decision === "allow" ? "allowed" : decision === "hold" ? "held" : "blocked"}`, `act_${id}`, { tool, amount, counterparty: prepared.counterparty }, as);
   const event: GuardEvent = { type: "guard", ledgerId: id, tool, amount, counterparty: prepared.counterparty, decision, status: "blocked", checks, review };

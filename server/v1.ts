@@ -1,3 +1,4 @@
+import { agentView } from "./explanations.ts";
 // The agent API: what an agent built anywhere calls instead of PayPal, with an agent key.
 //   POST /v1/refunds, POST /v1/payouts   ask to move money; the answer says executed, held or blocked
 //   GET  /v1/actions/:id                 follow a held request until the owner answers
@@ -77,6 +78,7 @@ v1.get("/agent", (_req, res) => {
   res.json({
     id: a.id, object: "agent", name: a.name, status: a.status, workspace: ctx().ws.name,
     can_refund: Boolean(a.can_refund), can_payout: Boolean(a.can_payout),
+    freeze_explanation: agentView(a).freeze_explanation,
     controls: { max_per_action: a.max_per_action, budget: a.budget, budget_period: a.budget_period, payees: a.payees ? JSON.parse(a.payees) : null, expires_at: a.expires_at },
   });
 });

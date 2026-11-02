@@ -14,6 +14,18 @@ CREATE TABLE IF NOT EXISTS policies (
   json TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS shadow_policy (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  json TEXT NOT NULL,
+  started_by TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  ends_at TEXT
+);
+CREATE TABLE IF NOT EXISTS shadow_results (
+  ledger_id INTEGER PRIMARY KEY REFERENCES ledger(id) ON DELETE CASCADE,
+  real_decision TEXT NOT NULL,
+  shadow_decision TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS orders (
   invoice_id TEXT PRIMARY KEY,
   customer_name TEXT NOT NULL,
@@ -116,6 +128,8 @@ CREATE TABLE IF NOT EXISTS incidents (
 
 // Columns added after the first release; older databases get them here.
 const COLUMNS: [table: string, column: string, type: string][] = [
+  ["policies", "created_by", "TEXT"],
+  ["agents", "freeze_explanation", "TEXT"],
   ["ledger", "agent_id", "TEXT"],
   ["ledger", "facts", "TEXT"],
   ["ledger", "policy_id", "INTEGER"],
@@ -170,13 +184,13 @@ export function activePolicy(): { id: number; text: string; policy: Policy } {
 }
 
 export function savePolicy(text: string, policy: Policy) {
-  const r = db().prepare("INSERT INTO policies (text, json, created_at) VALUES (?, ?, ?)").run(text, JSON.stringify(policy), nowIso());
+  const r = db().prepare("INSERT INTO policies (text, json, created_at, created_by) VALUES (?, ?, ?, ?)").run(text, JSON.stringify(policy), nowIso(), ctx().actor.name);
   return { id: Number(r.lastInsertRowid), text, policy };
 }
 
-export function policyVersions(): { id: number; text: string; policy: Policy; created_at: string }[] {
-  return (db().prepare("SELECT id, text, json, created_at FROM policies ORDER BY id DESC LIMIT 20").all() as any[])
-    .map((r) => ({ id: r.id, text: r.text, policy: JSON.parse(r.json), created_at: r.created_at }));
+export function policyVersions(): { id: number; text: string; policy: Policy; created_at: string; created_by: string | null }[] {
+  return (db().prepare("SELECT id, text, json, created_at, created_by FROM policies ORDER BY id DESC LIMIT 20").all() as any[])
+    .map((r) => ({ id: r.id, text: r.text, policy: JSON.parse(r.json), created_at: r.created_at, created_by: r.created_by }));
 }
 
 export function policyVersion(id: number) {
@@ -233,8 +247,10 @@ export function deleteAgent(id: string): boolean {
   return db().prepare("DELETE FROM agents WHERE id = ?").run(id).changes === 1;
 }
 
-export function setAgentStatus(id: string, status: Agent["status"]) {
-  return db().prepare("UPDATE agents SET status = ?, status_changed_at = ? WHERE id = ?").run(status, nowIso(), id).changes === 1;
+export function setAgentStatus(id: string, status: Agent["status"], explanation?: unknown) {
+  const at = nowIso();
+  const reason = status === "frozen" ? JSON.stringify(explanation ?? { check: "owner_freeze", evidence: { at, changed_by: ctx().actor.name }, next_step: "Review the agent, then unfreeze it on the Agents page." }) : null;
+  return db().prepare("UPDATE agents SET status = ?, status_changed_at = ?, freeze_explanation = ? WHERE id = ?").run(status, at, reason, id).changes === 1;
 }
 
 /** Money this agent moved (executed or approved) since a moment, for its own budget. */
@@ -477,5 +493,5 @@ export function paidToPayee(email: string, days: number): { total: number; amoun
 
 /** Clears the sample shop. The audit log stays: it is append-only, and the reset itself is recorded there. */
 export function resetDemo() {
-  db().exec("DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders; DELETE FROM agents; DELETE FROM grants; DELETE FROM incidents; DELETE FROM settings WHERE key LIKE 'learn.%';");
+  db().exec("DELETE FROM shadow_results; DELETE FROM shadow_policy; DELETE FROM ledger; DELETE FROM tickets; DELETE FROM policies; DELETE FROM orders; DELETE FROM agents; DELETE FROM grants; DELETE FROM incidents; DELETE FROM settings WHERE key LIKE 'learn.%';");
 }

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { isFilm } from "../auth";
 import "./assistant.css";
 
 type Turn = { role: "user" | "assistant"; content: string };
-type Props = { workspaceId?: string; shared?: boolean; demo?: boolean };
+type Props = { workspaceId?: string; shared?: boolean; demo?: boolean; toolbar?: boolean };
 const publicQuestions = ["How does it stop a bad refund?", "What does it cost?", "How do I connect my own agent?"];
 const workspaceQuestions = ["Why was the last request blocked?", "What needs me today?", "How can I get fewer approvals?"];
 
-export default function Assistant({ workspaceId, shared = false, demo = false }: Props) {
+export default function Assistant({ workspaceId, shared = false, demo = false, toolbar = false }: Props) {
   const [enabled, setEnabled] = useState(false);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Turn[]>([]);
@@ -21,6 +22,9 @@ export default function Assistant({ workspaceId, shared = false, demo = false }:
   const input = useRef<HTMLTextAreaElement>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const publicMode = !workspaceId;
+  // React 19.3: https://react.dev/reference/react-dom/createPortal
+  const [triggerSlot, setTriggerSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => { if (toolbar) setTriggerSlot(document.getElementById("assistant-trigger-slot")); }, [toolbar]);
   useEffect(() => {
     const controller = new AbortController();
     // The film shim answers status without touching a model or the server.
@@ -81,8 +85,9 @@ export default function Assistant({ workspaceId, shared = false, demo = false }:
     }
   }
   if (!enabled) return null;
+  const trigger = <button type="button" className={toolbar ? "assistant-toolbar-trigger" : "assistant-launcher"} ref={launcher} aria-expanded={open} aria-controls="assistant-panel" onClick={() => open ? close() : setOpen(true)}>Ask Floorwalker</button>;
   return (
-    <aside className="assistant-shell" style={viewport} aria-label="Ask Floorwalker">
+    <aside className={`assistant-shell ${toolbar ? "assistant-workspace" : ""}`} style={viewport} aria-label="Ask Floorwalker">
       {open && <section className="assistant-panel" id="assistant-panel" role="dialog" aria-label="Ask Floorwalker" onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); close(); } }}>
         <header className="assistant-header"><h2>Ask Floorwalker</h2><button type="button" onClick={close} aria-label="Close assistant">Close</button></header>
         <p className="assistant-disclosure">Answers from DeepSeek. {publicMode || !contextShared ? "Sends chat + product facts." : `Sends chat + ${demo ? "demo" : "workspace"} activity.`}<span className="assistant-disclosure-detail"> {publicMode || !contextShared ? "No workspace activity is sent." : "Includes rules, agents, recent checks, incidents and learning summaries."} Read-only; cannot move money or approve requests.</span></p>
@@ -98,7 +103,7 @@ export default function Assistant({ workspaceId, shared = false, demo = false }:
           <div><span>{draft.length}/1000</span>{busy ? <button type="button" onClick={() => pending.current?.abort()}>Stop</button> : <button type="submit" disabled={!draft.trim()}>Send</button>}</div>
         </form>
       </section>}
-      <button type="button" className="assistant-launcher" ref={launcher} aria-expanded={open} aria-controls="assistant-panel" onClick={() => open ? close() : setOpen(true)}>Ask Floorwalker</button>
+      {toolbar ? triggerSlot && createPortal(trigger, triggerSlot) : trigger}
     </aside>
   );
 }

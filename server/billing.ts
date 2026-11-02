@@ -1,3 +1,4 @@
+import { actionsThisMonth } from "./db.ts";
 // Plans and billing. Floorwalker bills with PayPal Subscriptions on its own sandbox app (the server's
 // credentials), whatever PayPal app a workspace connects for its agents.
 import { config } from "./config.ts";
@@ -139,4 +140,16 @@ export function assertBelow(wsId: string, what: "agents" | "webhooks", count: nu
   if (!row) return;
   const limits = limitsFor(row);
   if (count >= limits[what]) throw new QuotaError(`The ${limits.name} plan includes ${limits[what]} ${what}. Upgrade under Settings → Billing for more.`);
+}
+
+/** Uses exactly the counter and effective plan limits enforced by assertActionQuota. */
+export function billingUsage(wsId: string) {
+  const row = workspaceRow(wsId)!;
+  const limits = limitsFor(row);
+  const actionsUsed = actionsThisMonth();
+  const now = new Date();
+  return { plan: row.demo ? "demo" : row.plan, planName: row.demo ? "Demo" : limits.name,
+    actionsUsed, monthlyLimit: limits.actionsPerMonth,
+    resetsAt: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString(),
+    warning: actionsUsed >= limits.actionsPerMonth * 0.8 ? "You have used at least 80% of this month's checked actions." : null };
 }

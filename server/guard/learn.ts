@@ -6,7 +6,7 @@ import * as store from "../db.ts";
 import { structured } from "../llm.ts";
 import { validatePolicy, type Policy } from "./policy.ts";
 import { checkPayout, checkRefund, decide, PERIOD_DAYS, type Check, type Decision, type PayoutFacts, type RefundFacts, type Spend } from "./rules.ts";
-import { simulate } from "./simulate.ts";
+import { onlyObjectsToLimit, simulate } from "./simulate.ts";
 
 /**
  * Learns from the owner's own decisions. A request that waited for the owner and was approved every time is a tap the
@@ -50,7 +50,7 @@ function decided(): Decided[] {
     .filter((r) => (r.kind === "refund" || r.kind === "payout") && ["executed", "approved", "declined"].includes(r.status))
     .map((r) => ({
       row: r,
-      holds: (JSON.parse(r.checks) as Check[]).filter((c) => c.outcome === "hold"),
+      holds: (JSON.parse(r.checks) as Check[]).filter((c) => c.outcome === "hold" && (c.id !== "ai_review" || !onlyObjectsToLimit(r.review))),
       approved: r.status !== "declined",
       kind: r.kind as "refund" | "payout",
     }));
@@ -240,6 +240,7 @@ export async function reword(text: string, change: LearnedChange): Promise<strin
       system: "You edit a small-business owner's plain-language spending rules for their AI agent. Change only what the accepted change requires, in the owner's own style. Keep every other sentence exactly as written.",
       prompt: `<rules>\n${text}\n</rules>\n\n<accepted_change>\n${change.title}\n</accepted_change>`,
       schema: Reworded,
+      quick: true,
     });
     if (out.text.trim().length > text.length / 2) return out.text.trim();
   } catch { /* fall through */ }

@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { AgCharts } from "ag-charts-react";
 import type { AgCartesianChartOptions } from "ag-charts-community";
 import { chartTheme, chartColor } from "./chart-theme";
-import { isFilm } from "../auth";
 import { useTheme } from "./theme-provider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,19 +16,21 @@ export function TapsChart({ state }: { state: State }) {
   const { weeks, changes, summary } = query.data ?? emptyLearnedRules;
   const { resolvedTheme } = useTheme();
   const latest = weeks.findLast((week) => week.moves > 0);
-  const tapsSaved = changes.reduce(
-    (sum, change) => sum + change.impact.tapsSaved,
-    0,
-  );
+  const firstIndex = weeks.findIndex(week => week.moves > 0);
+  const lastIndex = weeks.findLastIndex(week => week.moves > 0);
+  const lastActivity = state.ledger.filter(entry => entry.kind === "refund" || entry.kind === "payout").reduce<string | null>((latest, entry) => !latest || entry.created_at > latest ? entry.created_at : latest, null);
+  const currentWeek = new Date(); currentWeek.setUTCHours(0, 0, 0, 0); currentWeek.setUTCDate(currentWeek.getUTCDate() - currentWeek.getUTCDay());
+  const oldActivity = !!lastActivity && Date.parse(lastActivity) < currentWeek.getTime();
+  const best = [...changes].sort((a, b) => b.impact.tapsSaved - a.impact.tapsSaved)[0];
   const options = useMemo<AgCartesianChartOptions<Omit<Week, "per100"> & { per100?: number }>>(() => {
     const dark = resolvedTheme === "dark";
     const foreground = chartColor("--muted-foreground");
     return {
       // A week without money moves is a gap, not zero taps.
-      data: weeks.map((week) => (week.moves ? week : { ...week, per100: undefined })),
+      data: weeks.slice(Math.max(0, firstIndex), lastIndex + 1).map((week) => (week.moves ? week : { ...week, per100: undefined })),
       height: 210,
       theme: chartTheme(dark),
-      animation: { enabled: !isFilm() },
+      animation: { enabled: false },
       background: { fill: chartColor("--background") },
       padding: { top: 12, right: 12, bottom: 8, left: 0 },
       legend: { enabled: false },
@@ -39,9 +40,9 @@ export function TapsChart({ state }: { state: State }) {
           xKey: "week",
           yKey: "per100",
           yName: "Taps per 100 money moves",
-          stroke: chartColor("--primary"),
+          stroke: chartColor("--chart-2"),
           strokeWidth: 2,
-          marker: { size: 5, fill: chartColor("--primary") },
+          marker: { size: 5, fill: chartColor("--chart-2") },
           tooltip: {
             renderer: ({ datum }) => ({
               title: datum.week,
@@ -62,9 +63,9 @@ export function TapsChart({ state }: { state: State }) {
         },
       },
     };
-  }, [weeks, resolvedTheme]);
+  }, [weeks, firstIndex, lastIndex, resolvedTheme]);
   return (
-    <Card className="min-w-0 gap-3 p-5 shadow-xs">
+    <Card className="taps-primary min-w-0 gap-3 p-5 shadow-none">
       <h2>How often agents need you</h2>
       {query.isPending ? (
         <div
@@ -101,17 +102,19 @@ export function TapsChart({ state }: { state: State }) {
               {summary && `, last ${summary.days} days`}
             </p>
           </div>
-          {weeks.length > 0 && <AgCharts options={options} />}
+          <div className="taps-trend">
+          {latest && <AgCharts options={options} />}
+          {oldActivity && lastActivity && <p className="text-xs text-muted-foreground">Last activity · <time dateTime={lastActivity}>{new Date(lastActivity).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}</time></p>}
           {(summary ? summary.moves === 0 : !latest) && (
             <p className="text-xs text-muted-foreground">No money moves yet.</p>
           )}
-          {changes.length > 0 && (
+          </div>
+          {best && (
             <a
               href="#rules"
-              className="text-xs font-medium underline-offset-4 hover:underline"
+              className="taps-suggestion text-sm underline-offset-4 hover:underline"
             >
-              {changes.length} suggested changes would save {tapsSaved} taps →
-              Rules
+              <strong>{best.title}</strong><span>Saves {best.impact.tapsSaved} taps in replay · {best.impact.tapsPer100.before} → {best.impact.tapsPer100.after} per 100 moves</span><span>See suggestions →</span>
             </a>
           )}
         </>

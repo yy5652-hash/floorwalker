@@ -4,7 +4,9 @@ import { Router } from "express";
 import { randomBytes } from "node:crypto";
 import { z } from "zod/v4";
 import { audit, auditLog, verifyAudit } from "./audit.ts";
-import { assertBelow, billingView, cancel, checkout, refreshIfStale, syncSubscription } from "./billing.ts";
+import { assertBelow, billingUsage, billingView, cancel, checkout, refreshIfStale, syncSubscription } from "./billing.ts";
+import { agentView } from "./explanations.ts";
+import { trustPreview, startShadow, stopShadow, shadowView, policyStatus } from "./guard/observe.ts";
 import { config } from "./config.ts";
 import { ctx } from "./context.ts";
 import * as store from "./db.ts";
@@ -28,7 +30,7 @@ const parse = <T>(schema: z.ZodType<T>, body: unknown): T => {
 
 // ---------------------------------------------------------------- agents
 const Controls = {
-  max_per_action: z.number().positive().nullable().optional(),
+  max_per_action: z.number().nonnegative().nullable().optional(),
   budget: z.number().positive().nullable().optional(),
   budget_period: z.enum(["day", "week", "month"]).nullable().optional(),
   payees: z.array(z.email()).max(200).nullable().optional(),
@@ -67,7 +69,7 @@ manage.post("/agents", need({ agents: ["manage"] }), handle((req) => {
   store.upsertAgent({ id, name: b.name, role: b.role, can_refund: b.can_refund ? 1 : 0, can_payout: b.can_payout ? 1 : 0 });
   applyControls(id, b);
   audit("agent.created", id, b);
-  return store.agent(id);
+  return agentView(store.agent(id)!);
 }));
 
 manage.patch("/agents/:id", need({ agents: ["manage"] }), handle((req) => {
@@ -82,7 +84,7 @@ manage.patch("/agents/:id", need({ agents: ["manage"] }), handle((req) => {
   });
   applyControls(id, b);
   audit("agent.updated", id, b);
-  return store.agent(id);
+  return agentView(store.agent(id)!);
 }));
 
 manage.delete("/agents/:id", need({ agents: ["manage"] }), handle((req) => {
@@ -96,8 +98,8 @@ manage.delete("/agents/:id", need({ agents: ["manage"] }), handle((req) => {
 function setStatus(id: string, status: "active" | "frozen") {
   if (!store.setAgentStatus(id, status)) throw new HttpError(404, "No such agent");
   audit(status === "frozen" ? "agent.frozen" : "agent.unfrozen", id);
-  publish(status === "frozen" ? "agent.frozen" : "agent.unfrozen", { id, object: "agent", status });
-  return store.agent(id);
+  publish(status === "frozen" ? "agent.frozen" : "agent.unfrozen", { id, object: "agent", status, freeze_explanation: agentView(store.agent(id)!).freeze_explanation });
+  return agentView(store.agent(id)!);
 }
 
 manage.post("/agents/:id/freeze", need({ agents: ["manage"] }), handle((req) => setStatus(String(req.params.id), "frozen")));
@@ -329,4 +331,29 @@ manage.post("/billing/cancel", need({ billing: ["manage"] }), handle(async (req)
   const view = await cancel(wsId(), String(req.body?.reason ?? ""));
   audit("billing.cancelled", view.subscription_id);
   return { ...view, usage: usage() };
+}));
+
+// Read-only previews and observe-only policies; the live policy is never changed here.
+manage.get("/agents/:id/trust-preview", handle(req => {
+  const agent = store.agent(String(req.params.id));
+  if (!agent) throw new HttpError(404, "No such agent");
+  const amount = req.query.amount === undefined ? undefined : parse(z.string().trim().min(1).transform(Number).pipe(z.number().nonnegative()), req.query.amount);
+  return trustPreview(agent, amount);
+}));
+manage.post("/policy/shadow", need({ rules: ["update"] }), handle(req => {
+  const body = parse(z.object({ policy: z.unknown(), endsAt: z.iso.datetime().nullable().optional() }), req.body);
+  const out = startShadow(body.policy, body.endsAt ?? null);
+  audit("rules.shadow_started", "shadow", { endsAt: body.endsAt ?? null });
+  return out;
+}));
+manage.delete("/policy/shadow", need({ rules: ["update"] }), handle(() => {
+  const out = stopShadow();
+  audit("rules.shadow_stopped", "shadow");
+  return out;
+}));
+manage.get("/policy/shadow", handle(() => shadowView()));
+manage.get("/policy/status", handle(() => policyStatus()));
+manage.get("/billing/usage", handle(async () => {
+  await refreshIfStale(wsId());
+  return billingUsage(wsId());
 }));

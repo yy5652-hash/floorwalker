@@ -74,7 +74,7 @@ function claimPooledDemo(userId: string): string | null {
 }
 
 /**
- * Ready demo shops left in the pool by an older release (before demo shops had earlier activity to learn from) are
+ * Ready demo shops left in the pool by an older release (before demo shops had earlier activity to learn from, or the request a learned rule covers) are
  * replaced, so every visitor gets the current demo.
  */
 function retireStalePool() {
@@ -82,7 +82,7 @@ function retireStalePool() {
   for (const { id } of ids) {
     try {
       const ws = openWorkspace(id);
-      const current = inWorkspace(ws, { kind: "system", id: "pool", name: "Floorwalker" }, () => ws.db.prepare("SELECT 1 FROM ledger WHERE source = 'history' LIMIT 1").get());
+      const current = inWorkspace(ws, { kind: "system", id: "pool", name: "Floorwalker" }, () => ws.db.prepare("SELECT 1 FROM ledger WHERE source = 'history' LIMIT 1").get() && ws.db.prepare("SELECT 1 FROM tickets WHERE id = 'T7'").get());
       if (!current) removeWorkspace(id);
     } catch (e: any) {
       console.error(`demo pool ${id}: ${e.message}`);

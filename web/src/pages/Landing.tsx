@@ -95,7 +95,7 @@ export function Landing() {
         <details><summary>Can I bring my own agent?</summary><p>Yes. Create an agent key and connect over REST or MCP. Refunds and payouts must go through Floorwalker for its checks to apply.</p></details>
         <details><summary>Does learning change rules on its own?</summary><p>No. Suggestions come from your decisions and are backtested. You choose whether to apply them. The preview shows taps saved, declined requests that would pass and benchmark attacks stopped.</p></details>
         <details><summary>What if the AI review is unavailable?</summary><p>The request does not run automatically. You can inspect the recorded checks and decide what to do.</p></details>
-        <details><summary>Who receives my data?</summary><p>PayPal sandbox and the configured Google or Anthropic AI provider receive the data needed for checks. Ask Floorwalker uses DeepSeek; real workspace activity sharing is off by default. <a href="/privacy">Read the privacy notice</a>.</p></details>
+        <details><summary>Who receives my data?</summary><p>PayPal sandbox and the configured Google or Anthropic AI provider receive the data needed for checks. If that provider is unavailable, DeepSeek receives the same data so checks can continue. Ask Floorwalker also uses DeepSeek; real workspace activity sharing is off by default. <a href="/privacy">Read the privacy notice</a>.</p></details>
       </section>
     </main>
     <footer className="site-footer"><Brand /><p>Every refund checked. Fewer taps as it learns.</p><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href={github} target="_blank" rel="noreferrer">GitHub <ExternalLink size={14} /></a></footer>

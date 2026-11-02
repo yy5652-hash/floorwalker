@@ -21,7 +21,7 @@ export function onlyObjectsToLimit(reviewJson: string | null): boolean {
   if (!reviewJson) return false;
   const review = JSON.parse(reviewJson) as { verdict?: string; matches_request?: boolean; injection_detected?: boolean; concerns?: { issue: string; evidence?: string }[] };
   if (review.verdict !== "escalate" || review.matches_request !== true || review.injection_detected !== false || !review.concerns?.length) return false;
-  return review.concerns.every((c) => /\b(limits?|budgets?|thresholds?|auto-?approv\w*)\b/i.test(c.issue));
+  return review.concerns.every((c) => /\b(limits?|budgets?|thresholds?|authority|auto-?approv\w*|on its own)\b/i.test(`${c.issue} ${c.evidence ?? ""}`));
 }
 
 /**

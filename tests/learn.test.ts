@@ -76,6 +76,8 @@ test("an AI hold that only objected to the limit doesn't stop replay or learning
   const limit = { issue: "The refund of $46 exceeds the $40 auto-approval limit.", evidence: "Anything above $40 asks me." };
   const story = { issue: "The story doesn't explain how the item broke.", evidence: "it broke" };
   assert.equal(withReview({ ...base, concerns: [limit] }).after, "allow");
+  // DeepSeek's wording for the same thing.
+  assert.equal(withReview({ ...base, concerns: [{ issue: "Refund amount exceeds the agent's own authority and needs the owner's approval", evidence: "$46.00 is above the $40.00 the agent may do on its own." }] }).after, "allow");
   assert.ok(learnedChanges(DEFAULT_POLICY).find((c) => c.id === change.id)?.rows.includes(row.id));
   assert.equal(simulate(DEFAULT_POLICY).rows.find((r) => r.id === row.id)!.after, "hold");
   assert.equal(withReview({ ...base, concerns: [limit, story] }).after, "hold");

@@ -230,7 +230,7 @@ function LedgerView({
       })),
       {
         field: "paypal_ref",
-        headerName: "PayPal ref", hide: true,
+        headerName: "PayPal ref", hide: true, chartDataType: "excluded",
         width: 255,
         cellClass: "font-mono text-xs",
         valueGetter: (p) =>
@@ -338,7 +338,7 @@ function LedgerView({
           cellSelection
           enableCharts
           chartThemes={[resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light"]}
-          customChartThemes={{ "floorwalker-light": chartTheme(false), "floorwalker-dark": chartTheme(true) }}
+          customChartThemes={{ [resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light"]: chartTheme(resolvedTheme === "dark") }}
           sideBar={{ toolPanels: ["columns", "filters"], hiddenByDefault: true }}
           statusBar={{ statusPanels: [
             { statusPanel: LedgerTotals, align: "left" },

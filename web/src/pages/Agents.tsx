@@ -473,6 +473,7 @@ function AgentEditor({
                 type="button"
                 variant="outline"
                 disabled={busy || agent.status === "frozen"}
+                title={agent.status === "frozen" ? "This agent is already frozen." : undefined}
                 onClick={() =>
                   void run(async () => {
                     await api(

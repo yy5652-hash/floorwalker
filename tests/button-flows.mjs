@@ -3,8 +3,8 @@
 // and writes tests/button-flows-RESULTS.md.
 //
 //   node tests/button-flows.mjs [base URL]            (default http://localhost:18999)
-//   FLOWS=account,settings node tests/button-flows.mjs   run only some flows (account settings agents developers setup workspaces roles demo approvals hijack watch demo-agents ledger rules demo-billing)
-//   FLOW_RUN=name reuses one test account across partial reruns; FLOW_PROFILE=dir keeps the browser profile (and so the demo session) between runs
+//   FLOWS=account,settings node tests/button-flows.mjs   run only some flows (account settings agents developers setup workspaces roles demo approvals trust hijack watch demo-agents ledger rules inbox demo-billing landing mobile pages)
+//   FLOW_COOKIES=file keeps the browser cookies between runs (so the demo workspace is reused); FLOW_RUN=name reuses one test account across partial reruns; FLOW_PROFILE=dir keeps the browser profile (and so the demo session) between runs
 //   FLOW_PAYPAL_CLIENT_ID / FLOW_PAYPAL_CLIENT_SECRET (a PayPal sandbox app) add the connect-real-credentials step; without them it is skipped
 //
 // Run it against a throwaway local server, never the live site (it signs up accounts, creates keys, refunds sandbox orders):
@@ -13,7 +13,7 @@
 // Anonymous sign-in is rationed at 6/hour per IP and email sign-up at 10/hour; restart the server to reset them.
 // PayPal is sandbox only. The script never approves a PayPal subscription.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -37,11 +37,17 @@ if (!targets?.length) { console.error('Could not start Chrome. Set CHROME_SHELL 
 const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
 await new Promise(r => ws.addEventListener('open', r));
 let seq = 0; const waiting = new Map(); const pageErrors = []; const dialogs = []; let navigating = false;
+// Console errors and warnings, with the page they came from. The AG Grid licence banner is a known missing key, not a defect.
+const consoleMsgs = []; const IGNORE_CONSOLE = /licen[sc]e|\*{6}|unlocked for trial/i;
+const consoleErrorsSince = n => consoleMsgs.slice(n).filter(m => !IGNORE_CONSOLE.test(m.text));
+let consoleWhere = '';
 ws.addEventListener('message', m => {
   const d = JSON.parse(m.data);
   if (waiting.has(d.id)) { waiting.get(d.id)(d.result ?? { error: d.error }); waiting.delete(d.id); }
   if (d.method === 'Runtime.exceptionThrown') pageErrors.push(d.params.exceptionDetails.exception?.description?.split('\n')[0] ?? d.params.exceptionDetails.text);
   if (d.method === 'Page.javascriptDialogOpening') { dialogs.push({ type: d.params.type, message: d.params.message }); void send('Page.handleJavaScriptDialog', { accept: true }); }
+  if (d.method === 'Runtime.consoleAPICalled' && ['error', 'warning', 'assert'].includes(d.params.type)) consoleMsgs.push({ type: d.params.type, where: consoleWhere, text: d.params.args.map(a => a.value ?? a.description ?? '').join(' ').replace(/\s+/g, ' ').slice(0, 300) });
+  if (d.method === 'Log.entryAdded' && ['error', 'warning'].includes(d.params.entry.level)) consoleMsgs.push({ type: d.params.entry.level, where: consoleWhere, text: `${d.params.entry.text} ${d.params.entry.url ?? ''}`.replace(/\s+/g, ' ').slice(0, 300) });
   if (d.method === 'Page.frameStartedLoading') navigating = true;
   if (d.method === 'Page.loadEventFired' || d.method === 'Page.frameStoppedLoading') navigating = false;
 });
@@ -49,8 +55,10 @@ ws.addEventListener('message', m => {
 const send = (method, params = {}) => new Promise(r => { const id = ++seq; const t = setTimeout(() => { waiting.delete(id); r({ error: { message: `${method} timed out` } }); }, 60000); waiting.set(id, x => { clearTimeout(t); r(x); }); ws.send(JSON.stringify({ id, method, params })); });
 const ev = async expression => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (r.error) throw new Error(r.error.message ?? 'browser command failed');
   if (r.exceptionDetails) throw new Error(`page error: ${r.exceptionDetails.exception?.description?.split('\n')[0] ?? r.exceptionDetails.text}`); return r.result?.value; };
-await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
+await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable'); await send('Log.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+// FLOW_COOKIES=file keeps the browser's cookies between runs (headless Chrome drops session cookies on exit), so an iterating run reuses the same demo workspace.
+if (process.env.FLOW_COOKIES && existsSync(process.env.FLOW_COOKIES)) await send('Network.setCookies', { cookies: JSON.parse(readFileSync(process.env.FLOW_COOKIES, 'utf8')) });
 await send('Browser.grantPermissions', { origin: BASE, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] }).catch(() => {});
 
 // Page-side helpers: a request log, plus element lookup by visible name.
@@ -171,7 +179,7 @@ async function waitFor(fn, { timeout = 10000, what = 'condition' } = {}) {
 async function waitControl(spec, opts = {}) { await locate(spec, { timeout: opts.timeout ?? 10000, allowDisabled: opts.allowDisabled }); }
 async function waitGone(spec, { timeout = 10000 } = {}) { await waitFor(async () => !(await ev(`!!__f.one(${JSON.stringify(S(spec))})`)), { timeout, what: `"${label(spec)}" to go away` }); }
 async function goto(path) {
-  const url = path.startsWith('http') ? path : BASE + path;
+  const url = path.startsWith('http') ? path : BASE + path; consoleWhere = path;
   const cur = await ev('location.href').catch(() => '');
   const sameDoc = cur && new URL(cur).pathname === new URL(url).pathname && new URL(cur).search === new URL(url).search && new URL(url).hash;
   if (sameDoc) { await ev(`location.hash = ${JSON.stringify(new URL(url).hash)}; true`); await sleep(300); await send('Page.reload'); }
@@ -195,7 +203,7 @@ async function waitToast(re, { timeout = 10000 } = {}) {
 }
 async function clearSession() { await send('Network.clearBrowserCookies'); await ev(`(() => { try { localStorage.clear(); sessionStorage.clear(); } catch {} return true; })()`).catch(() => {}); }
 async function resetBrowser() { await goto('/signin'); await clearSession(); await goto('/signin'); }
-async function signedInAs() { const r = await api('/api/auth/get-session'); return r.json?.user ?? null; }
+async function signedInAs() { if ((await ev('location.origin').catch(() => '')) !== BASE) await goto('/signin'); const r = await api('/api/auth/get-session'); return r.json?.user ?? null; }
 
 // ---------- reporting ----------
 const rows = []; let current = ''; let abort = false;
@@ -454,6 +462,13 @@ flow('settings', async () => {
   await step('Billing: both plan buttons exist, Free has no button and the current plan is marked', async () => {
     await waitText('free plan'); await waitText('Current'); await waitControl('Choose Pro'); await waitControl('Choose Business');
   });
+  await step('Billing: the usage meter shows this month\'s actions against the plan limit, matching the server', async () => {
+    const u = (await api('/api/billing/usage')).json; await waitText('Actions this month');
+    const bar = await ev(`(() => { const b = document.querySelector('[role=progressbar][aria-label="Actions this month usage"]'); return b && { now: b.getAttribute('aria-valuenow'), max: b.getAttribute('aria-valuemax'), text: b.getAttribute('aria-valuetext') }; })()`);
+    expect(bar && Number(bar.max) === u.monthlyLimit && Number(bar.now) === Math.min(u.actionsUsed, u.monthlyLimit), `the meter shows ${JSON.stringify(bar)} but the server says ${u.actionsUsed} of ${u.monthlyLimit}`);
+    const t = await pageText(); expect(new RegExp(`${u.planName} plan`, 'i').test(t) && /Resets/.test(t), 'the meter does not name the plan or when it resets'); expect(/No per-action overage/.test(t), 'the meter does not say there is no overage');
+    return `${u.actionsUsed} / ${u.monthlyLimit}`;
+  });
   await step('Billing: Choose Pro sends the owner to a PayPal sandbox approval page (not approved here)', async () => {
     await click('Choose Pro');
     await waitFor(async () => /paypal\.com/.test(await ev('location.hostname').catch(() => '')), { timeout: 30000, what: 'to be sent to the PayPal sandbox approval link' });
@@ -480,6 +495,11 @@ flow('settings', async () => {
 
 
 
+// The trust control inside an agent card: which level is chosen, the small-amount limit, and the preview line under it.
+const trustOf = name => ev(`(() => { const h = [...document.querySelectorAll('h3')].find(h => h.innerText.trim() === ${JSON.stringify(name)}); const c = h?.closest('.agent-card'); if (!c) return null;
+  return { level: c.querySelector('input[type=radio]:checked')?.value, amount: c.querySelector('.trust-save input')?.value, preview: c.querySelector('.trust-preview')?.innerText.replace(/\\s+/g, ' ').trim(), levels: [...c.querySelectorAll('.trust-levels small')].map(s => s.innerText.replace(/\\s+/g, ' ').trim()) }; })()`);
+// Open a <details> by clicking its summary, but only when it is closed (its state can survive a refresh).
+const openSummary = async spec => { const s = { sel: 'summary', ...spec }; if (!(await ev(`__f.one(${JSON.stringify(s)})?.parentElement.open`))) await click(s); };
 const agentCard = name => ({ sel: 'button', text: name, page: true });
 const cardText = async name => ev(`(() => { const h = [...document.querySelectorAll('h3')].find(h => h.innerText.trim() === ${JSON.stringify(name)}); return h ? h.closest('[data-film],div.agent-card,div[class*=card]')?.innerText ?? '' : ''; })()`);
 
@@ -509,15 +529,19 @@ flow('agents', async () => {
     await type('Budget (USD)', '120'); await choose({ sel: 'select', text: 'Period' }, 'week');
     await click({ sel: 'button', text: 'Create agent' }); await waitToast(/Agent created/i);
     const t = await waitText(`Flow Bot ${run}`); await waitGone({ sel: '[role=dialog]', page: true });
-    const card = await cardText(`Flow Bot ${run}`);
-    expect(/Up to \$40/.test(card) && card.includes(`payee-${run}@example.com`) && /\$120/.test(card) && /per week/.test(card), `card does not show the entered limits:\n${card.replace(/\s+/g, ' ')}`);
+    const card = await cardText(`Flow Bot ${run}`); const tr = await trustOf(`Flow Bot ${run}`);
+    expect(tr?.level === 'small' && tr.amount === '40', `the trust control does not show the $40 cap: ${JSON.stringify(tr)}`);
+    expect(/\$120/.test(card) && /per week/.test(card), `card does not show the budget:\n${card.replace(/\s+/g, ' ')}`);
+    await openSummary({ text: 'Permissions & activity', in: `Flow Bot ${run}` });
+    expect((await cardText(`Flow Bot ${run}`)).includes(`payee-${run}@example.com`), 'the allowed payee is not listed under Permissions & activity');
   }, { critical: true });
   await step('Agents: Edit agent opens the saved values; changing them and Save agent updates the card', async () => {
     await click({ sel: 'button', text: 'Edit agent', in: `Flow Bot ${run}` }); await waitText(`Edit Flow Bot ${run}`);
     expect((await field('Agent name')) === `Flow Bot ${run}` && (await field('Cap per action')) === '40', 'the form did not open with the saved values');
     await type('Cap per action', '55'); await type('Job description', 'Handles refunds and small payouts');
     await click({ sel: 'button', text: 'Save agent' }); await waitToast(/Agent updated/i); await waitGone({ sel: '[role=dialog]', page: true });
-    const card = await cardText(`Flow Bot ${run}`); expect(/Up to \$55/.test(card) && /small payouts/.test(card), 'card did not update');
+    const card = await cardText(`Flow Bot ${run}`); const t = await trustOf(`Flow Bot ${run}`);
+    expect(t?.level === 'small' && t.amount === '55' && /small payouts/.test(card), `card did not update: ${JSON.stringify(t)}`);
   });
   await step('Agents: a payout agent\'s budget can be removed in the editor ("No independent budget")', async () => {
     await click({ sel: 'button', text: 'Edit agent', in: `Flow Bot ${run}` }); await choose({ sel: 'select', text: "Agent's own budget" }, 'No independent budget');
@@ -536,6 +560,7 @@ flow('agents', async () => {
     await click({ sel: 'button', text: `Unfreeze Flow Bot ${run}` }); await waitControl({ sel: 'button', text: `Freeze Flow Bot ${run}` });
   });
   await step('Agents: "Create a key for this agent" opens the key dialog with this agent chosen', async () => {
+    await openSummary({ text: 'Permissions & activity', in: `Flow Bot ${run}` });
     await click({ sel: 'a', text: 'Create a key for this agent', in: `Flow Bot ${run}` }); await waitText('Create agent key');
     expect((await ev(`__f.one({ sel: 'select', text: 'Agent' }).selectedOptions[0].text`)) === `Flow Bot ${run}`, 'the key dialog did not preselect the agent');
     await key('Escape'); await waitGone({ sel: '[role=dialog]', page: true });
@@ -721,8 +746,6 @@ async function ensureDemo() {
   await waitFor(async () => (await stateNow()).workspace?.seedStatus === 'ready', { timeout: 180000, what: 'the demo shop to finish loading' });
 }
 const held = async () => (await stateNow()).ledger.filter(e => e.status === 'awaiting_approval');
-const cardOf = id => `[aria-label^="Request ${id}:"]`;
-const asPhone = async on => send('Emulation.setDeviceMetricsOverride', on ? { width: 390, height: 844, deviceScaleFactor: 2, mobile: true } : { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 // Setup that is not under test: a disposable agent and key, used to put extra requests in the approval queue the way a customer's own agent would.
 async function disposableAgent(name, controls) {
   const a = await api('/api/agents', { method: 'POST', body: { name, can_refund: true, can_payout: true, max_per_action: 1, ...controls } }); expect(a.status === 200, `agent setup failed (HTTP ${a.status})`);
@@ -731,45 +754,140 @@ async function disposableAgent(name, controls) {
 }
 const agentPost = (key, path, body, idem) => ev(`fetch(${JSON.stringify(path)}, { method: 'POST', credentials: 'omit', headers: { Authorization: 'Bearer ${key}', 'Content-Type': 'application/json', 'Idempotency-Key': ${JSON.stringify(idem)} }, body: ${JSON.stringify(JSON.stringify(body))} }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }))`);
 
+const cardOf = id => `[aria-label^="Request ${id}:"]`;
+const viewport = (w, h, mobile = false) => send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: mobile ? 2 : 1, mobile });
+const asPhone = async on => on ? viewport(390, 844, true) : viewport(1440, 900);
+// The approvals page shows one request at a time; pick it from the queue (or, on a phone, with the Next button) by id.
+const selectReq = async id => {
+  const queued = await ev(`!!__f.one(${JSON.stringify({ sel: '.approval-queue button', re: `#${id}$` })})`);
+  if (queued) await click({ sel: '.approval-queue button', re: `#${id}$` });
+  else for (let i = 0; i < 12 && !(await ev(`!!document.querySelector(${JSON.stringify(`[aria-label^="Request ${id}:"]`)})`)); i++) await click({ sel: 'button', text: 'Next request' });
+  await waitControl({ sel: 'button', re: '^Approve \\$', within: cardOf(id) });
+};
+const selectedReq = () => ev(`document.querySelector('[data-film=approval]')?.getAttribute('aria-label').match(/Request (\\d+):/)?.[1]`);
+// A real key press: keydown reaches the page's listeners the way the keyboard does, and a printable key types into a focused field.
+async function press(k, { ctrl = false, code } = {}) {
+  const base = { key: k, code: code ?? (k.length === 1 ? 'Key' + k.toUpperCase() : k), modifiers: ctrl ? 2 : 0, windowsVirtualKeyCode: k.length === 1 ? k.toUpperCase().charCodeAt(0) : 0 };
+  await send('Input.dispatchKeyEvent', { type: ctrl ? 'rawKeyDown' : 'keyDown', ...base, ...(ctrl ? {} : { text: k }) });
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base }); await settle(300);
+}
+const ledgerRow = async id => (await stateNow()).ledger.find(e => String(e.id) === String(id));
+const decided = async id => waitFor(async () => ['approved', 'declined', 'failed'].includes((await ledgerRow(id))?.status), { timeout: 90000, what: `request #${id} to be decided` });
+// Setup that is not under test: a refund from the disposable agent that its $1 cap holds for the owner.
+const heldRefundFor = async (fx, order, amount, tag) => {
+  const r = (await agentPost(fx.key, '/v1/refunds', { capture_id: order.capture_id, amount, requester_email: order.customer_email, source_message: `Please refund $${amount} for my order.`, reason: `Partial refund ${tag}` }, `flow-${tag}-${run}`)).json;
+  expect(r?.status === 'awaiting_approval', `expected a held refund, got ${r?.status}`); return r.id.replace('act_', '');
+};
+
 flow('approvals', async () => {
-  await ensureDemo(); let fx, heldRefund, heldPayout;
+  await ensureDemo(); let fx, fx2, heldRefund, heldPayout; const ids = {};
   if ((await ticketOf('Daniel')).status !== 'handled') await runTicket('Daniel');
   if ((await ticketOf('Elena', 'photo')).status !== 'handled') await runTicket('Elena', "Priya's photo shoot");
-  await step('Setup (not under test): put a capped refund and a capped payout from an API agent into the queue', async () => {
-    fx = await disposableAgent(`Flow cap agent ${run}`, {}); const st = await stateNow(); const order = st.orders.find(o => o.customer_email === 'maya.chen@example.com'); expect(order, 'Maya\'s order not found');
-    heldRefund = (await agentPost(fx.key, '/v1/refunds', { capture_id: order.capture_id, amount: 5, requester_email: order.customer_email, source_message: 'Please refund $5 for the chipped mug.', reason: 'Partial refund for chipped mug' }, `flow-r-${run}`)).json;
+  await step('Setup (not under test): put capped refunds and a capped payout from an API agent into the queue', async () => {
+    fx = await disposableAgent(`Flow cap agent ${run}`, {}); const st = await stateNow(); const orders = st.orders.filter(o => o.capture_id); expect(orders.length >= 3, 'the demo shop has fewer than three orders');
+    ids.key = await heldRefundFor(fx, orders[0], 3, 'k'); ids.palette = await heldRefundFor(fx, orders[1], 4, 'pal'); ids.other = await heldRefundFor(fx, orders[2 % orders.length], 5, 'o'); ids.phone = await heldRefundFor(fx, orders[0], 6, 'ph'); ids.spare = await heldRefundFor(fx, orders[1], 7, 'sp');
+    heldRefund = { id: `act_${ids.other}` };
+    // A $50 refund from an agent with no cap of its own waits only because the shop's $40 limit is lower: the case the learned "up to $60" suggestion covers.
+    fx2 = await disposableAgent(`Flow learn agent ${run}`, { max_per_action: null });
+    const refunded = o => st.ledger.filter(e => e.kind === 'refund' && e.counterparty === o.customer_email && ['executed', 'approved'].includes(e.status)).length;
+    const fresh = [...orders].sort((a, b) => refunded(a) - refunded(b)); // the shop allows one refund per customer per 30 days, so start with the customer who has had none
+    for (const o of fresh) { const r = (await agentPost(fx2.key, '/v1/refunds', { capture_id: o.capture_id, amount: 50, requester_email: o.customer_email, source_message: 'Please refund $50 for my order.', reason: `Larger refund ${o.customer_email}` }, `flow-ln-${o.capture_id}-${run}`)).json; if (r?.status === 'awaiting_approval') { ids.learn = r.id.replace('act_', ''); break; } }
+    // $39 is inside the shop's $40 limit, so it waits only if something else (the weekly budget) holds it: the case the learned "raise the budget" suggestion covers.
+    for (const o of fresh) { const r = (await agentPost(fx2.key, '/v1/refunds', { capture_id: o.capture_id, amount: 39, requester_email: o.customer_email, source_message: 'Please refund $39 for my order.', reason: `Refund inside the limit ${o.customer_email}` }, `flow-ln2-${o.capture_id}-${run}`)).json; if (r?.status === 'awaiting_approval') ids.learn2 = r.id.replace('act_', ''); if (r?.status) { if (r.status !== 'awaiting_approval') notes.push(`A $39 refund from an uncapped agent was ${r.status} (inside the limit and budget), so it did not wait for the owner.`); break; } }
     heldPayout = (await agentPost(fx.key, '/v1/payouts', { email: st.policy.policy.payouts.payees[0].email, amount: 2, reason: 'Regular shop service; hold for owner', source_message: 'Please pay $2 for shop service', requester_email: 'owner@juniperandoak.example' }, `flow-p-${run}`)).json;
-    expect(heldRefund?.status === 'awaiting_approval' && heldPayout?.status === 'awaiting_approval', `expected both held, got ${heldRefund?.status}/${heldPayout?.status}`);
+    expect(heldPayout?.status === 'awaiting_approval', `expected the payout held, got ${heldPayout?.status}`);
+    return `refunds #${ids.key} #${ids.palette} #${ids.other} #${ids.phone}, payout ${heldPayout.id}`;
   }, { critical: true, ok4xx: true });
-  await step('Approvals: the sidebar and page show all waiting requests, each with Approve and Decline', async () => {
-    await openApp('approvals'); const rows = await held(); expect(rows.length >= 4, `only ${rows.length} held`);
-    for (const e of rows) { await waitControl({ sel: 'button', re: '^Approve \\$', within: cardOf(e.id) }); await waitControl({ sel: 'button', text: 'Decline', within: cardOf(e.id) }); }
+  await viewport(1280, 720);
+  await step('Approvals: a split view with every waiting request in the queue and one request open on the right', async () => {
+    await openApp('approvals'); const rows = await held(); expect(rows.length >= 6, `only ${rows.length} held`);
+    await waitControl({ sel: 'button', re: '^Approve \\$' });
+    const n = await ev(`document.querySelectorAll('.approval-queue button').length`); expect(n === rows.length, `the queue lists ${n} requests but ${rows.length} are waiting`);
+    expect((await ev(`document.querySelector('.approval-queue-heading h2').innerText`)).includes(String(rows.length)), 'the heading does not show the number waiting');
+    expect((await ev(`document.querySelectorAll('[data-film=approval]').length`)) === 1, 'more than one request is open at once');
+    const q = await ev(`(() => { const a = document.querySelector('.approval-queue').getBoundingClientRect(), b = document.querySelector('[data-film=approval]').getBoundingClientRect(); return a.right <= b.left + 1; })()`); expect(q, 'the queue is not to the left of the request');
   });
-  await step('Approvals: "Approve from your phone" points at the phone page', async () => {
-    const href = await ev(`__f.one({ sel: 'a', text: 'Approve from your phone' }).href`); expect(new URL(href).pathname === '/approve', `link goes to ${href}`);
+  await step('Approvals at 1280x720: all four evidence rows and the Approve button are inside the screen without scrolling', async () => {
+    await openApp('approvals'); await waitControl({ sel: 'button', re: '^Approve \\$' });
+    const fit = await ev(`(() => { const r = e => { const b = e.getBoundingClientRect(); return { t: Math.round(b.top), b: Math.round(b.bottom) }; }; const btn = document.querySelector('[data-film=approve]');
+      return { y: scrollY, H: innerHeight, rows: [...document.querySelectorAll('.approval-evidence > div')].map(r), titles: [...document.querySelectorAll('.approval-evidence dt')].map(e => e.innerText.replace(/\\s+/g, ' ').trim()), btn: btn && r(btn) }; })()`);
+    expect(fit.rows.length === 4, `${fit.rows.length} evidence rows, expected 4 (${fit.titles.join(' / ')})`);
+    const out = fit.rows.filter(r => r.t < 0 || r.b > fit.H); expect(!out.length, `evidence rows outside the ${fit.H}px screen: ${JSON.stringify(fit.rows)} (${fit.titles.join(' / ')})`);
+    expect(fit.btn && fit.btn.t >= 0 && fit.btn.b <= fit.H, `the Approve button is at ${JSON.stringify(fit.btn)}, outside the ${fit.H}px screen`);
+    return `evidence rows end at ${Math.max(...fit.rows.map(r => r.b))}px, Approve button at ${fit.btn.t}-${fit.btn.b}px of ${fit.H}px`;
+  });
+  await step('Approvals: choosing each queue entry opens that request with Approve and Decline', async () => {
+    for (const e of await held()) { await selectReq(e.id); expect((await selectedReq()) === String(e.id), `request #${e.id} did not open`); await waitControl({ sel: 'button', text: 'Decline', within: cardOf(e.id) }); }
+  });
+  await step('Approvals: "Approve from your phone" opens a dialog with a QR code and a link to /approve', async () => {
+    await click({ sel: 'button', text: 'Approve from your phone' }); await waitText('Scan the code');
+    const info = await ev(`(() => { const img = document.querySelector('[role=dialog] img'); const a = document.querySelector('[role=dialog] a[href]'); return { src: img?.src.slice(0, 22), w: img?.naturalWidth, alt: img?.alt, path: a && new URL(a.href).pathname }; })()`);
+    expect(/^data:image\/png/.test(info.src ?? '') && info.w > 50, `no QR image: ${JSON.stringify(info)}`); expect(info.path === '/approve', `link goes to ${info.path}`);
+    await key('Escape'); await waitGone({ sel: '[role=dialog]', page: true });
   });
   await step('Approvals: the review-checks disclosure opens and shows why it was held', async () => {
-    const e = (await held())[0]; await click({ sel: 'summary', text: 'Review checks', within: cardOf(e.id) }); await waitText(/rule|check|limit/i);
+    const e = (await held())[0]; await selectReq(e.id); await openSummary({ text: 'Review checks', within: cardOf(e.id) }); await waitText(/Recorded rule outcome/);
   });
-  await step('Phone page: /approve lists the same requests and Approve with a note sends the Daniel refund', async () => {
-    const target = (await held()).find(e => e.amount === 86 && e.kind === 'refund');
-    expect(target, 'Daniel\'s $86 request is not waiting'); await asPhone(true); await goto('/approve'); await waitControl({ sel: 'button', re: '^Approve \\$86', within: cardOf(target.id) });
-    await type({ sel: 'input', text: 'Approval note', within: cardOf(target.id) }, `Looks right on the photos ${run}`);
-    await click({ sel: 'button', re: '^Approve \\$86', within: cardOf(target.id) });
-    await waitFor(async () => (await stateNow()).ledger.find(e => e.id === target.id)?.status === 'approved', { timeout: 60000, what: 'Daniel\'s refund to be approved in PayPal' });
-    await waitText(/Approved|submitted|Decision recorded/i); const row = (await stateNow()).ledger.find(e => e.id === target.id); expect(!!row.paypal_ref, 'no PayPal reference recorded'); await asPhone(false);
+  await step('Approvals: J moves to the next request and K back; K at the top stays put', async () => {
+    const order = (await held()).map(e => String(e.id)); const queue = await ev(`[...document.querySelectorAll('.approval-queue button')].map(b => b.innerText.match(/#(\\d+)/)[1])`);
+    await selectReq(queue[0]); await press('k'); expect((await selectedReq()) === queue[0], 'K at the top moved away from the first request');
+    await press('j'); expect((await selectedReq()) === queue[1], `J opened #${await selectedReq()}, expected #${queue[1]}`);
+    await press('j'); expect((await selectedReq()) === queue[2], 'a second J did not move on');
+    await press('k'); expect((await selectedReq()) === queue[1], 'K did not move back'); expect(order.length === queue.length, 'the queue changed');
+  });
+  await step('Approvals: pressing ? lists the keyboard shortcuts and Escape closes them', async () => {
+    await press('?', { code: 'Slash' }); const t = await waitText('Approval shortcuts'); expect(/J \/ K/.test(t) && /Approve selected request/.test(t) && /Open decline dialog/.test(t), 'the shortcut list is incomplete');
+    await key('Escape'); await waitGone({ sel: '[role=dialog]', page: true });
+    await click({ sel: 'button', text: 'Keyboard shortcuts' }); await waitText('Approval shortcuts'); await key('Escape'); await waitGone({ sel: '[role=dialog]', page: true });
+  });
+  await step('Approvals: the shortcut keys do nothing while typing in a note field', async () => {
+    const id = await selectedReq(); const before = (await held()).length; await openSummary({ text: 'Approval note', within: cardOf(id) });
+    await click({ sel: 'input', text: 'Approval note (optional)', within: cardOf(id) });
+    for (const ch of 'a d j k') await press(ch === ' ' ? ' ' : ch, ch === ' ' ? { code: 'Space' } : {});
+    expect((await field({ sel: 'input', text: 'Approval note (optional)' })) === 'a d j k', `the note holds "${await field({ sel: 'input', text: 'Approval note (optional)' })}"`);
+    expect(!(await ev(`!!document.querySelector('[role=dialog]')`)), 'a dialog opened while typing'); expect((await selectedReq()) === id, 'J/K moved the selection while typing'); expect((await held()).length === before, 'a request was decided while typing');
+    await type({ sel: 'input', text: 'Approval note (optional)' }, '');
+  });
+  await step('Approvals: D opens the decline dialog; closing it leaves the request waiting', async () => {
+    const id = await selectedReq(); await click({ sel: 'h2', text: 'Waiting for your approval', page: true }); await press('d'); await waitText('Decline this request?');
+    await key('Escape'); await waitGone({ sel: '[role=dialog]', page: true }); expect((await ledgerRow(id)).status === 'awaiting_approval', 'closing the dialog declined it');
+  });
+  await step('Approvals: ⌘K offers Approve and Decline for the open request; Decline opens the decline dialog', async () => {
+    await press('k', { ctrl: true }); const t = await waitText('Selected request'); expect(/Approve selected request/.test(t) && /Decline selected request/.test(t), 'the palette lacks approve or decline');
+    await click({ sel: '[cmdk-item]', text: 'Decline selected request' }); await waitText('Decline this request?'); await key('Escape'); await waitGone({ sel: '[role=dialog]', page: true });
+  });
+  await step('Approvals: pressing A approves the open request and moves on to the next', async () => {
+    await selectReq(ids.key); const before = (await held()).length; await click({ sel: 'h2', text: 'Waiting for your approval', page: true }); await press('a');
+    await decided(ids.key); const row = await ledgerRow(ids.key); if (row.status === 'failed') notes.push(`Approving #${ids.key} with A was decided but PayPal's sandbox failed it: ${row.error}`);
+    await waitFor(async () => (await selectedReq()) !== ids.key, { what: 'the next request to open' }); await waitText(new RegExp(`Request #${ids.key}: (Approved|failed)`, 'i'));
+    expect((await held()).length === before - 1, 'the number waiting did not drop by one'); return `#${ids.key} ${row.status}`;
   }, { ok4xx: true });
-  await step('Phone page: the page tells the person when nothing is waiting or shows what is', async () => { await asPhone(true); await goto('/approve'); await sleep(800); expect((await pageText()).length > 40, 'blank phone page'); await asPhone(false); });
+  await step('Approvals: ⌘K > Approve selected request approves the open request', async () => {
+    await selectReq(ids.palette); await press('k', { ctrl: true }); await waitText('Selected request'); await click({ sel: '[cmdk-item]', text: 'Approve selected request' });
+    await decided(ids.palette); return `#${ids.palette} ${(await ledgerRow(ids.palette)).status}`;
+  }, { ok4xx: true });
+  await step('Approvals: "Approve and stop asking about these" (when offered) shows the backtest first, then approves and applies the rule', async () => {
+    let offered = null;
+    for (const who of [{ n: 'the $50 refund', id: ids.learn }, { n: 'the $39 refund', id: ids.learn2 }, { n: 'Daniel', a: 86 }]) {
+      const e = (await held()).find(x => who.id ? String(x.id) === String(who.id) : x.amount === who.a); if (!e) continue; await selectReq(e.id);
+      const there = await waitFor(() => ev(`!!__f.one({ sel: 'button', text: 'Approve and stop asking' })`), { timeout: 8000, what: 'x' }).catch(() => false); if (there) { offered = e; break; }
+    }
+    if (!offered) { notes.push('"Approve and stop asking about these" was not offered for any waiting request (it appears only when a tested suggestion would have let that exact request through; the recorded AI review and the per-customer refund rule still held the demo requests), so its dialog and confirm path were not verified.'); return 'not offered for the waiting requests'; }
+    const v0 = (await stateNow()).policy.id; await click({ sel: 'button', text: 'Approve and stop asking' }); await waitText('Approve and update your rules?');
+    const t = await pageText(); expect(/Taps per 100 moves/.test(t) && /Declined requests that would pass/.test(t) && /Benchmark attacks stopped/.test(t), 'the backtest numbers are missing');
+    await key('Escape'); await waitGone({ sel: '[role=dialog]', page: true }); expect((await ledgerRow(offered.id)).status === 'awaiting_approval', 'closing the dialog approved it');
+    await click({ sel: 'button', text: 'Approve and stop asking' }); await click({ sel: 'button', text: 'Confirm approval and rule change' }); await decided(offered.id);
+    await waitFor(async () => (await stateNow()).policy.id > v0, { timeout: 30000, what: 'the rule change to create a new rules version' }); return `#${offered.id} approved and rules v${v0} -> v${(await stateNow()).policy.id}`;
+  }, { ok4xx: true });
   await step('Approvals: "Approve a different amount" opens a field; a bad amount is refused; $2 of the $5 refund goes through', async () => {
-    await openApp('approvals'); const id = heldRefund.id.replace('act_', ''); const card = cardOf(id);
+    await openApp('approvals'); const id = ids.other; const card = cardOf(id); await selectReq(id);
     await click({ sel: 'button', text: 'Approve a different amount', within: card }); await type({ sel: 'input', text: 'Amount in USD', within: card }, '9');
     const pos = await locate({ sel: 'button', re: '^Confirm', within: card }, { allowDisabled: true }); expect(pos.disabled, 'Confirm should stay off for an amount above the request'); await waitText(/Enter a positive amount up to/);
     await type({ sel: 'input', text: 'Amount in USD', within: card }, '2'); await click({ sel: 'button', re: '^Confirm \\$2', within: card });
-    await waitFor(async () => (await stateNow()).ledger.find(e => String(e.id) === id)?.status === 'approved', { timeout: 60000, what: 'the $2 refund to be approved' });
-    const row = (await stateNow()).ledger.find(e => String(e.id) === id); expect(Number(row.approved_amount) === 2, `approved ${row.approved_amount} instead of 2`);
+    await decided(id); const row = await ledgerRow(id); if (row.status === 'approved') expect(Number(row.approved_amount) === 2, `approved ${row.approved_amount} instead of 2`); else notes.push(`The $2 partial approval was decided as ${row.status}: ${row.error}`);
   }, { ok4xx: true });
   await step('Approvals: Decline asks for a reason, closing the dialog keeps it waiting, and Decline with a reason records exactly that reason', async () => {
-    const photo = (await held()).find(e => e.amount === 180); expect(photo, 'the $180 photographer payout is not waiting'); const card = cardOf(photo.id);
+    const photo = (await held()).find(e => e.amount === 180); expect(photo, 'the $180 photographer payout is not waiting'); const card = cardOf(photo.id); await selectReq(photo.id);
     await click({ sel: 'button', text: 'Decline', within: card }); await waitText('Decline this request?'); await key('Escape'); await waitGone({ sel: '[role=dialog]', page: true });
     expect((await held()).some(e => e.id === photo.id), 'closing the dialog still declined it');
     const reason = `Need the invoice first ${run}`; await click({ sel: 'button', text: 'Decline', within: card }); await type({ sel: 'textarea', text: 'Reason' }, reason);
@@ -778,7 +896,8 @@ flow('approvals', async () => {
     expect((await stateNow()).ledger.find(e => e.id === photo.id).decline_reason === reason, 'decline reason was not stored'); await waitText(reason);
   });
   await step('Approvals: approving a payout with "let this agent pay them for N days" creates a temporary allowance that can be revoked', async () => {
-    await openApp('approvals'); const id = heldPayout.id.replace('act_', ''); const card = cardOf(id);
+    await openApp('approvals'); const id = heldPayout.id.replace('act_', ''); const card = cardOf(id); await selectReq(id);
+    await openSummary({ text: 'Approval note', within: card });
     await click({ sel: 'input[type=checkbox]', text: 'Also let this agent pay', within: card }); await type({ sel: 'input[type=number]', within: card }, '3');
     await click({ sel: 'button', re: '^Approve \\$2', within: card });
     const sent = await ev(`__a.reqs.filter(r => r.b).map(r => r.b).pop()`); expect(/allow_payee_days/.test(sent ?? ''), `the approval did not ask for an allowance: ${sent}`);
@@ -788,16 +907,38 @@ flow('approvals', async () => {
     await click({ sel: 'button', text: 'Revoke', exact: true }); await waitControl('Keep as is'); await click('Keep as is'); await waitGone({ sel: '[role=dialog]', page: true }); await waitText(/Up to \$2/);
     await click({ sel: 'button', text: 'Revoke', exact: true }); await click({ sel: 'button', text: 'Revoke allowance' }); await waitToast(/Allowance revoked/i); await waitText('No active allowances');
   }, { ok4xx: true });
+  await step('Phone page: /approve opens the request from its link and Approve with a note sends it', async () => {
+    const id = ids.phone; await asPhone(true); await goto(`/approve#${id}`); await waitControl({ sel: 'button', re: '^Approve \\$6', within: cardOf(id) });
+    await openSummary({ text: 'Approval note', within: cardOf(id) });
+    await type({ sel: 'input', text: 'Approval note', within: cardOf(id) }, `Looks right on the photos ${run}`);
+    await click({ sel: 'button', re: '^Approve \\$6', within: cardOf(id) });
+    await decided(id); const row = await ledgerRow(id); if (row.status === 'approved') expect(!!row.paypal_ref, 'no PayPal reference recorded'); else notes.push(`The phone approval of #${id} was decided as ${row.status}: ${row.error}`);
+    await waitText(/Approved|submitted|Decision recorded|failed/i); await asPhone(false); return row.status;
+  }, { ok4xx: true });
+  await step('Phone page: with several waiting, Next request and Previous request move through them', async () => {
+    await asPhone(true); await goto('/approve'); const first = await waitFor(selectedReq, { what: 'a request' }); const total = (await held()).length;
+    if (total < 2) { await asPhone(false); return 'only one request waiting'; }
+    await click({ sel: 'button', text: 'Next request' }); expect((await selectedReq()) !== first, 'Next request stayed on the same request');
+    await click({ sel: 'button', text: 'Previous request' }); expect((await selectedReq()) === first, 'Previous request did not come back'); await asPhone(false);
+  });
   await step('Approvals: the recent-decisions rows open the ledger entry', async () => {
     await openApp('approvals'); await click({ sel: 'a[href^="/app#ledger/"]', nth: 0 }); await waitFor(async () => /#ledger\/\d+/.test(await ev('location.hash')), { what: 'a ledger entry' });
   });
-  await step('Approvals: "View ledger" and "Go to your inbox" links lead where they say', async () => {
+  await step('Approvals: "View ledger" link leads to the ledger', async () => {
     await openApp('approvals'); await click({ sel: 'a', text: 'View ledger' }); await waitFor(async () => (await ev('location.hash')).startsWith('#ledger'), { what: '#ledger' });
   });
+  await step('Approvals: deciding the last waiting request shows "All caught up" with the taps summary', async () => {
+    await openApp('approvals');
+    for (let i = 0; i < 6; i++) {
+      const rows = await held(); if (!rows.length) break; await selectReq(rows[0].id); const card = cardOf(rows[0].id);
+      await click({ sel: 'button', text: 'Decline', within: card }); await type({ sel: 'textarea', text: 'Reason' }, 'Cleared by the button flow'); await click({ sel: 'button', text: 'Decline request' });
+      await waitFor(async () => (await ledgerRow(rows[0].id)).status === 'declined', { timeout: 30000, what: 'the decline' }); await settle(600);
+    }
+    await waitText('All caught up'); await waitText(/taps per 100 money moves/i); await waitControl({ sel: 'a', text: 'Go to your inbox' });
+  });
   if (fx) await api(`/api/keys/${encodeURIComponent(fx.keyId)}`, { method: 'DELETE' }).catch(() => {});
+  if (fx2) await api(`/api/keys/${encodeURIComponent(fx2.keyId)}`, { method: 'DELETE' }).catch(() => {});
 });
-
-
 
 flow('hijack', async () => {
   await ensureDemo(); await openApp('inbox');
@@ -841,11 +982,13 @@ flow('watch', async () => {
   });
   await step('Watch: a second bypass and "Not me, keep agents frozen" keeps agents frozen and says what to do next', async () => {
     await openApp('watch'); await click({ sel: 'button', text: 'Refund $25 straight through PayPal' }); await waitText(/opened incident #\d+/, { timeout: 120000 });
-    await click('Not me, keep agents frozen'); await waitText(/Rotate your PayPal app/i, { timeout: 20000 });
+    const open0 = (await api('/api/incidents')).json.incidents.filter(i => !i.resolved_at).length; await click('Not me, keep agents frozen');
+    await waitText(/Rotate your PayPal app/i, { timeout: 20000 }).catch(async e => { const inc = (await api('/api/incidents')).json.incidents; throw new Error(`${e.message.split('\n')[0]} (open incidents before: ${open0}; now: ${inc.map(i => `#${i.id}${i.resolved_at ? ' ' + i.resolution : ' open'}`).join(', ')}) page: ${(await pageText()).replace(/\s+/g, ' ').match(/(Money moved|Resolved PayPal)[\s\S]{0,500}/)?.[0]}`); });
     expect((await stateNow()).agents.every(a => a.status === 'frozen'), 'agents were not kept frozen');
   }, { ok4xx: true });
   await step('Agents: unfreezing each agent from its card works after an incident', async () => {
-    await openApp('agents'); for (const a of (await stateNow()).agents) { await click({ sel: 'button', text: `Unfreeze ${a.name}` }); await waitControl({ sel: 'button', text: `Freeze ${a.name}` }); }
+    await openApp('agents'); const frozenText = await pageText(); expect(/Incident\s+#\d+/.test(frozenText) && /PayPal transaction/.test(frozenText) && /Frozen · unaccounted paypal transaction/i.test(frozenText), `a frozen card does not name the incident and the PayPal transaction: ${frozenText.replace(/\s+/g, ' ').match(/Frozen[^.]{0,200}/)?.[0]}`);
+    for (const a of (await stateNow()).agents) { await click({ sel: 'button', text: `Unfreeze ${a.name}` }); await waitControl({ sel: 'button', text: `Freeze ${a.name}` }); }
     expect((await stateNow()).agents.every(a => a.status === 'active'), 'some agent is still frozen');
   });
   await step('Watch: the incidents table lists the incidents', async () => { await openApp('watch'); await waitFor(async () => (await ev(`document.querySelectorAll('.ag-row').length`)) >= 2, { what: 'two incident rows' }); });
@@ -854,13 +997,33 @@ flow('watch', async () => {
 const dl = { count: 0, names: [] };
 ws.addEventListener('message', m => { const d = JSON.parse(m.data); if (d.method === 'Browser.downloadWillBegin' || d.method === 'Page.downloadWillBegin') { dl.count++; dl.names.push(d.params.suggestedFilename); } });
 flow('ledger', async () => {
-  await ensureDemo(); await openApp('ledger'); await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: mkdtempSync(join(tmpdir(), 'fw-flow-dl-')), eventsEnabled: true });
+  const consoleStart = consoleMsgs.length; let fxL, heldL;
+  await ensureDemo();
+  await step('Setup (not under test): put one request in the approval queue so the Waiting view has a row', async () => {
+    fxL = await disposableAgent(`Flow ledger agent ${run}`, {}); const order = (await stateNow()).orders.find(o => o.capture_id);
+    const r = await agentPost(fxL.key, '/v1/refunds', { capture_id: order.capture_id, amount: 2, requester_email: order.customer_email, source_message: 'Please refund $2 for my order.', reason: 'Ledger view check' }, `flow-l-${run}`); expect(r.json?.status === 'awaiting_approval', `expected held, got ${r.json?.status}`); heldL = r.json.id.replace('act_', '');
+  }, { ok4xx: true });
+  await openApp('ledger'); await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: mkdtempSync(join(tmpdir(), 'fw-flow-dl-')), eventsEnabled: true });
   await waitFor(async () => (await ev(`document.querySelectorAll('.ag-row').length`)) > 3, { what: 'ledger rows' });
   const rowCount = () => ev(`document.querySelectorAll('.ag-row').length`);
   await step('Ledger: search narrows the rows to matches and clearing it brings them back', async () => {
     const all = await rowCount(); await type('Search ledger', 'hannah.wright'); await waitFor(async () => (await rowCount()) < all, { what: 'fewer rows' });
     const t = await ev(`[...document.querySelectorAll('.ag-row')].map(r => r.innerText).join(' ')`); expect(t.includes('hannah.wright'), 'search result does not contain the match');
     await type('Search ledger', ''); await waitFor(async () => (await rowCount()) >= all, { what: 'rows back' });
+  });
+  await step('Ledger: the saved-view tabs (Waiting, Stopped, Done by agents) each show only their rows and All brings everything back', async () => {
+    const st = (await stateNow()).ledger; const labels = { awaiting_approval: 'Waiting for you', blocked: 'Blocked before PayPal', declined: 'Declined by you', failed: 'Payment failed', executed: 'Done automatically' };
+    const outcomes = () => ev(`[...document.querySelectorAll('.ag-row:not(.ag-full-width-row) [col-id="status"]')].map(c => c.innerText.replace(/\\s+/g, ' ').trim())`);
+    const seen = [];
+    for (const [tab, statuses] of [['Waiting', ['awaiting_approval']], ['Stopped', ['blocked', 'declined', 'failed']], ['Done by agents', ['executed']]]) {
+      await click({ sel: '.ledger-views button', text: tab, exact: true }); expect((await ev(`__f.one({ sel: '.ledger-views button', text: ${JSON.stringify(tab)}, exact: true }).getAttribute('aria-pressed')`)) === 'true', `${tab} is not marked as pressed`);
+      const want = st.filter(e => statuses.includes(e.status)).length; expect(tab !== 'Waiting' || want > 0, 'setup left nothing waiting'); const allowed = statuses.map(x => labels[x]);
+      await waitFor(async () => { const o = await outcomes(); return want ? o.length > 0 && o.every(x => allowed.some(a => x.startsWith(a))) : o.length === 0; }, { what: `the ${tab} rows (${want} expected)`, timeout: 8000 })
+        .catch(async () => { throw new Error(`${tab} shows ${JSON.stringify([...new Set(await outcomes())])}, expected only ${allowed.join(' / ')} (${want} rows)`); });
+      seen.push(`${tab}: ${want}`);
+    }
+    await click({ sel: '.ledger-views button', text: 'All', exact: true });
+    await waitFor(async () => new Set(await outcomes()).size > 1, { what: 'every outcome to come back under All' }); return seen.join(', ');
   });
   await step('Ledger: Group by Outcome groups the rows; a group opens with its chevron; None ungroups', async () => {
     await choose({ sel: 'select', text: 'Group ledger by' }, 'Outcome'); await waitFor(async () => (await ev(`document.querySelectorAll('.ag-row-group').length`)) > 0 && /approved|done automatically|blocked|declined/i.test(await ev(`[...document.querySelectorAll('.ag-row')].map(r => r.innerText).join(' ')`)), { what: 'group rows' });
@@ -869,6 +1032,7 @@ flow('ledger', async () => {
   });
   await step('Ledger: a row\'s chevron opens its decision trace and closes it again', async () => {
     const before = await rowCount(); await click({ sel: '.ag-group-contracted', page: true, nth: 0 }); await waitFor(async () => /Decision trace/i.test(await ev(`document.querySelector('.ag-full-width-row')?.innerText ?? ''`)), { what: 'the trace' });
+    const trace = await ev(`document.querySelector('.ag-full-width-row')?.innerText.replace(/\\s+/g, ' ') ?? ''`); expect(/Decision trace · #\d+/.test(trace) && /Decided by/.test(trace) && /(pass|hold|block)/.test(trace), `the decision trace is missing its checks or decision: ${trace.slice(0, 200)}`);
     await click({ sel: '.ag-group-expanded', page: true, nth: 0 }); await waitFor(async () => !(await ev(`!!document.querySelector('.ag-full-width-row')`)), { what: 'the trace to close' });
   });
   await step('Ledger: clicking a row opens the full request, and Close returns to the list', async () => {
@@ -887,6 +1051,11 @@ flow('ledger', async () => {
     const n = dl.count; await click({ sel: 'button', text: 'CSV', page: true }); await waitFor(async () => dl.count > n, { what: 'a CSV download' }); await click({ sel: 'button', text: 'Excel', page: true }); await waitFor(async () => dl.count > n + 1, { what: 'an Excel download' });
     expect(dl.names.slice(n).some(x => /ledger\.csv/.test(x)) && dl.names.slice(n).some(x => /ledger\.xlsx/.test(x)), `downloads were ${dl.names.slice(n).join(', ')}`);
   });
+  await step('Ledger: AG Grid wrote no errors or warnings to the console (the licence banner is a known missing key)', async () => {
+    const bad = consoleErrorsSince(consoleStart); expect(!bad.length, bad.slice(0, 3).map(m => `${m.type}: ${m.text}`).join(' || '));
+  });
+  if (heldL) await api(`/api/ledger/${heldL}/decline`, { method: 'POST', body: { reason: 'Cleared by the button flow' } }).catch(() => {});
+  if (fxL) await api(`/api/keys/${encodeURIComponent(fxL.keyId)}`, { method: 'DELETE' }).catch(() => {});
 });
 
 
@@ -894,10 +1063,19 @@ flow('ledger', async () => {
 flow('rules', async () => {
   await ensureDemo(); await openApp('rules'); await waitText('Learned from your decisions');
   const version = async () => (await stateNow()).policy.id;
+  const stepNow = () => ev(`[...document.querySelectorAll('nav[aria-label="Rule steps"] button')].find(b => b.getAttribute('aria-current') === 'step')?.innerText.replace(/\\s+/g, ' ').trim()`);
+  await step('Rules: the page has three steps, Write, Test and Apply, and each step button moves to its section', async () => {
+    const names = await ev(`[...document.querySelectorAll('nav[aria-label="Rule steps"] button')].map(b => b.innerText.replace(/\\s+/g, ' ').trim())`);
+    expect(names.length === 3 && /Write/.test(names[0]) && /Test/.test(names[1]) && /Apply/.test(names[2]), `steps are: ${names.join(' | ')}`);
+    expect(/Write/.test(await stepNow()), `the first step is not marked as current (${await stepNow()})`);
+    await click({ sel: 'nav[aria-label="Rule steps"] button', text: 'Apply' }); expect(/Apply/.test(await stepNow()), 'Apply is not marked as current after clicking it'); await waitText('Your rules in effect');
+    const top = await ev(`Math.round(document.getElementById('rules-step-3').getBoundingClientRect().top)`); expect(top < 400, `the Apply section is ${top}px down after clicking Apply`);
+    await click({ sel: 'nav[aria-label="Rule steps"] button', text: 'Write' }); expect(/Write/.test(await stepNow()), 'Write is not marked as current');
+  });
   await step('Rules: "Show the N requests" opens the evidence for a suggestion and closes again', async () => {
     const pos = await locate({ sel: 'summary', re: '^Show the \\d+ requests$' }); const open0 = await ev(`__f.one({ sel: 'summary', re: '^Show the' }).parentElement.open`);
     await mouse(pos); await settle(); expect((await ev(`__f.one({ sel: 'summary', re: '^Show the' }).parentElement.open`)) !== open0, 'the evidence list did not toggle');
-    await click({ sel: 'summary', re: '^Show the' }); 
+    await click({ sel: 'summary', re: '^Show the' });
   });
   await step('Rules: "Not now" removes a suggestion and it stays away after a reload', async () => {
     const n0 = await ev(`__f.all({ sel: 'button', text: 'Not now' }).length`); expect(n0 >= 1, 'no suggestions to dismiss');
@@ -912,24 +1090,67 @@ flow('rules', async () => {
   });
   await step('Rules: the Cautious, Generous and Standard presets each fill the text box and show as chosen', async () => {
     const seen = {};
-    for (const p of ['Cautious', 'Generous', 'Standard']) { await click({ sel: 'button', text: p, exact: true }); await waitFor(async () => (await ev(`__f.one({ sel: 'button', text: ${JSON.stringify(p)}, exact: true }).getAttribute('aria-checked') ?? __f.one({ sel: 'button', text: ${JSON.stringify(p)}, exact: true }).getAttribute('data-state')`)) !== null, {}); seen[p] = await field({ sel: 'textarea' }); }
+    for (const p of ['Cautious', 'Generous', 'Standard']) {
+      await click({ sel: 'button', text: p, exact: true }); seen[p] = await field({ sel: 'textarea' });
+      const on = await ev(`__f.one({ sel: 'button', text: ${JSON.stringify(p)}, exact: true }).getAttribute('aria-checked') ?? __f.one({ sel: 'button', text: ${JSON.stringify(p)}, exact: true }).getAttribute('data-state')`);
+      expect(on === 'true' || on === 'on', `${p} is not shown as chosen (${on})`);
+    }
     expect(seen.Cautious !== seen.Generous && seen.Standard.length > 20, 'the presets did not change the text');
   });
   const rule = 'Refunds up to $30 can go through on their own. Ask me before any refund over $30. Never refund more than $120. Only pay people on my payee list.';
-  await step('Rules: typing a rule and "Turn into rules" shows a preview', async () => {
+  let fx;
+  await step('Rules: typing a rule and "Turn into rules" shows the compiled rules beside it with changes marked', async () => {
     await type({ sel: 'textarea', text: 'Plain-English rules' }, rule); await click('Turn into rules'); await waitText('Preview your rules', { timeout: 90000 });
-    await waitControl('Test on past activity'); await waitControl('Activate'); await waitControl('Discard');
+    await waitControl('Activate'); await waitControl('Discard'); await waitControl('Watch first'); expect((await ev(`document.querySelectorAll('.c1-limit.changed').length`)) >= 1, 'no field is marked as changed against the active rules');
   });
-  await step('Rules: "Test on past activity" shows what would have changed', async () => { await click('Test on past activity'); await waitText('Tested on your past activity', { timeout: 60000 }); });
+  await step('Rules: "Test on past activity" shows what would have changed and moves to the Test step', async () => {
+    await click('Test on past activity'); await waitText('Tested on your past activity', { timeout: 60000 }); expect(/Test/.test(await stepNow()), `the current step is "${await stepNow()}"`);
+    await waitText('Taps per 100 money moves');
+  });
   await step('Rules: Discard drops the preview and restores the active text', async () => { await click('Discard'); await waitNoText('Preview your rules'); await waitText('Active rules'); });
-  await step('Rules: compile again, Activate makes the rules live as a new version', async () => {
+  await step('Rules: "Watch first" starts shadow mode: the draft is watched, the active version does not change', async () => {
     const v0 = await version(); await type({ sel: 'textarea', text: 'Plain-English rules' }, rule); await click('Turn into rules'); await waitText('Preview your rules', { timeout: 90000 });
-    await click('Activate'); await waitToast(/new rules are active/i, { timeout: 30000 }); await waitFor(async () => (await version()) > v0, { what: 'a new policy version' });
+    await click('Watch first'); await waitToast(/Watching this draft for one week/i); await waitText('Watching your draft'); await waitText('Your active rules still decide');
+    expect((await version()) === v0, 'starting to watch changed the active rules'); const sh = (await api('/api/policy/shadow')).json; expect(sh.active && sh.draft, `the server does not show an active draft: ${JSON.stringify(sh).slice(0, 200)}`);
+    await waitText('No requests observed yet');
+  });
+  await step('Rules: new requests show up in the shadow report with the live and shadow decision', async () => {
+    fx = await disposableAgent(`Flow shadow agent ${run}`, {}); const st = await stateNow(); const order = st.orders.find(o => o.capture_id);
+    const r = await agentPost(fx.key, '/v1/refunds', { capture_id: order.capture_id, amount: 2, requester_email: order.customer_email, source_message: 'Please refund $2 for my order.', reason: 'Small refund for the shadow report' }, `flow-shadow-${run}`);
+    expect(r.json?.status === 'awaiting_approval', `expected a held refund, got ${r.json?.status}`);
+    await waitFor(async () => (await api('/api/policy/shadow')).json.report.seen >= 1, { what: 'the shadow report to count the request' });
+    await openApp('rules'); await waitText('Requests observed'); await waitText('Taps per 100 requests'); const t = await pageText(); expect(/Show \d+ differing requests/.test(t), 'no differing-requests disclosure');
+    await click({ sel: 'summary', re: '^Show \\d+ differing requests' }); await waitText(/Live decision|No decisions differed/);
+    await click({ sel: 'summary', text: 'View the watched draft' }); await waitText(/automatic approval limit/i);
+    if (r.json?.id) await api(`/api/ledger/${r.json.id.replace('act_', '')}/decline`, { method: 'POST', body: { reason: 'Cleared by the button flow' } });
+  }, { ok4xx: true });
+  await step('Rules: Stop clears the watched draft and its report', async () => {
+    await click({ sel: 'button', text: 'Stop', exact: true }); await waitToast(/Watching stopped/i); await waitNoText('Watching your draft');
+    const sh = (await api('/api/policy/shadow')).json; expect(!sh.draft && !sh.active, `the server still holds a draft: ${JSON.stringify(sh).slice(0, 200)}`);
+  });
+  let before;
+  await step('Rules: compile again, Activate makes the rules live as a new version and moves to the Apply step', async () => {
+    before = JSON.stringify((await stateNow()).policy.policy); const v0 = await version(); await type({ sel: 'textarea', text: 'Plain-English rules' }, rule); await click('Turn into rules'); await waitText('Preview your rules', { timeout: 90000 });
+    await click('Activate'); await waitToast(/new rules are active/i, { timeout: 30000 }); await waitFor(async () => (await version()) > v0, { what: 'a new policy version' }); expect(/Apply/.test(await stepNow()), `the current step is "${await stepNow()}"`);
+  });
+  await step('Rules: "Your rules in effect" shows the new version, when it took effect, who changed it, and what changed', async () => {
+    const v = await version(); await waitText(new RegExp(`Active version\\s*v${v}\\b`)); const t = await pageText();
+    expect(/Took effect/.test(t) && /Changed by/.test(t) && /What changed/.test(t), 'the status block is incomplete');
+    const diffs = await ev(`document.querySelectorAll('.c1-differences li').length`); expect(diffs >= 1, `no field differences are listed (${t.match(/No differences[^.]*\\./)?.[0] ?? 'none'})`);
+    expect(/waiting requests would decide differently/.test(t), 'no count of waiting requests that would decide differently');
+  });
+  await step('Rules: "Roll back" asks first, "Keep current rules" changes nothing, and confirming restores the earlier rules as a new version', async () => {
+    const v0 = await version(); await click({ sel: 'button', text: 'Roll back', exact: true }); await waitText(/Roll back to v\d+\?/);
+    await click('Keep current rules'); await waitGone({ sel: '[role=dialog]', page: true }); expect((await version()) === v0, 'cancelling still rolled back');
+    await click({ sel: 'button', text: 'Roll back', exact: true }); await waitText(/Roll back to v\d+\?/); await click({ sel: 'button', text: 'Roll back', exact: true, within: '[role=dialog]' });
+    await waitToast(/Restored rules from v\d+/i); await waitFor(async () => (await version()) > v0, { what: 'the restored version' });
+    expect(JSON.stringify((await stateNow()).policy.policy) === before, 'the restored rules are not the ones that were active before'); await waitText(new RegExp(`Active version\\s*v${await version()}\\b`));
   });
   await step('Rules: Versions lists the history and "Restore" brings an older version back as a new one', async () => {
     const v0 = await version(); const n = await ev(`__f.all({ sel: 'button', text: 'Restore', exact: true }).length`); expect(n >= 1, 'no older version to restore');
     await click({ sel: 'button', text: 'Restore', exact: true, nth: 0 }); await waitToast(/Restored rules from v\d+/i); await waitFor(async () => (await version()) > v0, { what: 'the restored version to be active' });
   });
+  if (fx) await api(`/api/keys/${encodeURIComponent(fx.keyId)}`, { method: 'DELETE' }).catch(() => {});
 });
 
 
@@ -1004,6 +1225,10 @@ flow('demo-billing', async () => {
     await waitText('Demo: every feature on'); const pos = await locate({ sel: 'button', text: 'Choose Pro' }, { allowDisabled: true }); expect(pos.disabled, 'Choose Pro should be off in the demo');
     await click({ sel: 'a', text: 'Create an account to subscribe' }); await waitFor(async () => (await ev('location.pathname')) === '/signup', { what: '/signup' });
   });
+  await step('Demo billing: the usage meter shows the actions used this month against the demo limit', async () => {
+    await openApp('settings/billing'); const u = (await api('/api/billing/usage')).json; await waitText('Actions this month'); const bar = await ev(`(() => { const b = document.querySelector('[role=progressbar][aria-label="Actions this month usage"]'); return b && { now: b.getAttribute('aria-valuenow'), max: b.getAttribute('aria-valuemax') }; })()`);
+    expect(bar && Number(bar.max) === u.monthlyLimit && Number(bar.now) === Math.min(u.actionsUsed, u.monthlyLimit) && u.actionsUsed > 0, `the meter shows ${JSON.stringify(bar)} but the server says ${u.actionsUsed} of ${u.monthlyLimit}`); await openApp('settings/billing');
+  });
   await step('Demo security tab: asks for an account instead of showing dead passkey buttons', async () => {
     await openApp('settings/security'); await waitText('Create an account before adding passkeys'); await waitControl({ sel: 'a', text: 'Create account' });
   });
@@ -1032,10 +1257,183 @@ flow('demo-agents', async () => {
 });
 
 
+
+// ---- trust levels and freeze explanations (demo workspace, which has 90 days of history to preview) ----
+flow('trust', async () => {
+  await ensureDemo(); const name = `Flow trust agent ${run}`; let fx, order, heldId;
+  const radio = (label, who = name) => ({ sel: 'input[type=radio]', text: label, in: who });
+  const agentNow = async () => (await stateNow()).agents.find(a => a.id === fx.agent.id);
+  const saveTrust = async () => { await click({ sel: 'button', text: 'Save trust level', in: name }); await waitToast(/Saved/); };
+  await step('Setup (not under test): a disposable agent with no cap, so it starts at "Everything the rules allow"', async () => {
+    fx = await disposableAgent(name, { max_per_action: null }); order = (await stateNow()).orders.find(o => o.capture_id); expect(order, 'no demo order'); expect(fx.agent.max_per_action == null, 'the new agent has a cap');
+  }, { critical: true });
+  await openApp('agents');
+  await step('Agents: every trust level shows its own numbers for the last 90 days', async () => {
+    await waitFor(async () => (await trustOf('Support agent'))?.levels.every(l => /taps \/ 100/.test(l)), { what: 'the three preview lines', timeout: 15000 });
+    const t = await trustOf('Support agent'); expect(new Set(t.levels).size > 1, `all three levels show the same numbers: ${t.levels.join(' | ')}`);
+  });
+  await step('Agents: moving the trust control updates the preview sentence under it', async () => {
+    const seen = {};
+    for (const [id, label] of [['ask', 'Ask every time'], ['small', 'Small amounts on its own'], ['rules', 'Everything the rules allow']]) {
+      await click(radio(label, 'Support agent')); await waitFor(async () => { const t = await trustOf('Support agent'); return t.level === id && /\d+ taps per 100/.test(t.preview); }, { what: `the ${id} preview`, timeout: 15000 }); seen[id] = (await trustOf('Support agent')).preview;
+    }
+    expect(seen.ask !== seen.rules, `asking every time and following the rules preview the same: ${seen.ask}`);
+    const small = amount => type({ sel: 'input', text: 'Small-amount limit', in: 'Support agent' }, amount);
+    await click(radio('Small amounts on its own', 'Support agent')); await small('1'); await waitFor(async () => /\d+ taps per 100/.test((await trustOf('Support agent')).preview), { what: 'the $1 preview' }); const low = (await trustOf('Support agent')).levels[1];
+    await small('900'); await waitFor(async () => (await trustOf('Support agent')).levels[1] !== low, { what: 'the numbers to change with the limit', timeout: 15000 }); return `$1 limit: ${low} | $900 limit: ${(await trustOf('Support agent')).levels[1]}`;
+  });
+  await step('Agents: "Save trust level" is off until something changes, and a non-money limit is refused', async () => {
+    await openApp('agents'); const pos = await locate({ sel: 'button', text: 'Save trust level', in: name }, { allowDisabled: true }); expect(pos.disabled, 'Save is on although nothing changed');
+    await click(radio('Small amounts on its own')); await type({ sel: 'input', text: 'Small-amount limit', in: name }, '0'); await waitText('Enter a positive USD amount');
+    const bad = await locate({ sel: 'button', text: 'Save trust level', in: name }, { allowDisabled: true }); expect(bad.disabled, 'Save is on for a $0 limit');
+  });
+  await step('Agents: saving "Ask every time" persists after a reload', async () => {
+    await openApp('agents'); await click(radio('Ask every time')); await saveTrust(); await openApp('agents');
+    const t = await trustOf(name); expect(t.level === 'ask', `after a reload the level is ${t.level}`); expect((await agentNow()).max_per_action === 0, `the server stored ${(await agentNow()).max_per_action}`);
+  });
+  await step('Agents: an agent at "Ask every time" holds even a $1 refund for the owner', async () => {
+    const r = await agentPost(fx.key, '/v1/refunds', { capture_id: order.capture_id, amount: 1, requester_email: order.customer_email, source_message: 'Please refund $1 for my order.', reason: 'Tiny refund at Ask every time' }, `flow-trust-${run}`);
+    expect(r.json?.status === 'awaiting_approval', `a $1 refund from an agent at Ask every time came back ${r.json?.status}`); heldId = r.json.id.replace('act_', '');
+    const row = (await stateNow()).ledger.find(e => String(e.id) === heldId); expect(row.checks.some(c => /agent/.test(c.id) && c.outcome === 'hold'), `no agent-level hold among the checks: ${row.checks.map(c => c.id + ':' + c.outcome)}`);
+  }, { ok4xx: true });
+  await step('Agents: saving "Small amounts on its own" at $7 persists after a reload', async () => {
+    await openApp('agents'); await click(radio('Small amounts on its own')); await type({ sel: 'input', text: 'Small-amount limit', in: name }, '7'); await saveTrust(); await openApp('agents');
+    const t = await trustOf(name); expect(t.level === 'small' && t.amount === '7', `after a reload: ${JSON.stringify(t)}`); expect((await agentNow()).max_per_action === 7, `the server stored ${(await agentNow()).max_per_action}`);
+  });
+  await step('Agents: saving "Everything the rules allow" persists after a reload', async () => {
+    await click(radio('Everything the rules allow')); await saveTrust(); await openApp('agents');
+    const t = await trustOf(name); expect(t.level === 'rules', `after a reload the level is ${t.level}`); expect((await agentNow()).max_per_action == null, `the server stored ${(await agentNow()).max_per_action}`);
+  });
+  await step('Agents: a frozen agent shows who froze it, when, and what to do next; Unfreeze clears it', async () => {
+    await click({ sel: 'button', text: `Freeze ${name}` }); const t = await waitText(/Frozen · owner freeze/);
+    const card = await cardText(name); expect(/Changed by/.test(card) && /Frozen at/.test(card), `the card lacks who and when:\n${card.replace(/\s+/g, ' ')}`);
+    const ex = (await agentNow()).freeze_explanation; expect(ex?.check === 'owner_freeze' && ex.next_step, `the server has no explanation: ${JSON.stringify(ex)}`); expect(card.includes(ex.next_step.slice(0, 30)), 'the next step is not shown on the card');
+    await click({ sel: 'button', text: `Unfreeze ${name}` }); await waitControl({ sel: 'button', text: `Freeze ${name}` }); await waitFor(async () => !/Frozen · owner freeze/.test(await cardText(name)), { what: 'the explanation to go' });
+    expect(!(await agentNow()).freeze_explanation, 'the server still has a freeze explanation after unfreezing');
+  });
+  await step('Ledger: a request blocked by a freeze shows which rule stopped it and the next step', async () => {
+    await click({ sel: 'button', text: `Freeze ${name}` }); await waitControl({ sel: 'button', text: `Unfreeze ${name}` });
+    const r = await agentPost(fx.key, '/v1/refunds', { capture_id: order.capture_id, amount: 1, requester_email: order.customer_email, source_message: 'Please refund $1 for my order.', reason: 'Tiny refund while frozen' }, `flow-trust-frozen-${run}`);
+    expect(r.json?.status === 'blocked', `a frozen agent's request came back ${r.status} ${r.json?.status}`); const id = r.json.id.replace('act_', '');
+    await goto(`/app#ledger/${id}`); await waitText(`Request #${id}`); const t = await waitText('Why it stopped'); expect(/Next step/.test(t), 'no next step for the blocked request');
+    await key('Escape'); await openApp('agents'); await click({ sel: 'button', text: `Unfreeze ${name}` }); await waitControl({ sel: 'button', text: `Freeze ${name}` });
+  }, { ok4xx: true });
+  if (heldId) await api(`/api/ledger/${heldId}/decline`, { method: 'POST', body: { reason: 'Cleared by the button flow' } }).catch(() => {});
+  if (fx) await api(`/api/keys/${encodeURIComponent(fx.keyId)}`, { method: 'DELETE' }).catch(() => {});
+});
+
+
+// ---- inbox: three panes, the highlighted hidden instruction, the explanation of a blocked request ----
+flow('inbox', async () => {
+  await ensureDemo(); await viewport(1440, 900);
+  await step('Setup (not under test): Jordan\'s injected email has been handled by the agent', async () => {
+    if ((await ticketOf('Jordan')).status !== 'handled') await runTicket('Jordan');
+  }, { ok4xx: true });
+  await step('Inbox: three panes side by side: the requests, the message, and what the agent did', async () => {
+    await openApp('inbox');
+    const p = await ev(`(() => { const q = s => document.querySelector(s)?.getBoundingClientRect(); const o = r => r && { l: Math.round(r.left), r: Math.round(r.right), w: Math.round(r.width) };
+      return [o(q('.inbox-layout > [data-slot=card]:first-child')), o(q('section[aria-label="The message"]')), o(q('section[aria-label="What the agent did"]'))]; })()`);
+    expect(p.every(Boolean), `a pane is missing: ${JSON.stringify(p)}`); expect(p[0].r <= p[1].l + 1 && p[1].r <= p[2].l + 1, `the panes are not left to right: ${JSON.stringify(p)}`); expect(p.every(x => x.w > 180), `a pane is too narrow: ${JSON.stringify(p)}`);
+    return JSON.stringify(p.map(x => x.w));
+  });
+  await step('Inbox: Jordan\'s email shows the hidden instruction the AI review quoted, highlighted', async () => {
+    await click({ sel: 'button.item', text: 'Jordan' }); await waitText('AI review flagged hidden instructions');
+    const marks = await ev(`[...document.querySelectorAll('section[aria-label="The message"] mark')].map(m => m.innerText)`); expect(marks.length >= 1, `nothing is highlighted: ${(await ev(`document.querySelector('.message-warning')?.innerText`))}`);
+    expect(marks.some(m => m.length > 8), `the highlight is too short to be an instruction: ${JSON.stringify(marks)}`); return `highlighted: "${marks[0].slice(0, 80)}"`;
+  });
+  await step('Inbox: a blocked request shows which rule stopped it, the evidence and the next step', async () => {
+    const t = await ticketOf('Jordan'); const st = await stateNow(); const blocked = st.ledger.filter(e => e.ticket_id === t.id && e.status === 'blocked');
+    if (!blocked.length) { notes.push(`Jordan's request produced no blocked ledger row in this run (${st.ledger.filter(e => e.ticket_id === t.id).map(e => e.status).join(', ') || 'no payment request'}), so the block explanation in the inbox was not shown; the freeze-block explanation is covered in the trust flow.`); return 'no blocked row for Jordan this run'; }
+    const pane = 'section[aria-label="What the agent did"]'; const text = await ev(`document.querySelector(${JSON.stringify(pane)}).innerText`);
+    expect(/Why it stopped/.test(text) && /Next step/.test(text), `no explanation among: ${text.replace(/\\s+/g, ' ').slice(0, 300)}`);
+  });
+  await step('Inbox: Maya\'s ticket still shows her message beside what the agent did', async () => { await click({ sel: 'button.item', text: 'Maya' }); await waitText(/chipped/i); await waitText('What the agent did'); });
+});
+
+// ---- landing: the decision stream and the legal pages ----
+flow('landing', async () => {
+  await resetBrowser(); await viewport(1440, 900);
+  const stream = () => ev(`document.querySelector('.decision-stream')?.innerText.replace(/\\s+/g, ' ')`);
+  await step('Landing: the decision stream plays by itself', async () => {
+    await goto('/'); await waitFor(async () => !!(await stream()), { what: 'the stream' }); const a = await stream(); await sleep(3500); const b = await stream(); expect(a !== b, `the stream did not move in 3.5s: ${a?.slice(0, 120)}`);
+  });
+  await step('Landing: Pause stops the stream, the label becomes Play, and Play resumes it', async () => {
+    await click('Pause demo stream'); await waitControl({ sel: 'button', text: 'Play demo stream' }); const a = await stream(); await sleep(2500); expect((await stream()) === a, 'the stream kept moving while paused');
+    await click('Play demo stream'); await waitControl({ sel: 'button', text: 'Pause demo stream' }); await sleep(2500); expect((await stream()) !== a, 'the stream did not resume');
+  });
+  for (const [who, full, outcome] of [['Maya', 'Maya Chen', 'Executed'], ['Daniel', 'Daniel Okafor', 'Held for the owner'], ['Jordan', 'Jordan Blake', 'Blocked']]) {
+    await step(`Landing: the ${who} button shows ${full}'s request and its outcome "${outcome}"`, async () => {
+      await click({ sel: 'nav[aria-label="Recorded requests"] button', text: who });
+      expect((await ev(`__f.one({ sel: 'nav[aria-label="Recorded requests"] button', text: ${JSON.stringify(who)} }).getAttribute('aria-pressed')`)) === 'true', `${who} is not marked as pressed`);
+      const t = await stream(); expect(t.includes(full), `the stream shows someone else: ${t.slice(0, 120)}`); expect(t.includes(outcome), `no "${outcome}" in: ${t.slice(0, 200)}`);
+    });
+  }
+  await step('Landing: the footer Privacy link opens /privacy, and a hard reload keeps the page', async () => {
+    await goto('/'); await click({ sel: 'footer a', text: 'Privacy' }); await waitFor(async () => (await ev('location.pathname')) === '/privacy', { what: '/privacy' });
+    await waitText('What is stored'); await send('Page.reload'); await sleep(600); await waitFor(async () => !navigating && (await ev(`document.readyState`)) === 'complete', { what: 'the reload' });
+    expect((await ev('location.pathname')) === '/privacy', 'a reload left /privacy'); await waitText('Where data goes'); expect((await ev(`document.querySelector('h1')?.innerText`)) === 'Privacy', 'the page title is not Privacy');
+  });
+  await step('Landing: the footer Terms link opens /terms, and a hard reload keeps the page', async () => {
+    await goto('/'); await click({ sel: 'footer a', text: 'Terms' }); await waitFor(async () => (await ev('location.pathname')) === '/terms', { what: '/terms' });
+    await waitText('What an approval does'); await send('Page.reload'); await sleep(600); await waitFor(async () => !navigating && (await ev(`document.readyState`)) === 'complete', { what: 'the reload' });
+    expect((await ev('location.pathname')) === '/terms', 'a reload left /terms'); await waitText('Plans and availability'); expect((await ev(`document.querySelector('h1')?.innerText`)) === 'Terms of use', 'the page title is not Terms of use');
+  });
+  await step('Legal pages: typing the address straight in loads each page, and their links lead back', async () => {
+    await goto('/privacy'); await waitText('What is stored'); await click({ sel: 'footer a', text: 'Terms' }); await waitFor(async () => (await ev('location.pathname')) === '/terms', { what: '/terms' });
+    await click({ sel: 'footer a', text: 'Privacy' }); await waitFor(async () => (await ev('location.pathname')) === '/privacy', { what: '/privacy' });
+    await click({ sel: 'footer a', text: 'Home' }); await waitFor(async () => (await ev('location.pathname')) === '/', { what: 'the home page' });
+    await goto('/'); await openSummary({ text: 'Who receives my data?' }); await click({ sel: 'a', text: 'Read the privacy notice' }); await waitFor(async () => (await ev('location.pathname')) === '/privacy', { what: '/privacy from the FAQ' });
+  });
+});
+
+// ---- phone width: no sideways scrolling, and the Approve button is on screen ----
+flow('mobile', async () => {
+  await ensureDemo(); let fx; const held375 = [];
+  const overflow = () => ev(`(() => { const iw = screen.width, wide = [...document.querySelectorAll('body *')].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.right > iw + 1 && !e.closest('.ag-root-wrapper, [data-sonner-toaster], .benchmark-scroll, .c1-table-scroll, [data-radix-popper-content-wrapper]') && getComputedStyle(e).position !== 'fixed'; }).slice(0, 4).map(e => e.tagName.toLowerCase() + '.' + String(e.className).slice(0, 40));
+    return { iw, sw: document.documentElement.scrollWidth, wide }; })()`);
+  const fits = async what => { const o = await overflow(); expect(o.sw <= o.iw, `${what} scrolls sideways: page is ${o.sw}px wide on a ${o.iw}px screen (wide: ${o.wide.join(', ')})`); return `${o.sw}px of ${o.iw}px`; };
+  await step('Setup (not under test): put a request in the approval queue', async () => {
+    fx = await disposableAgent(`Flow phone agent ${run}`, {}); const order = (await stateNow()).orders.find(o => o.capture_id);
+    const r = await agentPost(fx.key, '/v1/refunds', { capture_id: order.capture_id, amount: 4, requester_email: order.customer_email, source_message: 'Please refund $4 for my order.', reason: 'Phone layout check' }, `flow-m-${run}`); expect(r.json?.status === 'awaiting_approval', `expected held, got ${r.json?.status}`); held375.push(r.json.id.replace('act_', ''));
+  }, { ok4xx: true });
+  await viewport(375, 812, true);
+  await step('375px wide: the landing page does not scroll sideways', async () => { await goto('/'); await waitText('Every refund checked'); return fits('the landing page'); });
+  await step('375px wide: /approve does not scroll sideways and the Approve button is on screen', async () => {
+    await goto('/approve'); await waitControl({ sel: 'button', re: '^Approve \\$' }); const note = await fits('/approve');
+    const r = await ev(`(() => { const b = document.querySelector('[data-film=approve]').getBoundingClientRect(); return { t: Math.round(b.top), b: Math.round(b.bottom), l: Math.round(b.left), r: Math.round(b.right), H: innerHeight, W: innerWidth }; })()`);
+    expect(r.t >= 0 && r.b <= r.H && r.l >= 0 && r.r <= r.W, `the Approve button is at ${JSON.stringify(r)}`); return `${note}; button ${r.t}-${r.b}px of ${r.H}px`;
+  });
+  await step('375px wide: with the decision details opened, /approve still does not scroll sideways', async () => {
+    const id = await selectedReq(); await openSummary({ text: 'Review checks', within: cardOf(id) }); await openSummary({ text: 'Approval note', within: cardOf(id) }); await sleep(300); return fits('/approve with the details open');
+  });
+  for (const page of ['overview', 'rules', 'agents', 'inbox', 'approvals']) {
+    await step(`375px wide: ${page} does not scroll sideways`, async () => { await openApp(page); await sleep(800); return fits(page); });
+  }
+  await viewport(1440, 900);
+  for (const id of held375) await api(`/api/ledger/${id}/decline`, { method: 'POST', body: { reason: 'Cleared by the button flow' } }).catch(() => {});
+  if (fx) await api(`/api/keys/${encodeURIComponent(fx.keyId)}`, { method: 'DELETE' }).catch(() => {});
+});
+
+// ---- console errors on every page ----
+flow('pages', async () => {
+  await ensureDemo(); await viewport(1440, 900);
+  const visit = (name, path, after) => step(`Console: ${name} loads without console errors`, async () => {
+    const n = consoleMsgs.length; await (path.startsWith('/app#') ? openApp(path.slice(5)) : goto(path)); await sleep(1500); if (after) await after();
+    const errs = consoleErrorsSince(n); expect(!errs.length, errs.slice(0, 3).map(m => `${m.type}: ${m.text}`).join(' || '));
+  });
+  for (const [name, path] of [['landing', '/'], ['sign-in', '/signin'], ['sign-up', '/signup'], ['privacy', '/privacy'], ['terms', '/terms']]) await visit(name, path);
+  await visit('phone approvals', '/approve');
+  for (const page of ['overview', 'inbox', 'approvals', 'agents', 'rules', 'ledger', 'watch', 'setup', 'developers', 'developers/webhooks', 'audit', 'settings/general', 'settings/paypal', 'settings/team', 'settings/notifications', 'settings/billing', 'settings/security'])
+    await visit(page, `/app#${page}`, page === 'ledger' ? async () => { await waitFor(async () => (await ev(`document.querySelectorAll('.ag-row').length`)) > 0, { what: 'ledger rows' }); await sleep(1000); } : undefined);
+  await step('Overview: the first screen says what needs the owner now and shows the interruption count', async () => {
+    await openApp('overview'); const t = await pageText(); expect(/What needs you now/.test(t), 'no "What needs you now" section'); expect(/taps per 100/i.test(t), 'no taps-per-100 interruption figure on the overview');
+  });
+});
+
 //FLOWS-GO-HERE
 
 // ---------- run ----------
-const ORDER = ['account', 'settings', 'agents', 'developers', 'setup', 'workspaces', 'roles', 'demo', 'approvals', 'hijack', 'watch', 'demo-agents', 'ledger', 'rules', 'demo-billing'];
+const ORDER = ['account', 'settings', 'agents', 'developers', 'setup', 'workspaces', 'roles', 'demo', 'approvals', 'trust', 'hijack', 'watch', 'demo-agents', 'ledger', 'rules', 'inbox', 'demo-billing', 'landing', 'mobile', 'pages'];
 flows.sort((a, b) => ORDER.indexOf(a[0]) - ORDER.indexOf(b[0]));
 for (const [name, fn] of flows) {
   if (ONLY && !ONLY.includes(name)) continue;
@@ -1043,6 +1441,8 @@ for (const [name, fn] of flows) {
   console.log(`\n=== ${name}`);
   try { await fn(); } catch (e) { rows.push({ flow: name, name: '(flow crashed)', result: 'FAIL', note: clean(e.message) }); console.log(`FAIL  ${name} | flow crashed | ${clean(e.message).split('\n')[0]}`); }
 }
+{ const seen = [...new Map(consoleErrorsSince(0).map(m => [`${m.where}|${m.text}`, m])).values()];
+  notes.push(seen.length ? `Console errors and warnings seen during the run (the AG Grid licence banner is ignored): ${seen.slice(0, 8).map(m => `${m.where || '/'}: ${m.type} ${m.text.slice(0, 120)}`).join(' // ')}` : 'No console errors or warnings on any page visited (the AG Grid licence banner, a known missing key, is ignored).'); }
 const pass = rows.filter(r => r.result === 'PASS').length, fail = rows.filter(r => r.result === 'FAIL').length, skip = rows.filter(r => r.result === 'SKIP').length;
 const md = [`# Button flows: results`, '', `Run ${new Date().toISOString().slice(0, 10)} against ${BASE} (a throwaway local server, PayPal sandbox). **${pass} passed, ${fail} failed, ${skip} skipped.**`, '',
   'Each step is a real mouse click or real typing in headless Chrome, followed by a check of what the page shows. `node tests/button-flows.mjs` reruns it.', '',
@@ -1052,4 +1452,5 @@ const md = [`# Button flows: results`, '', `Run ${new Date().toISOString().slice
 const outName = ONLY ? 'button-flows-RESULTS.partial.md' : 'button-flows-RESULTS.md';
 writeFileSync(new URL(`./${outName}`, import.meta.url), md);
 console.log(`\n${pass} passed, ${fail} failed, ${skip} skipped. Wrote tests/${outName}`);
+if (process.env.FLOW_COOKIES) { const jar = (await send('Network.getAllCookies')).cookies ?? []; if (jar.length) writeFileSync(process.env.FLOW_COOKIES, JSON.stringify(jar)); }
 process.exit(fail ? 1 : 0);

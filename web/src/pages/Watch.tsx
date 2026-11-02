@@ -3,7 +3,7 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { useTheme } from "../components/theme-provider";
 import { lightTheme, darkTheme } from "../components/grid-theme";
-import { IncidentBanner } from "../components/IncidentBanner";
+import { IncidentBanner, frozenAgentIds } from "../components/IncidentBanner";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
@@ -66,6 +66,9 @@ export function Watch({ state }: { state: State }) {
   const busy = sweep.isPending || settings.isPending || bypass.isPending;
   const manageable = canManage(state);
   const watch = query.data?.watch;
+  // An open incident, or one the owner marked "not me" while its agents are still frozen: the next step stays on screen.
+  const attention = (query.data?.incidents ?? []).filter(incident => !incident.resolved_at
+    || (incident.resolution === "not_mine" && frozenAgentIds(incident.frozen_agents).some(id => state.agents.find(agent => agent.id === id)?.status === "frozen")));
   return (
     <div className="watch-page space-y-6">
       <Resource query={query}>
@@ -122,7 +125,7 @@ export function Watch({ state }: { state: State }) {
             </Card>
             <section className="watch-incidents" aria-label="Incidents">
               <h2>Incidents</h2>
-              {query.data?.incidents.some(incident => !incident.resolved_at) ? query.data.incidents.filter(incident => !incident.resolved_at).sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id).map(incident => <IncidentBanner key={`${state.workspace?.id ?? "film"}:${incident.id}`} incident={incident} state={state} />)
+              {attention.length ? attention.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id).map(incident => <IncidentBanner key={`${state.workspace?.id ?? "film"}:${incident.id}`} incident={incident} state={state} />)
                 : <div className="watch-empty"><h3>{query.data?.incidents.length ? "No open incidents" : "No incidents recorded"}</h3><p>Watching for PayPal refunds and payout events that have no matching Floorwalker action. Order checks compare refunds on tracked PayPal orders; connected webhooks report PayPal events.</p><p>{watch.last_sweep ? `Last order check: ${new Date(watch.last_sweep.at).toLocaleString("en-US")}. ${watch.last_sweep.orders} orders and ${watch.last_sweep.refunds} refunds checked.` : "No order check has completed yet."}</p>{watch.last_event && <p>Last PayPal event: {new Date(watch.last_event.at).toLocaleString("en-US")}.</p>}</div>}
             </section>
             <details className="watch-history" open>

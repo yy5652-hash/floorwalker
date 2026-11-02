@@ -858,7 +858,7 @@ a:not([data-slot="button"]):not(.brand-mark):hover { text-decoration: underline;
 }
 
 /* === Redesign C1: rules, shadow/status and billing usage (scoped) === */
-.c1-rules { min-width: 0; background: var(--background); display: grid; gap: 32px; }
+.c1-rules { min-width: 0; background: var(--background); display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
 .c1-rules h2 { font-size: 23px; letter-spacing: -.035em; font-weight: 550; }
 .c1-rules h3 { font-size: 15px; font-weight: 600; }
 .c1-muted { font-size: 12px; line-height: 1.7; color: var(--muted-foreground); overflow-wrap: anywhere; }
@@ -868,7 +868,7 @@ a:not([data-slot="button"]):not(.brand-mark):hover { text-decoration: underline;
 .c1-stepper button span { font-size: 11px; font-variant-numeric: tabular-nums; }
 .c1-stepper button[aria-current] { border-color: var(--foreground); color: var(--foreground); font-weight: 600; }
 .c1-stepper button:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
-.c1-section { display: grid; gap: 24px; min-width: 0; padding-bottom: 32px; border-bottom: 1px solid var(--border); scroll-margin-top: 24px; }
+.c1-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; min-width: 0; padding-bottom: 32px; border-bottom: 1px solid var(--border); scroll-margin-top: 24px; }
 .c1-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .c1-write-layout { display: grid; gap: 32px; min-width: 0; }
 .c1-editor-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 32px; min-width: 0; align-items: start; }
@@ -881,7 +881,7 @@ a:not([data-slot="button"]):not(.brand-mark):hover { text-decoration: underline;
 .c1-rules .c1-compiled .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
 .c1-rules .c1-compiled .mb-3 { margin: 14px 0 0; }
 .c1-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.c1-section-line { border-top: 1px solid var(--border); padding-top: 20px; display: grid; gap: 12px; min-width: 0; }
+.c1-section-line { border-top: 1px solid var(--border); padding-top: 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
 .c1-suggestions { border-top: 1px solid var(--border); padding-top: 24px; min-width: 0; }
 .c1-learned h2 { font-size: 17px; }
 .c1-learned > div > p { font-size: 12px; }

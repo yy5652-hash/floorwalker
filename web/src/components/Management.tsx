@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Copy, Loader2 } from "lucide-react";
+import { Check, Copy, Loader2 } from "lucide-react";
 import { api, errorMessage } from "../api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -157,7 +157,10 @@ export function Confirm({
   onConfirm,
   children,
   disabled,
+  reason,
   label = "Confirm",
+  done,
+  closeOnError = false,
   danger = true,
 }: {
   title: string;
@@ -165,7 +168,13 @@ export function Confirm({
   onConfirm: () => Promise<unknown>;
   children: ReactNode;
   disabled?: boolean;
+  // Why the button is disabled, shown as its tooltip.
+  reason?: string;
   label?: string;
+  // Shown as a notice once the action has gone through.
+  done?: string;
+  // Close this dialog when the action fails, so an explanation on the page behind it is not hidden.
+  closeOnError?: boolean;
   danger?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -177,6 +186,7 @@ export function Confirm({
         variant="outline"
         size="sm"
         disabled={disabled}
+        title={disabled ? reason : undefined}
         onClick={() => setOpen(true)}
       >
         {children}
@@ -204,6 +214,8 @@ export function Confirm({
               void run(async () => {
                 await onConfirm();
                 setOpen(false);
+              }, done).then((ok) => {
+                if (!ok && closeOnError) setOpen(false);
               })
             }
           >
@@ -215,6 +227,23 @@ export function Confirm({
     </>
   );
 }
+// Copies text, falling back to a hidden textarea where the clipboard API is blocked (plain http, some embedded views).
+export async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.append(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    if (!ok) throw new Error("Copy unavailable");
+  }
+}
 export function Code({
   text,
   label = "Copy code",
@@ -222,23 +251,29 @@ export function Code({
   text: string;
   label?: string;
 }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   return (
     <div className="relative min-w-0 rounded-lg border bg-muted/40">
       <div className="flex justify-end border-b p-1">
         <Button
           variant="ghost"
           size="sm"
+          aria-label={copied ? "Copied to clipboard" : label}
           onClick={async () => {
             try {
-              await navigator.clipboard.writeText(text);
+              await copyText(text);
+              setCopied(true);
+              clearTimeout(timer.current);
+              timer.current = setTimeout(() => setCopied(false), 2000);
               toast.success("Copied");
             } catch {
               toast.error("Copy unavailable. Select the text to copy it.");
             }
           }}
         >
-          <Copy className="size-3" />
-          {label}
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+          {copied ? "Copied" : label}
         </Button>
       </div>
       <pre className="overflow-auto p-4 text-xs leading-6 whitespace-pre max-h-96">

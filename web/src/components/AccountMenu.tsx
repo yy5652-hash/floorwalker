@@ -115,7 +115,12 @@ export function WorkspaceMenu({ state }: { state: State }) {
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
-          <Button disabled={busy || !name.trim()}>Create workspace</Button>
+          <Button
+            disabled={busy || !name.trim()}
+            title={name.trim() ? undefined : "Give the workspace a name first."}
+          >
+            Create workspace
+          </Button>
         </form>
       </Modal>
     </>
@@ -123,6 +128,8 @@ export function WorkspaceMenu({ state }: { state: State }) {
 }
 export function UserMenu({ state }: { state: State }) {
   const { busy, run } = useTask();
+  // A passkey prompt can stay open for a long time; it must not lock the menu (and Sign out) while it waits.
+  const passkey = useTask();
   const name = state.me?.name ?? "Demo owner";
   return (
     <DropdownMenu>
@@ -154,11 +161,12 @@ export function UserMenu({ state }: { state: State }) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          disabled={isFilm() || state.me?.anonymous}
-          onSelect={() => void run(() => account.addPasskey(), "Passkey added")}
+          disabled={isFilm() || state.me?.anonymous || passkey.busy}
+          title={state.me?.anonymous ? "Create an account first. Passkeys belong to accounts, not to the demo." : undefined}
+          onSelect={() => void passkey.run(() => account.addPasskey(), "Passkey added")}
         >
           <Fingerprint />
-          Add a passkey
+          {passkey.busy ? "Waiting for your device…" : state.me?.anonymous ? "Add a passkey (needs an account)" : "Add a passkey"}
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <a href="/app#settings">

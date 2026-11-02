@@ -11,6 +11,7 @@ import { ctx, inWorkspace, setDefaultWorkspace } from "./context.ts";
 import * as store from "./db.ts";
 import { seedDemo } from "./demo.ts";
 import { audit } from "./audit.ts";
+import { agentAllowance } from "./agent-budget.ts";
 import { assertActionQuota } from "./billing.ts";
 import { publish } from "./events.ts";
 import { handle, HttpError, need, signedIn } from "./http.ts";
@@ -115,8 +116,9 @@ function metrics(rows: store.LedgerRow[]) {
 function agentsWithStats(rows: store.LedgerRow[], policy: ReturnType<typeof store.activePolicy>["policy"]) {
   return store.agents().map((a) => {
     const mine = rows.filter((r) => r.agent_id === a.id);
-    const budget = a.can_refund && !a.can_payout ? policy.refunds.budget : a.can_payout && !a.can_refund ? policy.payouts.budget : null;
-    const days = budget ? ({ day: 1, week: 7, month: 30 } as const)[budget.period] : 7;
+    // The agent's own budget (if it has one) wins over the shared one, so the card shows what it was given.
+    const { budget, period } = agentAllowance(a, policy);
+    const days = budget ? ({ day: 1, week: 7, month: 30 } as const)[period] : 7;
     const since = Date.now() - days * 86_400_000;
     const spent = sum(mine.filter((r) => (r.status === "executed" || r.status === "approved") && Date.parse(r.decided_at ?? r.created_at) >= since));
     return { ...a, budget, spent, metrics: metrics(mine), last: mine[0]?.created_at ?? null };

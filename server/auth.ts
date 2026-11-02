@@ -153,7 +153,8 @@ const options = {
     window: 60,
     max: 120,
     // Each demo visitor gets real sandbox orders, so new demo workspaces are rationed per IP.
-    customRules: { "/sign-in/anonymous": { window: 3600, max: 6 }, "/sign-up/email": { window: 3600, max: 10 } },
+    // Reads the app makes on every page load: a busy shared office network should not lock people out of their own menu.
+    customRules: { "/sign-in/anonymous": { window: 3600, max: 6 }, "/sign-up/email": { window: 3600, max: 10 }, "/organization/list": { window: 60, max: 600 }, "/get-session": { window: 60, max: 600 } },
   },
   plugins: [
     organization({

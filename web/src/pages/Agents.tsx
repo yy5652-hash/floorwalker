@@ -32,6 +32,7 @@ import {
   type PageProps,
 } from "../api";
 import { ConnectAgent, EmptyState } from "../components/UI";
+const manageHint = "Only owners and admins can manage agents.";
 export function AgentCard({
   agent,
   compact = false,
@@ -113,6 +114,7 @@ export function AgentCard({
           className={`   ml-auto h-8 px-2.5 text-xs   ${frozen ? "" : "text-block hover:bg-destructive/10"}`}
           data-film={`freeze-${agent.id}`}
           disabled={busy || !canManage(state)}
+          title={canManage(state) ? undefined : manageHint}
           onClick={() => void toggle()}
           aria-label={`${frozen ? "Unfreeze" : "Freeze"} ${agent.name}`}
           aria-pressed={frozen}
@@ -196,6 +198,7 @@ export function AgentCard({
                 variant="outline"
                 size="sm"
                 disabled={!canManage(state)}
+                title={canManage(state) ? undefined : manageHint}
                 onClick={() => onEdit?.(agent)}
               >
                 Edit agent
@@ -246,6 +249,7 @@ export function Agents(props: PageProps) {
         <div className="flex flex-wrap justify-between gap-3">
           <Button
             disabled={!canManage(props.state)}
+            title={canManage(props.state) ? undefined : manageHint}
             onClick={() => setEditing("new")}
           >
             New agent
@@ -302,6 +306,13 @@ export function FreezeAll({ state, refresh, notify }: PageProps) {
         variant="outline"
         disabled={
           !canManage(state) || !state.agents.some((a) => a.status === "active")
+        }
+        title={
+          !canManage(state)
+            ? manageHint
+            : state.agents.some((a) => a.status === "active")
+              ? undefined
+              : "Every agent is already frozen."
         }
         onClick={() => setOpen(true)}
       >
@@ -544,7 +555,10 @@ function AgentEditor({
             onChange={(e) => setExpires(e.target.value)}
           />
         </Field>
-        <Button disabled={!name.trim()}>
+        <Button
+          disabled={!name.trim()}
+          title={name.trim() ? undefined : "Give the agent a name first."}
+        >
           {busy ? "Saving…" : agent ? "Save agent" : "Create agent"}
         </Button>
       </fieldset>
@@ -554,6 +568,8 @@ function AgentEditor({
             title="Delete this agent?"
             description="Agents with payment history cannot be deleted. Freeze an agent to stop future requests."
             label="Delete agent"
+            done="Agent deleted"
+            closeOnError
             onConfirm={async () => {
               try {
                 await api(

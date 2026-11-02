@@ -108,6 +108,7 @@
     getCam() { return cam; },
     label(text) { label = text; return true; },
     frame(t) {
+      window.__flow?.(t);
       const m = Math.floor(t / 60), sec = (t % 60).toFixed(1).padStart(4, '0');
       $('film-read').textContent = label ? `${label} // T+${String(m).padStart(2, '0')}:${sec}` : '';
       layout(); placeRings(); stepAnimations(t); layout(); placeRings(); return window.scrollY;

@@ -66,7 +66,7 @@ export async function checkout(wsId: string, plan: Exclude<PlanId, "free">, subs
       user_action: "SUBSCRIBE_NOW",
       shipping_preference: "NO_SHIPPING",
       return_url: `${base()}/api/billing/return`,
-      cancel_url: `${base()}/app#settings`,
+      cancel_url: `${base()}/app#settings/billing`,
     },
   });
   const approveUrl = (sub.links as { rel: string; href: string }[]).find((l) => l.rel === "approve")?.href;

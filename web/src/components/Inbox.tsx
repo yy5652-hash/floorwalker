@@ -311,12 +311,25 @@ export function Inbox({
   if (!state.tickets.length)
     return (
       <Card className="min-w-0 gap-0 py-0 shadow-xs">
-        <EmptyState title="Your inbox is ready for its first request">
-          <p>Load the demo shop to give your agents something to work on.</p>
-          <Button asChild className="mt-4">
-            <a href="/app#setup">Set up your demo shop</a>
-          </Button>
-        </EmptyState>
+        {state.workspace?.demo ? (
+          <EmptyState title="Your inbox is ready for its first request">
+            <p>Load the demo shop to give your agents something to work on.</p>
+            <Button asChild className="mt-4">
+              <a href="/app#overview">Load the demo shop</a>
+            </Button>
+          </EmptyState>
+        ) : (
+          <EmptyState title="No requests yet">
+            <p>
+              The sample inbox lives in the demo workspace. In your own
+              workspace, requests arrive from your agents over the API or MCP
+              and show up in Approvals and the ledger.
+            </p>
+            <Button asChild className="mt-4">
+              <a href="/app#developers/quickstart">Open the quickstart</a>
+            </Button>
+          </EmptyState>
+        )}
       </Card>
     );
   return (
@@ -376,6 +389,7 @@ export function Inbox({
             className="text-block hover:bg-destructive/10"
             data-film="hijack"
             disabled={!!running || !ready}
+            title={ready ? undefined : "Finish setup to run an agent."}
             onClick={() => {
               setSelected("ATTACK");
               void run("/api/attack", "ATTACK");

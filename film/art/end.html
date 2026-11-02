@@ -7,7 +7,7 @@
   #e { font-family: 'JetBrains Mono', monospace; font-size: 28px; margin-top: 14px; color: var(--soft); }
 </style></head><body>
 <div class="shot" id="s"><img src="img/w-vault.jpg" alt=""></div>
-<canvas class="gl" id="c"></canvas>
+<canvas class="gl" id="f"></canvas><canvas class="gl" id="c"></canvas>
 <div class="col">
   <div class="wordmark quiet" id="a">Floorwalker</div>
   <div class="mono quiet" id="b">Every refund checked. Fewer taps as it learns.</div>
@@ -17,6 +17,8 @@
 <script src="cine.js"></script>
 <script type="module">
   import { stage, streams, dust } from './gate.js';
+  import { flow } from './flow.js';
+  const f = flow(document.getElementById('f'), 0.4);
   const s = stage(document.getElementById('c'), { alpha: true });
   const st = streams({ count: 700, attackShare: 0, gate: false, R: 13, near: 30, far: 150, speed: 0.5 }), du = dust({ count: 200 });
   [st, du].forEach(o => s.scene.add(o.object));
@@ -25,7 +27,7 @@
   window.render = t => {
     shot('s', t, -0.4, 60);
     document.querySelector('#s img').style.transform = `scale(${1.05 - 0.05 * smooth(clamp(t / 10))})`;
-    st.set(t, 0.55); du.set(t); s.draw();
+    f(t); st.set(t, 1); du.set(t); s.draw();
     rise('a', t, 0.4, 0, 0.9); rise('b', t, 0.9, 0, 0.7); rise('d', t, 1.7, 0, 0.7); rise('e', t, 2.1, 0, 0.7);
   };
   window.ready = true;

@@ -12,7 +12,7 @@
   .t b { font-family: 'Oxanium'; font-size: 42px; font-weight: 500; color: var(--ink); margin-right: 8px; letter-spacing: 0; }
   .bad { color: var(--red); } .mid { color: var(--amber); } .good { color: var(--green); }
 </style></head><body>
-<canvas class="gl" id="g"></canvas>
+<canvas class="gl" id="f"></canvas><canvas class="gl" id="g"></canvas>
 <div id="head"><h1 id="a">FloorwalkerBench</h1><div class="sub mono" id="b">198 labelled money moves · 80 attacks · $3,796 at stake · average of 3 runs</div></div>
 <div class="col" id="c" style="left:60px"><div class="k">No guard</div><div class="s">requests go straight to PayPal</div><div class="v bad" id="v1">$0</div><div class="d mono">taken by attacks</div><div class="t"><b>0</b>taps per 100 money moves</div></div>
 <div class="col" id="d" style="left:680px"><div class="k">Rules in the prompt</div><div class="s">the model, told the rules</div><div class="v mid" id="v2">$0</div><div class="d mono">taken by attacks</div><div class="t"><b>49</b>taps per 100 money moves</div></div>
@@ -20,7 +20,9 @@
 <script src="cine.js"></script>
 <script type="module">
   import { stage, streams, ring } from './gate.js';
-  const s = stage(document.getElementById('g'), { fov: 30 });
+  import { flow } from './flow.js';
+  const f = flow(document.getElementById('f'), 0.3);
+  const s = stage(document.getElementById('g'), { fov: 30, alpha: true });
   // One gate per guard, each drawn with its own vanishing point over its column: the share of red streams that get through follows how much money that guard let through.
   const G = [[620, 1], [0, 0.07], [-620, 0]].map(([x, leak]) => {
     const scene = new s.scene.constructor(), st = streams({ count: 3600, attackShare: 0.5, R: 6.6, leak, near: 26, far: 70, speed: 1.3 }), r = ring({ R: 6.6 });
@@ -37,7 +39,7 @@
     rise('a', t, 0.1, 0, 0.6); rise('b', t, 0.4, 0, 0.6);
     col('c', t, at1); col('d', t, at2); col('e', t, at3);
     count('v1', t, at1, 3796); count('v2', t, at2, 52);
-    s.renderer.clear();
+    f(t); s.renderer.clear();
     [at1, at2, at3].forEach((at, i) => {
       const on = smooth(clamp((t - at + 0.7) / 0.9));
       G[i].st.set(t + 3, on); G[i].r.set(t, on, i === 0 ? 0.9 : i === 1 ? 0.3 : 0);

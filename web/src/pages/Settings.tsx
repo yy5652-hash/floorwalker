@@ -269,9 +269,11 @@ function PayPal({ state, refresh }: PageProps) {
                 )}
                 <Confirm
                   disabled={!editable}
+                  reason="Only owners and admins can disconnect PayPal."
                   title="Disconnect PayPal?"
                   description="Your agents will lose access to this sandbox app. Demo workspaces fall back to Floorwalker's demo app."
                   label="Disconnect"
+                  done="PayPal disconnected"
                   onConfirm={async () => {
                     await api("/api/settings/paypal", "DELETE");
                     await settings.refetch();
@@ -327,6 +329,11 @@ function PayPal({ state, refresh }: PageProps) {
                       : "Connect sandbox app"}
                 </Button>
               </fieldset>
+              {!editable && (
+                <p className="text-xs text-muted-foreground">
+                  Only owners and admins can connect PayPal.
+                </p>
+              )}
             </form>
           </Card>
           <Card className="self-start p-6">
@@ -382,6 +389,15 @@ function Team({ state }: PageProps) {
       ? ["owner", "admin", "approver", "viewer"]
       : ["admin", "approver", "viewer"]
   ) as TeamRole[];
+  // Why a teammate's role and Remove button are locked, shown as their tooltip.
+  const rowReason = (member: { userId: string; role: string }) =>
+    !editable
+      ? "Only owners and admins can change the team."
+      : member.userId === state.me?.userId
+        ? "You can't change or remove your own membership."
+        : !isOwner(state) && member.role === "owner"
+          ? "Only an owner can change another owner."
+          : undefined;
   const billing = useResource<BillingData>("/api/billing", editable);
   const full =
     billing.data?.limits.members != null &&
@@ -417,6 +433,7 @@ function Team({ state }: PageProps) {
                         aria-label={`Role for ${member.user.name}`}
                         className={selectClass}
                         value={member.role}
+                        title={rowReason(member)}
                         disabled={
                           !editable ||
                           busy ||
@@ -443,9 +460,11 @@ function Team({ state }: PageProps) {
                           member.userId === state.me?.userId ||
                           (!isOwner(state) && member.role === "owner")
                         }
+                        reason={rowReason(member)}
                         title="Remove teammate?"
                         description={`${member.user.name} will lose access to this workspace.`}
                         label="Remove member"
+                        done="Member removed"
                         onConfirm={async () => {
                           await account.removeMember(id, member.id);
                           await team.refetch();
@@ -504,6 +523,11 @@ function Team({ state }: PageProps) {
               </Field>
               <Button disabled={full}>Create invitation link</Button>
             </fieldset>
+            {!editable && (
+              <p className="text-sm text-muted-foreground">
+                Only owners and admins can invite teammates.
+              </p>
+            )}
             {full && (
               <p className="text-sm text-muted-foreground">
                 Member limit reached, including pending invitations.{" "}
@@ -549,6 +573,7 @@ function Team({ state }: PageProps) {
                     title="Cancel invitation?"
                     description={`The invitation for ${invite.email} will no longer work.`}
                     label="Cancel invitation"
+                    done="Invitation canceled"
                     onConfirm={async () => {
                       await account.cancelInvite(invite.id);
                       await team.refetch();
@@ -684,6 +709,7 @@ function Notifications({ state }: PageProps) {
                 title="Remove this push device?"
                 description="This device will stop receiving notifications from your account."
                 label="Remove device"
+                done="Device removed"
                 onConfirm={async () => {
                   await api("/api/push/subscribe", "DELETE", {
                     endpoint: device.endpoint,
@@ -766,13 +792,20 @@ function Notifications({ state }: PageProps) {
               />
               <Button>Save Slack settings</Button>
             </fieldset>
+            {!canManage(state) && (
+              <p className="text-xs text-muted-foreground">
+                Only owners and admins can change Slack alerts.
+              </p>
+            )}
           </form>
           {slack.data?.configured && (
             <Confirm
               disabled={!canManage(state)}
+              reason="Only owners and admins can disconnect Slack."
               title="Disconnect Slack?"
               description="Workspace events will no longer be sent to Slack."
               label="Disconnect Slack"
+              done="Slack disconnected"
               onConfirm={async () => {
                 await api("/api/settings/slack", "DELETE");
                 await slack.refetch();
@@ -1067,6 +1100,7 @@ function Security({ state }: PageProps) {
                 title="Delete passkey?"
                 description="You will no longer be able to sign in with this passkey. Your password remains available."
                 label="Delete passkey"
+                done="Passkey deleted"
                 onConfirm={async () => {
                   await account.deletePasskey(key.id);
                   await passkeys.refetch();
@@ -1096,6 +1130,7 @@ function Security({ state }: PageProps) {
           title="Sign out other sessions?"
           description="Your other browsers and devices will need to sign in again."
           label="Sign out other sessions"
+          done="Other sessions signed out"
           onConfirm={() => account.revokeOtherSessions()}
         >
           Sign out other sessions

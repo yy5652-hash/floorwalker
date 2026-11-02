@@ -179,6 +179,7 @@ function Keys({ state }: PageProps) {
         </div>
         <Button
           disabled={!state.agents.length}
+          title={state.agents.length ? undefined : "Create an agent first. Every key belongs to one agent."}
           onClick={() => setOpen(true)}
         >
           <Plus />
@@ -238,6 +239,7 @@ function Keys({ state }: PageProps) {
                             title="Revoke this key?"
                             description={`${k.name} will stop authenticating requests immediately.`}
                             label="Revoke key"
+                            done="Key revoked"
                             onConfirm={async () => {
                               await api(
                                 `/api/keys/${encodeURIComponent(k.id)}`,
@@ -501,7 +503,10 @@ function TestConsole() {
               </Field>
             </>
           )}
-          <Button disabled={busy || !key.trim() || isFilm()}>
+          <Button
+            disabled={busy || !key.trim() || isFilm()}
+            title={key.trim() ? undefined : "Paste an agent key above first."}
+          >
             {busy ? "Sending…" : "Send request"}
           </Button>
         </form>
@@ -718,6 +723,7 @@ function Webhooks() {
                   size="sm"
                   variant="outline"
                   disabled={busy || !ep.enabled}
+                  title={ep.enabled ? undefined : "Turn this endpoint on first."}
                   onClick={() =>
                     void run(async () => {
                       await api(
@@ -754,6 +760,7 @@ function Webhooks() {
                   title="Delete webhook?"
                   description={`Events will no longer be delivered to ${ep.url}.`}
                   label="Delete endpoint"
+                  done="Endpoint deleted"
                   onConfirm={() => mutate(ep.id, "DELETE")}
                 >
                   Delete
@@ -836,7 +843,10 @@ function Webhooks() {
             value={selectedEvents}
             onChange={setSelectedEvents}
           />
-          <Button disabled={busy || !selectedEvents.length}>
+          <Button
+            disabled={busy || !selectedEvents.length}
+            title={selectedEvents.length ? undefined : "Choose at least one event."}
+          >
             {editing ? "Save changes" : "Add endpoint"}
           </Button>
         </form>

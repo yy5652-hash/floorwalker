@@ -7,6 +7,7 @@ import {
   statusTone,
   type LedgerEntry,
 } from "../api";
+import { copyText } from "./Management";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -77,7 +78,7 @@ export function ConnectAgent({ notify }: { notify: (s: string) => void }) {
   );
   async function copy() {
     try {
-      await navigator.clipboard.writeText(MCP_COMMAND);
+      await copyText(MCP_COMMAND);
       setCopied(true);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 2500);
@@ -99,11 +100,12 @@ export function ConnectAgent({ notify }: { notify: (s: string) => void }) {
         </code>
         <Button
           variant="outline"
-          size="icon"
-          aria-label="Copy MCP command"
+          size="sm"
+          aria-label={copied ? "Copied to clipboard" : "Copy MCP command"}
           onClick={copy}
         >
           {copied ? <Check /> : <Copy />}
+          {copied ? "Copied" : "Copy"}
         </Button>
       </div>
     </div>

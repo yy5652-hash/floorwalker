@@ -5,11 +5,14 @@
   #r1 b { color: var(--violet); font-weight: 600; }
 </style></head><body>
 <div class="shot" id="a"><img src="img/w-mug.jpg" alt=""></div>
-<div id="laser"></div>
+<canvas class="gl" id="f"></canvas><div id="laser"></div>
 <div class="holo mono" id="r1">Claim scan<br><b>Chipped rim</b><br>Order JO-9677-MAY<br><b>$24.00</b></div>
 <script src="cine.js"></script>
-<script>
+<script type="module">
+  import { flow } from './flow.js';
+  const f = flow(document.getElementById('f'), 0.5);
   window.render = t => {
+    f(t + 6);
     shot('a', t, -0.3, 30, { zoom: [1.0, 1.08], drift: [20, 6], fade: 0.4 });
     document.getElementById('laser').style.top = `${200 + 620 * (0.5 + 0.5 * Math.sin(t * 1.9 - 1.2))}px`;
     rise('r1', t, 0.5, 0, 0.3);

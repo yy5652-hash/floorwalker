@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Fingerprint, ArrowRight } from "lucide-react";
 import { account, isFilm, safeNext, startDemo } from "../auth";
@@ -46,6 +46,11 @@ export function AuthPage({
       !isFilm(),
     retry: false,
   });
+  const signedIn = !!session.data && !session.data.user.isAnonymous;
+  // Someone who already has a signed-in account has nothing to do on the sign-in or sign-up forms.
+  useEffect(() => {
+    if (signedIn && !invitationId) location.replace(safeNext());
+  }, [signedIn, invitationId]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

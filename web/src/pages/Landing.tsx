@@ -1,4 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, ExternalLink, ShieldAlert } from "lucide-react";
+import { account, isFilm } from "../auth";
 import { DemoButton } from "./Auth";
 import { publicPlans } from "./Settings";
 import { Code } from "../components/Management";
@@ -15,6 +17,9 @@ const benchmark = [
   ["Floorwalker", "$0", "30", "100%"],
 ];
 export function Landing() {
+  // Someone with a real account is sent to the app and to billing, not back to the sign-up form.
+  const session = useQuery({ queryKey: ["session"], queryFn: account.session, enabled: !isFilm(), retry: false });
+  const member = !!session.data && !session.data.user.isAnonymous;
   return <div className="landing">
     <header className="site-nav">
       <Brand />
@@ -23,8 +28,10 @@ export function Landing() {
         <a className="desktop-link" href="#benchmark">Benchmark</a>
         <a className="desktop-link" href="#pricing">Pricing</a>
         <ThemeToggle />
-        <a href="/signin">Sign in</a>
-        <Button asChild className="desktop-link"><a href="/signup">Get started <ArrowRight /></a></Button>
+        {member ? <Button asChild><a href="/app">Open dashboard <ArrowRight /></a></Button> : <>
+          <a href="/signin">Sign in</a>
+          <Button asChild className="desktop-link"><a href="/signup">Get started <ArrowRight /></a></Button>
+        </>}
       </nav>
     </header>
     <main>
@@ -121,7 +128,7 @@ export function Landing() {
         <div className="pricing-plans">{publicPlans.map(plan => <article key={plan.id} className={plan.id === "pro" ? "plan featured-plan" : "plan"}>
           <div><h3>{plan.name}</h3><div className="plan-price"><Money value={`$${plan.price}`} /><small>/ month</small></div></div>
           <p>{plan.agents === null ? "Unlimited" : plan.agents} agents · {plan.actionsPerMonth?.toLocaleString()} actions<br /> {plan.members === null ? "Unlimited" : plan.members} team members · {plan.webhooks === null ? "Unlimited" : plan.webhooks} webhooks</p>
-          <Button asChild variant={plan.id === "pro" ? "default" : "outline"}><a href="/signup">Get started <ArrowRight /></a></Button>
+          <Button asChild variant={plan.id === "pro" ? "default" : "outline"}>{member ? <a href="/app#settings/billing">Choose {plan.name} <ArrowRight /></a> : <a href="/signup">Get started <ArrowRight /></a>}</Button>
         </article>)}</div>
       </section>
     </main>

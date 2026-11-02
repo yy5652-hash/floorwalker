@@ -150,7 +150,7 @@ export function Ledger({
         headerName: "Who", enableRowGroup: true,
         flex: 1,
         minWidth: 130,
-        valueFormatter: (p) => personName(p.value),
+        valueFormatter: (p) => (p.data || p.value != null ? personName(p.value) : ""),
       },
       {
         field: "status",
@@ -169,7 +169,10 @@ export function Ledger({
                 </Badge>
               )}
             </div>
-          ) : null,
+          ) : (
+            // A group row has no entry; its heading is the outcome the rows share.
+            <span className="font-medium">{p.valueFormatted ?? STATUS_LABEL[p.value as LedgerEntry["status"]] ?? p.value}</span>
+          ),
       },
       {
         headerName: "Why",

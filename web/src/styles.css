@@ -265,7 +265,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .page-intro { max-width: 680px; }
 .page-intro p { margin-top: 10px; }
 .overview { gap: 28px; }
-.overview-metrics { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 0; padding: 4px 0 28px; border-bottom: 1px solid var(--border); }
+.overview-metrics { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 0; padding: 4px 0 28px; border-bottom: 1px solid var(--border); background: var(--background); box-shadow: 0 0 20px 14px var(--background); }
 .overview-metrics [data-slot="card"] { border: 0; border-radius: 0; padding: 8px 24px; background: transparent; border-left: 1px solid var(--border); }
 .overview-metrics [data-slot="card"]:first-child { padding-left: 0; border-left: 0; }
 .metric-label { font-size: 14px; color: var(--muted-foreground); }
@@ -370,7 +370,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 @media (hover: none) { .ag-header-cell-menu-button, .ag-header-cell-filter-button { opacity: 1; } }
 /* The product site: confident typography, a real workspace, and inspectable proof. */
-.landing { background: var(--background); }
+.flow-background { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+.landing { background: transparent; }
+[data-slot="sidebar-inset"] { background: transparent; }
 .site-nav, .landing main, .site-footer { max-width: 1280px; margin-inline: auto; padding-inline: 48px; }
 .site-nav { display: flex; align-items: center; justify-content: space-between; height: 100px; gap: 24px; }
 .site-nav nav { display: flex; gap: 26px; align-items: center; font-size: 14px; }

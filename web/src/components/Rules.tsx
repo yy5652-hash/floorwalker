@@ -330,10 +330,16 @@ export function Rules({ state, refresh, notify }: PageProps) {
               Write the boundaries. Your AI turns them into checks you can
               inspect.
             </p>
+            {!canManage(state) && (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Only owners and admins can change rules.
+              </p>
+            )}
             <div className="flex items-center gap-2 flex-wrap">
               <Button
                 data-film="compile"
                 disabled={!canManage(state) || !!busy || !state.configured.ai || !text.trim()}
+                title={!canManage(state) ? "Only owners and admins can change rules." : !state.configured.ai ? "Connect an AI model in Setup first." : !text.trim() ? "Write your rules first." : undefined}
                 onClick={() =>
                   void work("compile", async () => {
                     const result = await post<{

@@ -661,6 +661,7 @@ function TemporaryAllowances({ state }: PageProps) {
                 title="Revoke temporary allowance?"
                 description="Future payments to this payee will use the normal workspace rules."
                 label="Revoke allowance"
+                done="Allowance revoked"
                 onConfirm={async () => {
                   await api(`/api/grants/${grant.id}`, "DELETE");
                   await grants.refetch();

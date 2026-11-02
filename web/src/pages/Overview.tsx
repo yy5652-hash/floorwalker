@@ -191,6 +191,7 @@ export function Overview(
           </div>
           <Button
             disabled={!canManage(state) || props.resetting || !state.configured.paypal}
+            title={!canManage(state) ? "Only owners and admins can load the demo shop." : !state.configured.paypal ? "PayPal isn't configured on this server." : undefined}
             onClick={props.reset}
             variant="default"
             type="button"

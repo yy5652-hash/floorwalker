@@ -10,7 +10,7 @@ import {
   type BypassResult, type Incident, type State,
 } from "../api";
 import { useIncidents, useRefreshIncidents } from "../hooks/use-incidents";
-import { Resource, Toggle } from "../components/Management";
+import { Confirm, Resource, Toggle } from "../components/Management";
 import { useTheme } from "../components/theme-provider";
 import { lightTheme, darkTheme } from "../components/grid-theme";
 import { Button } from "@/components/ui/button";
@@ -91,6 +91,7 @@ export function Watch({ state }: { state: State }) {
                     ) : <p className="text-xs text-muted-foreground">Not checked yet</p>}
                   </div>
                   <Button variant="outline" disabled={!manageable || busy || !state.configured.paypal}
+                    title={!manageable ? "Only owners and admins can check PayPal." : !state.configured.paypal ? "PayPal isn't configured on this server." : undefined}
                     onClick={() => sweep.mutate()}>
                     {sweep.isPending && <Loader2 className="animate-spin" />}
                     {sweep.isPending ? "Checking PayPal…" : "Check now"}
@@ -107,6 +108,11 @@ export function Watch({ state }: { state: State }) {
               </CardContent>
             </Card>
             <Card className="mt-6 px-5 py-2">
+              {!manageable && (
+                <p className="pt-3 text-xs text-muted-foreground">
+                  Only owners and admins can check PayPal or change this setting.
+                </p>
+              )}
               <Toggle label="Freeze every agent when money moves outside Floorwalker"
                 checked={watch.freeze} disabled={!manageable || busy}
                 onChange={(freeze) => settings.mutate(freeze)} />
@@ -140,6 +146,23 @@ export function Watch({ state }: { state: State }) {
             {bypass.isPending && <Loader2 className="animate-spin" />}
             {bypass.isPending ? (checking ? "Checking PayPal…" : "Refunding in PayPal…") : "Refund $25 straight through PayPal"}
           </Button>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <Confirm
+              disabled={!manageable || busy || !state.configured.paypal}
+              reason={!manageable ? "Only owners and admins can reset the demo." : "PayPal isn't configured on this server."}
+              title="Reset the demo?"
+              description="This clears the demo's ledger and inbox and creates fresh sandbox orders, so you can try every step again."
+              label="Reset demo"
+              done="Fresh sandbox orders created."
+              onConfirm={async () => {
+                await post("/api/demo/reset");
+                await refresh();
+              }}
+            >
+              Reset the demo
+            </Confirm>
+            Each try uses up a sandbox order; reset when none are left.
+          </div>
           {bypass.isPending && <span role="status" className="sr-only">{checking ? "Checking PayPal…" : "Refunding in PayPal…"}</span>}
           {bypass.data && (
             <p role="status" className="break-words text-sm leading-relaxed">

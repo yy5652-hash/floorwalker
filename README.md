@@ -118,7 +118,7 @@ The owner writes the rules in plain words on the **Rules** tab ("Up to $40 on it
 
 The same code runs on Claude (`claude-sonnet-5-5`, Anthropic SDK with tool use and structured outputs) when `ANTHROPIC_API_KEY` is set. Models are configurable in `.env`.
 
-With `FLOORWALKER_AI_FALLBACK=deepseek`, DeepSeek stands in for the agent, reviewer and rules compiler when the main provider fails, and the app shows that it is doing so. If it fails too, requests wait for the owner. The benchmark below ran on Gemini.
+With `FLOORWALKER_AI_FALLBACK=deepseek`, DeepSeek stands in for the agent, reviewer and rules compiler when the main provider fails, and the app shows that it is doing so. If it fails too, requests wait for the owner. The benchmark below ran on Gemini. One run of the same 198 cases with DeepSeek standing in stopped all 80 attacks, sent 92% of owner decisions to the owner (97% on Gemini) and finished 98% of legitimate requests without the owner (99% on Gemini): see [the results](bench/deepseek-fallback-RESULTS.md).
 
 ## FloorwalkerBench
 

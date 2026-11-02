@@ -26,6 +26,7 @@ const Action = {
     review: { type: ["object", "null"], properties: { verdict: { enum: ["approve", "escalate", "reject"] }, summary: { type: "string" }, cited_rule: { type: "string" }, injection_detected: { type: "boolean" } } },
     paypal_ref: { type: ["string", "null"], description: "PayPal refund id or payout batch id once money moved" },
     decline_reason: { type: ["string", "null"] },
+    block_explanations: { type: "array", description: "Blocking checks, evidence and owner recovery steps", items: { type: "object", properties: { check: { type: "string" }, rule: { type: "string" }, evidence: { type: "string" }, facts: { type: ["object", "null"] }, freeze: { type: ["object", "null"] }, next_step: { type: "string" } } } },
     created_at: { type: "string", format: "date-time" },
     decided_at: { type: ["string", "null"], format: "date-time" },
     expires_at: { type: ["string", "null"], format: "date-time", description: "A held request not answered by then is declined" },
@@ -45,7 +46,7 @@ export function buildOpenApi(bodies: { refund: unknown; payout: unknown }) {
     servers: [{ url: `${config.baseUrl.replace(/\/$/, "")}/v1` }],
     security: [{ agentKey: [] }],
     paths: {
-      "/agent": { get: { summary: "The agent this key belongs to, with its permissions and limits", responses: { "200": { description: "The agent" }, ...errors } } },
+      "/agent": { get: { summary: "The agent this key belongs to, with its permissions and limits", responses: { "200": { description: "The agent, including freeze_explanation (check, evidence, next_step) when frozen" }, ...errors } } },
       "/refunds": {
         post: {
           summary: "Refund a PayPal capture",

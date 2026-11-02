@@ -216,6 +216,8 @@ npm run bench -- --set all   # FloorwalkerBench: four guards on 198 cases with t
 | `web/` | React app (shadcn/ui, AG Grid Enterprise, AG Charts): Overview, Inbox, Approvals, Agents, Rules, Ledger, Watch, Developers, Audit log, Settings |
 | `bench/` | FloorwalkerBench cases and runner |
 
+Credits: UI state transitions use [Motion](https://github.com/motiondivision/motion) (MIT).
+
 ## License
 
 MIT

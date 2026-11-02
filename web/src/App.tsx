@@ -1,5 +1,5 @@
 import { isFilm } from "./auth";
-import { canManage } from "./api";
+import { canApprove, canManage } from "./api";
 import { IncidentBanner } from "./components/IncidentBanner";
 import { AuthPage } from "./pages/Auth";
 import { Developers, developerTabs } from "./pages/Developers";
@@ -42,16 +42,16 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { errorMessage, getState, post, setDirectory } from "./api";
-import { ApprovalCard, Approvals, PhoneApproval } from "./components/Approvals";
+import { ApprovalCard, Approvals, PhoneApproval, type ApprovalCommand } from "./components/Approvals";
 import { Inbox } from "./components/Inbox";
-import { Brand, EmptyState } from "./components/UI";
+import { Brand } from "./components/UI";
 import { ThemeToggle } from "./components/Theme";
 import { Agents } from "./pages/Agents";
 import { Landing } from "./pages/Landing";
+import { Legal } from "./pages/Legal";
 import { Setup } from "./pages/Setup";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -265,6 +265,8 @@ function Workspace({ mobile }: { mobile: boolean }) {
   }, [refresh]);
   const [route, setRoute] = useState(location.hash.slice(1) || "overview");
   const [commandOpen, setCommandOpen] = useState(false);
+  const [selectedApproval, setSelectedApproval] = useState<number | null>(null);
+  const [approvalCommand, setApprovalCommand] = useState<ApprovalCommand | null>(null);
   const [freezeOpen, setFreezeOpen] = useState(false);
   const freezeTask = useTask();
   const [resetting, setResetting] = useState(false);
@@ -286,6 +288,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
     const changed = () => setRoute(location.hash.slice(1) || "overview");
     const keydown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        if ((event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]') || document.querySelector('[role="dialog"]:not(:has([cmdk-root])), [role="alertdialog"]'))) return;
         event.preventDefault();
         setCommandOpen((open) => !open);
       }
@@ -386,10 +389,6 @@ function Workspace({ mobile }: { mobile: boolean }) {
         (e) => String(e.id) === location.hash.slice(1).replace(/^act_/, ""),
       )
     : undefined;
-  const phoneEntries =
-    focusedEntry && !waiting.some((e) => e.id === focusedEntry.id)
-      ? [focusedEntry, ...waiting]
-      : waiting;
   const page =
     pages.find(
       (p) =>
@@ -455,6 +454,12 @@ function Workspace({ mobile }: { mobile: boolean }) {
           ))}
         </CommandGroup>
         <CommandSeparator />
+        {page.id === "approvals" && selectedApproval !== null && <CommandGroup heading="Selected request">
+          {(["approve", "decline"] as const).map(action => <CommandItem key={action} disabled={!canApprove(state)} onSelect={() => {
+            setCommandOpen(false);
+            setApprovalCommand({ id: selectedApproval, action, serial: Date.now() });
+          }}>{action === "approve" ? "Approve selected request" : "Decline selected request"}</CommandItem>)}
+        </CommandGroup>}
         <CommandGroup heading="Actions">
           <CommandItem
             disabled={!manageable || isFilm()}
@@ -546,23 +551,8 @@ function Workspace({ mobile }: { mobile: boolean }) {
           </div>
           {feedback}
           <IncidentBanner key={workspaceId} state={state} />
-          {phoneEntries.length ? (
-            [...phoneEntries]
-              .sort(
-                (a, b) =>
-                  Number(String(b.id) === location.hash.slice(1)) -
-                  Number(String(a.id) === location.hash.slice(1)),
-              )
-              .map((entry) => (
-                <ApprovalCard key={entry.id} entry={entry} {...props} />
-              ))
-          ) : (
-            <Card>
-              <EmptyState title="All caught up">
-                <p>We'll bring the next request here when it needs you.</p>
-              </EmptyState>
-            </Card>
-          )}
+          {focusedEntry && focusedEntry.status !== "awaiting_approval" && <ApprovalCard key={focusedEntry.id} entry={focusedEntry} {...props} />}
+          <Approvals key={workspaceId} {...props} initialId={focusedEntry?.id} />
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <ShieldCheck className="size-4" />
             Your approval runs this action exactly once.
@@ -695,7 +685,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
         <main
           id="main-content"
           tabIndex={-1}
-          className="mx-auto w-full max-w-[1440px] flex-1 space-y-7 p-4 outline-none sm:p-6 lg:p-8"
+          className={`workspace-main page-${page.id} mx-auto w-full max-w-[1280px] flex-1 space-y-6 p-4 outline-none sm:p-6 lg:p-8`}
         >
           <header className="flex flex-wrap items-start justify-between gap-5">
             <div className="page-intro">
@@ -716,7 +706,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
             ) : null}
           </header>
           {feedback}
-          {["overview", "inbox", "approvals", "agents", "watch"].includes(page.id) && (
+          {["inbox", "approvals", "agents", "watch"].includes(page.id) && (
             <IncidentBanner key={workspaceId} state={state} />
           )}
           {state.workspace?.seedStatus?.startsWith("failed:") && (
@@ -752,7 +742,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
               disabled={resetting || !manageable}
             />
           </div>
-          {page.id === "approvals" && <Approvals {...props} />}
+          {page.id === "approvals" && <Approvals key={workspaceId} {...props} command={approvalCommand} onSelection={setSelectedApproval} onCommandHandled={() => setApprovalCommand(null)} initialId={Number(route.split("/")[1]) || undefined} />}
           {page.id === "agents" && <Agents {...props} />}
           {page.id === "rules" && (
             <Suspense fallback={<PageSkeleton />}>
@@ -816,6 +806,7 @@ function Workspace({ mobile }: { mobile: boolean }) {
 }
 function Routes() {
   const path = location.pathname.replace(/\/+$/, "") || "/";
+  if (path === "/privacy" || path === "/terms") return <Legal page={path.slice(1) as "privacy" | "terms"} />;
   if (path === "/signin" || path === "/signup")
     return <AuthPage signup={path === "/signup"} />;
   if (path.startsWith("/invite/"))

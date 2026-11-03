@@ -41,9 +41,9 @@
     rise('a', t, 0.1, 0, 0.6); rise('b', t, 0.4, 0, 0.6);
     // One result fills the screen; after the last one, all three settle side by side.
     ['c', 'd', 'e'].forEach((id, i) => {
-      const e = document.getElementById(id), on = i === active, a = on ? Math.max(all, smooth(clamp((t - ats[i]) / 0.35))) : all, k = on ? 1 + 0.5 * (1 - all) : 1;
+      const e = document.getElementById(id), on = i === active, a = on ? Math.max(all, smooth(clamp((t - ats[i]) / 0.35))) : all, k = on ? 1 + 0.35 * (1 - all) : 1;
       e.style.opacity = a;
-      e.style.transform = `translate(${on ? (680 - LEFT[i]) * (1 - all) : 0}px, ${on ? 30 * (1 - all) : 0}px) scale(${k})`;
+      e.style.transform = `translate(${on ? (680 - LEFT[i]) * (1 - all) : 0}px, ${on ? -40 * (1 - all) : 0}px) scale(${k})`;
     });
     count('v1', t, at1, 3796); count('v2', t, at2, 52);
     f(t); s.renderer.clear();

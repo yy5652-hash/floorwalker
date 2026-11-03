@@ -353,7 +353,7 @@ def srt(timeline, path):
     Path(path).write_text("".join(f"{i}\n{ts(l['start'])} --> {ts(l['end'] + 0.3)}\n{l['text']}\n\n" for i, l in enumerate(rows, 1)))
 
 
-def track(path, total):
+def track(path, total, end_aligned=False):
     """A finished piece of music as the bed, level-matched and ending with the film."""
     n = int(total * SR)
     decode = lambda *f: np.frombuffer(subprocess.run([M.FFMPEG, "-hide_banner", "-loglevel", "error", "-i", str(path), *f, "-f", "f32le", "-ac", "2", "-ar", str(SR), "-"], check=True, capture_output=True).stdout, dtype=np.float32).reshape(-1, 2).astype(np.float64)
@@ -361,13 +361,15 @@ def track(path, total):
     # A slightly shorter track is slowed imperceptibly, so its own ending lands on the film's last seconds.
     if len(x) < n:
         x = decode("-filter:a", f"atempo={max(0.9, len(x) / n):.5f}")
-    x = x[:n] if len(x) >= n else np.concatenate([x, np.zeros((n - len(x), 2))])
+    # A longer track can be entered part way, so its own final cadence is the film's last note.
+    x = (x[len(x) - n:] if end_aligned else x[:n]) if len(x) >= n else np.concatenate([x, np.zeros((n - len(x), 2))])
     return x / max(1e-9, np.sqrt((x ** 2).mean())) * 0.16
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--music", help="a finished music file to use instead of the synthesised score")
+    ap.add_argument("--music-end", action="store_true", help="enter the music part way so it ends where the film ends")
     ap.add_argument("--out", default="out/allowance-demo.mp4")
     ap.add_argument("--audio-only", action="store_true", help="write work/mix.wav and stop")
     a = ap.parse_args()
@@ -377,11 +379,11 @@ def main():
     frames = sorted((HERE / "work/frames").glob("*.jpg"))
     if abs(len(frames) / FPS - total) > 0.5:
         raise SystemExit(f"{len(frames)} frames = {len(frames) / FPS:.1f} s but the timeline is {total:.1f} s")
-    if total >= 175:
-        raise SystemExit(f"the film is {total:.1f} s; the limit is 2:55")
+    if total >= 179:
+        raise SystemExit(f"the film is {total:.1f} s; it must stay under the 3:00 limit")
     holds = [e["t"] for e in events["events"] if e["kind"] == "hit"]
     voice = voice_chain(narration(timeline, total))
-    bed = track(a.music, total) if a.music else arranged(timeline, holds)
+    bed = track(a.music, total, a.music_end) if a.music else arranged(timeline, holds)
     fx = foley(total, events["events"])
     wav = HERE / "work/mix.wav"
     if a.music:

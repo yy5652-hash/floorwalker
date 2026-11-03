@@ -8,7 +8,7 @@ DOMAIN=floorwalker.43-160-214-187.sslip.io
 SSH=(ssh ${DEPLOY_KEY:+-i "$DEPLOY_KEY"})
 cd "$(dirname "$0")/.."
 npm run build
-rsync -e "${SSH[*]}" -az --delete --exclude node_modules --exclude .git --exclude data --exclude .env --exclude 'film/work' --exclude 'film/out' --exclude 'film/.venv' --exclude notes --exclude PLAN.md --exclude COMPETITOR_ANALYSIS.md --exclude REDESIGN_PLAN.md \
+rsync -e "${SSH[*]}" -az --delete --exclude node_modules --exclude .git --exclude data --exclude .env --exclude 'film/work' --exclude 'film/out' --exclude 'film/music' --exclude 'film/.venv' --exclude notes --exclude PLAN.md --exclude COMPETITOR_ANALYSIS.md --exclude REDESIGN_PLAN.md \
   ./ "$HOST:/tmp/floorwalker-src/"
 scp -q ${DEPLOY_KEY:+-i "$DEPLOY_KEY"} .env "$HOST:/tmp/floorwalker.env"
 "${SSH[@]}" "$HOST" NODE=$NODE DOMAIN=$DOMAIN 'bash -s' <<'REMOTE'

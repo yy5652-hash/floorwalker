@@ -7,7 +7,7 @@
 - Before/after comparison: `notes/compare/compare.html`. Live screens: `notes/gallery-live`.
 
 ## Next
-1. Film: re-record on the new UI (Ask button in the top bar, add the Tessa "Approve and stop asking" beat). Storyboard waits for the owner's nod (`notes/film/`). Use one measured tap figure in film and STORY (the fresh demo shows 55 taps per 100 before learning; film said 53, story says 66 to 50). Follow the video spec: naming, music list, 60-second vertical cut, no overwriting.
+1. Film v1 is done (2026-11-03): `film/out/Floorwalker_20261103_1355_v1_横屏.mp4` (177.5 s, 1920x1080) and `_竖屏.mp4` (59.7 s, 1080x1920), copies, storyboard and music list on the Desktop and in `notes/film/`. Music: Bach, Air on the G String, Golden Cut Reborn, YouTube Audio Library licence (no attribution; the file stays out of git and deploys). Waiting for the owner's review.
 2. Owner uploads the film to YouTube as Public and fills the personal and attestation fields on Devpost.
 3. After the link arrives: update the README and the Devpost video field, upload the new gallery, make the repo public, submit before Nov 5 if possible.
 

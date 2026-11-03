@@ -46,6 +46,10 @@ type WorkspaceSettings = {
 };
 export type NotificationSettings = {
   prefs: {
+    email_held: boolean;
+    email_blocked: boolean;
+    email_reminders: boolean;
+    email_weekly: boolean;
     push_held: boolean;
     push_blocked: boolean;
     push_reminders: boolean;
@@ -696,6 +700,22 @@ function Notifications({ state }: PageProps) {
                   }
                 />
               ))}
+          </div>
+          <h3>Email</h3>
+          <p className="text-sm text-muted-foreground">Approval emails go to owners and approvers. Weekly summaries go to owners on Monday at 09:00 UTC. Demo workspaces never send email.</p>
+          <div className="divide-y">
+            {notifications.data && ([
+              ["email_held", "Payments needing approval"],
+              ["email_blocked", "Blocked requests"],
+              ["email_reminders", "Approval reminders"],
+              ["email_weekly", "Weekly summary"],
+            ] as const).map(([key, label]) => (
+              <Toggle key={key} label={label} checked={notifications.data!.prefs[key]} disabled={busy}
+                onChange={(value) => void run(async () => {
+                  await api("/api/me/notifications", "PATCH", { [key]: value });
+                  await notifications.refetch();
+                })} />
+            ))}
           </div>
           <h3>Registered devices</h3>
           {notifications.data?.devices.map((device) => (

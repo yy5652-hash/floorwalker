@@ -10,6 +10,10 @@ import { seal, unseal } from "./crypto.ts";
 import * as store from "./db.ts";
 import { subscribe, type FloorwalkerEvent } from "./events.ts";
 import { core } from "./workspaces.ts";
+import { sendEmail, type Email } from "./email.ts";
+import { actionToken, escapeHtml, openLink } from "./email-actions.ts";
+import { blockExplanations } from "./explanations.ts";
+import { learnedChanges, tapsPer100 } from "./guard/learn.ts";
 
 core.exec(`
 CREATE TABLE IF NOT EXISTS push_subscription (
@@ -56,8 +60,8 @@ export function pushDevices(userId: string): { endpoint: string; user_agent: str
   return core.prepare("SELECT endpoint, user_agent, created_at FROM push_subscription WHERE user_id = ? ORDER BY created_at DESC").all(userId) as any;
 }
 
-export type Prefs = { push_held: boolean; push_blocked: boolean; push_reminders: boolean; push_executed: boolean };
-const DEFAULT_PREFS: Prefs = { push_held: true, push_blocked: true, push_reminders: true, push_executed: false };
+export type Prefs = { email_held: boolean; email_blocked: boolean; email_reminders: boolean; email_weekly: boolean; push_held: boolean; push_blocked: boolean; push_reminders: boolean; push_executed: boolean };
+const DEFAULT_PREFS: Prefs = { email_held: true, email_blocked: true, email_reminders: true, email_weekly: true, push_held: true, push_blocked: true, push_reminders: true, push_executed: false };
 
 export function prefs(userId: string, wsId: string): Prefs {
   const r = core.prepare("SELECT prefs FROM notify_pref WHERE user_id = ? AND ws_id = ?").get(userId, wsId) as { prefs: string } | undefined;
@@ -174,12 +178,14 @@ subscribe(async (e, ws) => {
       : null,
     e.type === "action.executed" ? pushTo(ws, "push_executed", { title: `Done: ${money(a.amount)} ${a.type}`, body: `${agentName(a.agent_id)} → ${a.counterparty}`, tag: `${ws.id}:${a.id}`, url: link(ws, a), actions: [] }) : null,
     slack(ws, e),
+    e.type === "action.held" || e.type === "action.blocked" ? emailRequest(ws, Number(a.id.replace(/^act_/, "")), e.type === "action.blocked" ? "blocked" : "held") : null,
   ]);
 });
 
 /** One reminder per request that has waited longer than the workspace's reminder delay. Runs inside a workspace. */
 export async function remindWaiting() {
   const { ws } = ctx();
+  await sendWeeklySummary();
   const after = store.setting<number>("reminder_after_minutes", 60);
   const cutoff = new Date(Date.now() - after * 60_000).toISOString();
   const due = store.ledger().filter((r) => r.status === "awaiting_approval" && !r.reminded_at && r.created_at <= cutoff);
@@ -187,6 +193,106 @@ export async function remindWaiting() {
   for (const r of due) {
     store.markReminded(r.id);
     const a = actionView(r) as unknown as ActionData;
-    await Promise.allSettled([pushHeld(ws, a, true), slack(ws, { id: `evt_reminder_${r.id}`, type: "action.held", workspace_id: ws.id, created_at: new Date().toISOString(), data: a }, true)]);
+    await Promise.allSettled([emailRequest(ws, r.id, "reminders"), pushHeld(ws, a, true), slack(ws, { id: `evt_reminder_${r.id}`, type: "action.held", workspace_id: ws.id, created_at: new Date().toISOString(), data: a }, true)]);
   }
+}
+
+
+// Persistent receipts keep duplicate events and scheduler ticks from sending the same email twice.
+core.exec(`CREATE TABLE IF NOT EXISTS email_notice (
+ ws_id TEXT NOT NULL, user_id TEXT NOT NULL, notice TEXT NOT NULL,
+ PRIMARY KEY(ws_id,user_id,notice)
+);`);
+async function deliverOnce(ws: Workspace, userId: string, notice: string, make: () => Email) {
+  if (!core.prepare('INSERT OR IGNORE INTO email_notice VALUES (?,?,?)').run(ws.id, userId, notice).changes) return;
+  try { await sendEmail(make()); }
+  catch (e) {
+    core.prepare('DELETE FROM email_notice WHERE ws_id=? AND user_id=? AND notice=?').run(ws.id, userId, notice);
+    throw e;
+  }
+}
+function recipients(ws: Workspace) {
+  return core.prepare('SELECT DISTINCT u.id,u.email,m.role FROM member m JOIN user u ON u.id=m.userId WHERE m.organizationId=? AND u.emailVerified=1 AND COALESCE(u.isAnonymous,0)=0')
+    .all(ws.id) as { id: string; email: string; role: string }[];
+}
+function compose(ws: Workspace, to: string, subject: string, lines: string[], links: [string, string][], tag: string): Email {
+  const settings = `${config.baseUrl.replace(/\/$/, '')}/app?ws=${encodeURIComponent(ws.id)}#settings/notifications`;
+  const footer: [string, string][] = [...links, ['Notification settings', settings]];
+  return { to, subject, tag,
+    text: [...lines, '', ...footer.map(([label, url]) => `${label}: ${url}`), '', ws.name].join('\n'),
+    html: `<html lang="en"><body>${lines.map(l => `<p>${escapeHtml(l)}</p>`).join('')}${footer.map(([label, url]) => `<p><a${label.startsWith("Approve $") || label === "Decline" ? ' style="display:inline-block;padding:12px 18px;border:1px solid #333;border-radius:6px"' : ""} href="${escapeHtml(url)}">${escapeHtml(label)}</a></p>`).join('')}<footer>${escapeHtml(ws.name)}</footer></body></html>` };
+}
+/** The same four groups and priority order as ApprovalEvidence. */
+export function emailEvidence(row: store.LedgerRow) {
+  const checks = JSON.parse(row.checks) as { id: string; outcome: string; detail: string }[];
+  const limits = new Set(['auto_limit', 'hard_limit', 'budget', 'payee_limit', 'agent_cap', 'agent_budget']);
+  const rules = checks.filter(c => !['ai_review', 'injection'].includes(c.id));
+  const priority: Record<string, number> = { pass: 0, hold: 1, block: 2 };
+  const labels: Record<string, string> = { pass: 'Passed', hold: 'Needs you', block: 'Blocked', missing: 'Not recorded' };
+  const summarize = (label: string, group: typeof checks, fallback: string) => {
+    const first = [...group].sort((a,b) => priority[b.outcome] - priority[a.outcome])[0];
+    return `${label}: ${labels[first?.outcome ?? 'missing']} — ${first?.detail ?? fallback}`;
+  };
+  const review = row.review ? JSON.parse(row.review) : null;
+  return [
+    summarize('PayPal records', rules.filter(c => ['capture','buyer'].includes(c.id)), row.kind === 'payout' ? 'No recipient payment record is verified for this payout; see the payee rule below.' : 'No PayPal evidence was recorded for this request.'),
+    summarize('Your rules', rules.filter(c => !limits.has(c.id) && !['capture','buyer'].includes(c.id)), 'No other rule applies to this request.'),
+    summarize('Limits', rules.filter(c => limits.has(c.id)), 'No amount or budget check was recorded.'),
+    review ? `AI review: ${labels[({ approve: 'pass', escalate: 'hold', reject: 'block' } as Record<string,string>)[review.verdict]] ?? 'Not recorded'} — ${review.summary}`
+      : summarize('AI review', checks.filter(c => ['ai_review','injection'].includes(c.id)), 'No AI recommendation recorded for this request.'),
+  ];
+}
+export async function emailRequest(ws: Workspace, id: number, kind: 'held' | 'blocked' | 'reminders') {
+  if (ws.demo) return;
+  const row = store.ledgerEntry(id);
+  if (!row || (kind !== 'blocked' && (row.status !== 'awaiting_approval' || (row.expires_at && Date.parse(row.expires_at) <= Date.now())))) return;
+  const title = `${money(row.amount)} ${row.kind} to ${row.counterparty ?? 'unknown'}`;
+  const review = row.review ? JSON.parse(row.review) : null;
+  const checks = JSON.parse(row.checks) as { outcome: string; detail: string }[];
+  const conclusion = (checks.find(c => c.outcome === 'block') ?? checks.find(c => c.outcome === 'hold'))?.detail ?? review?.summary ?? 'This request is waiting for your decision.';
+  const lines = [title, kind === 'blocked' ? 'Stopped before reaching PayPal.' : (conclusion.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() || conclusion),
+    ...emailEvidence(row),
+    ...(kind === 'blocked' ? blockExplanations(row).map(b => `${b.rule}: ${b.evidence} ${b.next_step}`) : []),
+    `Agent: ${agentName(row.agent_id)}`, `Expires: ${row.expires_at ?? 'No request expiry recorded'}`];
+  await Promise.allSettled(recipients(ws).filter(m => can(m.role, { ledger: ['approve'] }) && prefs(m.id, ws.id)[`email_${kind}`]).map(m =>
+    deliverOnce(ws, m.id, `${kind}:${id}`, () => compose(ws, m.email,
+      kind === 'blocked' ? `Blocked: ${title}` : `${kind === 'reminders' ? 'Still waiting: ' : ''}Approve a ${title}?`, lines,
+      [...(kind === 'blocked' ? [] : [[`Approve ${money(row.amount)}`, actionToken(ws, row, m.id, 'approve')], ['Decline', actionToken(ws, row, m.id, 'decline')]] as [string,string][]),
+        ['Open in Floorwalker', openLink(ws.id, id)]], `request-${kind}`))));
+}
+// Installed when the email routes are mounted, so the Overview owns the money/count formulas.
+type OverviewMetrics = (rows: store.LedgerRow[]) => { moved: number; stopped: number; waitingCount: number };
+let overviewMetrics: OverviewMetrics | undefined;
+export function useOverviewMetrics(metrics: OverviewMetrics) { overviewMetrics = metrics; }
+/** Completed Monday–Monday reporting weeks; tap calculations and suggestions reuse Overview functions. */
+export function weeklySummary(now = new Date()) {
+  const end = new Date(now);
+  end.setUTCHours(0, 0, 0, 0);
+  end.setUTCDate(end.getUTCDate() - (end.getUTCDay() + 6) % 7);
+  const start = end.getTime() - 7 * 86400000;
+  const moves = store.ledger().filter(r => ['refund','payout'].includes(r.kind));
+  const week = moves.filter(r => Date.parse(r.created_at) >= start && Date.parse(r.created_at) < end.getTime());
+  const last = moves.filter(r => Date.parse(r.created_at) >= start - 7 * 86400000 && Date.parse(r.created_at) < start);
+  if (!overviewMetrics) throw new Error('Overview metrics have not been registered.');
+  const suggestion = learnedChanges(store.activePolicy().policy)[0] ?? null;
+  return { week: new Date(start).toISOString().slice(0,10), moves: week.length,
+    taps: tapsPer100(week.map(r => r.decision)), lastTaps: tapsPer100(last.map(r => r.decision)),
+    automatic: overviewMetrics(week.filter(r => r.status === 'executed')).moved,
+    stopped: overviewMetrics(week).stopped,
+    waiting: overviewMetrics(store.ledger()).waitingCount, suggestion };
+}
+export async function sendWeeklySummary(now = new Date()) {
+  const { ws } = ctx();
+  if (ws.demo || now.getUTCDay() !== 1 || now.getUTCHours() < 9) return;
+  const summary = weeklySummary(now);
+  if (!summary.moves) return;
+  await Promise.allSettled(recipients(ws).filter(m => m.role.split(',').map(r => r.trim()).includes('owner') && prefs(m.id,ws.id).email_weekly).map(m =>
+    deliverOnce(ws, m.id, `weekly:${summary.week}`, () => compose(ws, m.email, 'Your Floorwalker weekly summary', [
+      `Week of ${summary.week}`,
+      `Taps per 100 money moves: ${summary.taps} this week vs ${summary.lastTaps} last week`,
+      `Money done without the owner: ${money(summary.automatic)}`,
+      `Money stopped: ${money(summary.stopped)}`,
+      `Requests still waiting: ${summary.waiting}`,
+      summary.suggestion ? `Best learned suggestion: ${summary.suggestion.title} — saves ${summary.suggestion.impact.tapsSaved} taps in the learning window.` : 'No learned suggestion is supported by the recorded decisions yet.',
+    ], [['Open in Floorwalker', `${config.baseUrl}/app?ws=${encodeURIComponent(ws.id)}#overview`]], 'weekly'))));
 }

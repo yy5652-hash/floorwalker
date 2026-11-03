@@ -48,6 +48,12 @@ app.use(helmet({
 }));
 app.get("/healthz", healthEndpoint);
 
+// Email links are public capabilities; scanners only see a confirmation page.
+const { emailActions } = await import("./email-actions.ts");
+const { useOverviewMetrics } = await import("./notify.ts");
+useOverviewMetrics(metrics);
+app.use("/email", emailActions);
+
 // better-auth reads its own request bodies, so it is mounted before the JSON parser.
 app.all("/api/auth/*splat", toNodeHandler(auth));
 app.use(express.json({ limit: "200kb" }));
@@ -149,6 +155,18 @@ app.use("/api", assistant.publicRoutes);
 // Everything under /api below needs a signed-in member and runs inside their active workspace.
 app.use("/api", signedIn);
 app.use("/api", assistant.workspaceRoutes);
+// Accept the email switches as well as the existing push switches.
+app.patch("/api/me/notifications", handle(async (req) => {
+  const { prefs, setPrefs } = await import("./notify.ts");
+  const current = prefs(req.me!.userId, ctx().ws.id);
+  const next: Partial<typeof current> = {};
+  for (const key of Object.keys(current) as (keyof typeof current)[]) {
+    if (req.body?.[key] === undefined) continue;
+    if (typeof req.body[key] !== "boolean") throw new HttpError(400, "Notification preferences must be switches.");
+    next[key] = req.body[key];
+  }
+  return { prefs: setPrefs(req.me!.userId, ctx().ws.id, next) };
+}));
 app.use("/api", manage);
 
 // Account-only routes retain the same origin/session checks as workspace settings.

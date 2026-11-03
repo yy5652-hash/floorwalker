@@ -168,6 +168,7 @@ async function authRequest(path: string, body: object) {
   if (isFilm()) throw new Error("Account changes are unavailable during filming.");
   const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-floorwalker-next": safeNext(), "x-floorwalker-keep-signed-in": String((body as { keepSignedIn?: boolean }).keepSignedIn !== false) }, body: JSON.stringify(body) });
   const data = await response.json();
+  if (response.status === 429) throw new Error("Too many attempts. Wait a minute and try again.");
   if (!response.ok) throw new Error(data.message || data.error || "The account request failed.");
   return data;
 }

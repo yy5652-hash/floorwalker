@@ -1,3 +1,4 @@
+import { config } from "./config.ts";
 import { fromNodeHeaders } from "better-auth/node";
 import type { NextFunction, Request, Response } from "express";
 import { auth, can, latestWorkspaceOf, type Permission } from "./auth.ts";
@@ -14,6 +15,8 @@ export type Me = {
   sessionId: string;
   /** When this session signed in; a recent passkey sign-in counts as step-up for large approvals. */
   signedInAt: number;
+  /** One of the server's operators (FLOORWALKER_ADMIN_EMAILS): sees the sign-in statistics. */
+  admin?: boolean;
 };
 
 declare global {
@@ -53,6 +56,7 @@ export async function signedIn(req: Request, res: Response, next: NextFunction) 
     workspaceId: wsId,
     sessionId: s.session.id,
     signedInAt: new Date(s.session.createdAt).getTime(),
+    admin: !(s.user as any).isAnonymous && config.adminEmails.includes(s.user.email.toLowerCase()),
   };
   inWorkspace(openWorkspace(wsId), { kind: "user", id: s.user.id, name, role: member.role, ip: req.ip }, () => next());
 }

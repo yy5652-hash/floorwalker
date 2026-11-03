@@ -25,6 +25,8 @@ function aiConfig() {
 }
 
 export const config = {
+  mailFrom: env("MAIL_FROM"),
+  adminEmails: env("ADMIN_EMAILS").toLowerCase().split(",").map((email) => email.trim()).filter(Boolean),
   port: Number(readEnv("PORT", "3000")),
   production: readEnv("NODE_ENV") === "production",
   dbPath: env("DB", !existsSync("data/floorwalker.db") && existsSync("data/allowance.db") ? "data/allowance.db" : "data/floorwalker.db"),

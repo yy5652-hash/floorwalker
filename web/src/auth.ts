@@ -1,6 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import {
   anonymousClient,
+  emailOTPClient,
   organizationClient,
 } from "better-auth/client/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
@@ -41,6 +42,7 @@ const makeClient = () =>
     plugins: [
       organizationClient({ ac, roles }),
       anonymousClient(),
+      emailOTPClient(),
       passkeyClient(),
     ],
   });
@@ -75,11 +77,18 @@ export type TeamRole = "owner" | "admin" | "approver" | "viewer";
 export const account = {
   session: () =>
     isFilm() ? Promise.resolve(null) : checked(authClient().getSession()),
-  signIn: (email: string, password: string) =>
-    checked(authClient().signIn.email({ email, password })),
+  signIn: (email: string, password: string, keepSignedIn = true) =>
+    authRequest("/api/auth/sign-in/email", { email, password, keepSignedIn }),
+  sendCode: (email: string, type = "sign-in", keepSignedIn = true) => authRequest("/api/auth/email-otp/send-verification-otp", { email, type, keepSignedIn }),
+  verifyCode: (email: string, otp: string, keepSignedIn = true) => authRequest("/api/auth/sign-in/email-otp", { email, otp, keepSignedIn }),
+  resetPassword: (email: string, otp: string, password: string) => authRequest("/api/auth/email-otp/reset-password", { email, otp, password }),
+  setPassword: (newPassword: string) => authRequest("/api/account/set-password", { newPassword }),
+  changePassword: (currentPassword: string, newPassword: string) => checked(authClient().changePassword({ currentPassword, newPassword, revokeOtherSessions: true })),
+  sendEmailChange: (newEmail: string) => checked(authClient().emailOtp.requestEmailChange({ newEmail })),
+  changeEmail: (newEmail: string, otp: string) => checked(authClient().emailOtp.changeEmail({ newEmail, otp })),
   signUp: (name: string, email: string, password: string) =>
     checked(authClient().signUp.email({ name, email, password })),
-  passkeySignIn: () => checked(authClient().signIn.passkey()),
+  passkeySignIn: (keepSignedIn = true) => checked(authClient().signIn.passkey({ fetchOptions: { headers: { "x-floorwalker-keep-signed-in": String(keepSignedIn) } } })),
   signOut: () => checked(authClient().signOut()),
   organizations: () =>
     isFilm() ? Promise.resolve([]) : checked(authClient().organization.list()),
@@ -154,3 +163,13 @@ export function safeNext(
     return "/app";
   }
 }
+
+async function authRequest(path: string, body: object) {
+  if (isFilm()) throw new Error("Account changes are unavailable during filming.");
+  const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-floorwalker-next": safeNext(), "x-floorwalker-keep-signed-in": String((body as { keepSignedIn?: boolean }).keepSignedIn !== false) }, body: JSON.stringify(body) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || data.error || "The account request failed.");
+  return data;
+}
+export function rememberEmail(email: string) { try { localStorage.setItem("floorwalker:last-email", email); } catch {} }
+export function lastEmail() { try { return localStorage.getItem("floorwalker:last-email") || ""; } catch { return ""; } }

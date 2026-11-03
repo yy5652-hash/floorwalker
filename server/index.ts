@@ -2,7 +2,7 @@ import { downloadWorkspace } from "./account-export.ts";
 import { healthEndpoint } from "./health.ts";
 import { agentView, blockExplanations } from "./explanations.ts";
 import { createAssistant, assistantContextAllowed } from "./assistant.ts";
-import { toNodeHandler } from "better-auth/node";
+import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import express, { type Response } from "express";
 import helmet from "helmet";
 import { existsSync } from "node:fs";
@@ -150,6 +150,24 @@ app.use("/api", assistant.publicRoutes);
 app.use("/api", signedIn);
 app.use("/api", assistant.workspaceRoutes);
 app.use("/api", manage);
+
+// Account-only routes retain the same origin/session checks as workspace settings.
+app.post("/api/account/set-password", async (req, res) => {
+  try {
+    res.json(await auth.api.setPassword({ headers: fromNodeHeaders(req.headers), body: { newPassword: req.body.newPassword } }));
+  } catch (e: any) {
+    res.status(typeof e.statusCode === "number" ? e.statusCode : 400).json({ error: e.message || "Could not set password." });
+  }
+});
+app.get("/api/admin/auth-stats", (req, res) => {
+  if (req.me?.anonymous || !config.adminEmails.includes(req.me?.email.toLowerCase() ?? "")) return void res.status(403).json({ error: "Admin access required." });
+  const days = core.prepare(`SELECT substr(timestamp,1,10) AS day,
+    SUM(event = 'signup_created') AS newAccounts, SUM(event = 'login_success') AS signIns,
+    SUM(event = 'code_sent') AS codesSent,
+    SUM(event = 'login_success' AND method IN ('code','continue')) AS codeSignIns
+    FROM auth_event GROUP BY day ORDER BY day DESC LIMIT 90`).all() as { day: string; newAccounts: number; signIns: number; codesSent: number; codeSignIns: number }[];
+  res.json(days.map((day) => ({ ...day, conversion: day.codesSent ? day.codeSignIns / day.codesSent : 0 })));
+});
 
 app.get("/api/export", need({ organization: ["delete"] }), handle(downloadWorkspace));
 

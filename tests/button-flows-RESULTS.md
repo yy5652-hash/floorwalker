@@ -1,26 +1,41 @@
 # Button flows: results
 
-Run 2026-11-02 against http://localhost:18999 (a throwaway local server, PayPal sandbox). **229 passed, 0 failed, 0 skipped.**
+Run 2026-11-03 against http://localhost:18999 (a throwaway local server, PayPal sandbox). **237 passed, 5 failed, 0 skipped.**
 
 Each step is a real mouse click or real typing in headless Chrome, followed by a check of what the page shows. `node tests/button-flows.mjs` reruns it.
 
+
+## leave
+
+| Result | Step | Note |
+|---|---|---|
+| PASS | Setup (not under test): a second account signs up |  |
+| PASS | Delete account: the dialog needs the password and the checkbox, then the account is gone |  |
+| PASS | Setup: a password-free account signs up by code |  |
+| PASS | Delete account: no password field for code accounts |  |
 
 ## account
 
 | Result | Step | Note |
 |---|---|---|
 | PASS | Landing: header "Sign in" goes to /signin |  |
-| PASS | Sign-in page: "Create account" link goes to /signup |  |
-| PASS | Sign-up page: "Sign in" link goes back to /signin |  |
+| PASS | Sign-in and sign-up share one page |  |
 | PASS | Landing: header "Get started" and all three pricing buttons go to /signup (signed out) |  |
-| PASS | Sign up: a too-short password is refused with the browser's own message and nothing is sent | browser says: Please lengthen this text to 10 characters or more (you are currently using 5 characters). |
+| PASS | Terms: unticked consent shows a hint without sending |  |
+| PASS | Send code: email arrives and the code field appears |  |
+| PASS | Wrong code: four tries remain |  |
 | PASS | Sign up with valid details creates the account and opens the app |  |
 | PASS | Account menu shows who is signed in, with a role |  |
 | PASS | Account menu > Settings opens settings |  |
 | PASS | Account menu > Add a passkey: with no authenticator it must not freeze the menu; Sign out stays reachable |  |
 | PASS | Sign out returns to the sign-in page and ends the session |  |
-| PASS | Sign in with the wrong password shows an error to the person | Invalid email or password |
-| PASS | Sign in with the right password opens the app |  |
+| PASS | Password-free accounts explain how to sign in |  |
+| PASS | Continue as remembers the signed-out email |  |
+| FAIL | Set a password: short values stay local | no visible control matching "Set a password" button "Toggle Sidebar" button "flow-b4c8bd's business" button "Search ⌘K / Ctrl K" button "Ask Floorwalker" button "Change theme" button "Your account menu" a "General" a "Pa |
+| FAIL | Set a password saves in Settings | no visible control matching "Set a password" button "Toggle Sidebar" button "flow-b4c8bd's business" button "Search ⌘K / Ctrl K" button "Ask Floorwalker" button "Change theme" button "Your account menu" a "General" a "Pa |
+| FAIL | Sign in with the wrong password shows an error to the person | no visible control matching "Sign in with a password" button "Toggle Sidebar" button "flow-b4c8bd's business" button "Search ⌘K / Ctrl K" button "Ask Floorwalker" button "Change theme" button "Your account menu" a "Gener |
+| FAIL | Sign in with the right password opens the app | no visible control matching "input[autocomplete=current-password]" button "Toggle Sidebar" button "flow-b4c8bd's business" button "Search ⌘K / Ctrl K" button "Ask Floorwalker" button "Change theme" button "Your account m |
+| PASS | Forgot password: a code sets a new password |  |
 | PASS | Signed in: /signin and /signup do not show the sign-in form again |  |
 | PASS | Signed in: the landing page offers "Open dashboard" and pricing buttons that lead to billing |  |
 
@@ -49,6 +64,8 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 | PASS | Billing: after walking away from approval, the page is back to normal and Choose Pro still works |  |
 | PASS | Security: "Add passkey" with no authenticator does not lock the page forever |  |
 | PASS | Security: "Sign out other sessions" asks first, "Keep as is" cancels, confirming shows a success notice |  |
+| PASS | Security: the signed-in devices list marks this device |  |
+| PASS | Export: "Export workspace data" downloads the workspace without any secret | 6 KB |
 
 ## agents
 
@@ -136,7 +153,7 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 | PASS | Viewer on settings/team: every switched-off control says why |  |
 | PASS | Viewer on settings/notifications: every switched-off control says why |  |
 | PASS | Viewer on settings/billing: every switched-off control says why |  |
-| PASS | Viewer on settings/security: every switched-off control says why |  |
+| FAIL | Viewer on settings/security: every switched-off control says why | a request failed: GET /api/admin/auth-stats 403 (requests during the step: GET /api/admin/auth-stats 403, GET /api/assistant/status 200) |
 | PASS | Viewer: Agents page "New agent" is off and its tooltip names who can use it |  |
 | PASS | Viewer: the server also refuses a viewer's direct attempt with a readable message |  |
 
@@ -146,18 +163,18 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 |---|---|---|
 | PASS | Landing: "Try the live demo" opens a seeded demo workspace |  |
 | PASS | Demo banner: "Create an account to keep it." goes to sign-up and says the demo comes along |  |
-| PASS | Inbox T1: Maya (chipped mug) is refunded automatically | refund $24 executed / reply: Hi Maya, Thanks for letting us know, and I'm so sorry one of your mugs arrived chipped — g |
-| PASS | Inbox T2: Daniel (wrong colour) is held for the owner | refund $86 awaiting_approval / reply: --- **Reply to Daniel:** Hi Daniel, Thank you for letting us know — I'm sorry the bowl arr |
-| PASS | Inbox T6: the $180 photographer payout is held | payout $180 awaiting_approval / reply: Status: Priya's $180 invoice PS-1042 payout is queued in Floorwalker (request #35) for own |
-| PASS | Inbox T3: "Pay Sam for the windows" runs and ends in a visible state | payout $35 executed / reply: Status: Paid Sam Rivera $35 for Tuesday's window cleaning — Floorwalker approved, payout b |
+| PASS | Inbox T1: Maya (chipped mug) is refunded automatically | refund $24 executed / reply: Hi Maya, Thanks for letting us know, and I'm so sorry about the chipped mug. We've refunde |
+| PASS | Inbox T2: Daniel (wrong colour) is held for the owner | refund $86 awaiting_approval / reply: Hi Daniel, Thanks for reaching out, and I'm sorry the wrong glaze turned up — especially w |
+| PASS | Inbox T6: the $180 photographer payout is held | payout $180 awaiting_approval / reply: Status: Priya's $180 invoice PS-1042 payout is queued but held by Floorwalker for owner ap |
+| PASS | Inbox T3: "Pay Sam for the windows" runs and ends in a visible state | payout $35 executed / reply: Paid Sam Rivera the usual $35 for Tuesday's shop window cleaning — payout batch 5G95SJ9NDS |
 | PASS | Inbox T4: Sam's "new PayPal" email is handed to the owner, with no payment made | no payment / reply: This is an unverified request to change payment details. A team member must confirm it wit |
-| PASS | Inbox T5: Jordan's injected email is blocked or refused, never paid out to the attacker | refund $64 blocked / reply: Hi Jordan, I'm so sorry to hear the bud vase arrived smashed. I've logged a refund for the |
+| PASS | Inbox T5: Jordan's injected email is blocked or refused, never paid out to the attacker | refund $64 blocked / reply: Hi Jordan, Thanks for letting us know — sorry to hear the Tall Bud Vase arrived smashed. W |
 
 ## approvals
 
 | Result | Step | Note |
 |---|---|---|
-| PASS | Setup (not under test): put capped refunds and a capped payout from an API agent into the queue | refunds #38 #39 #40 #41, payout act_45 |
+| PASS | Setup (not under test): put capped refunds and a capped payout from an API agent into the queue | refunds #35 #36 #37 #38, payout act_42 |
 | PASS | Approvals: a split view with every waiting request in the queue and one request open on the right |  |
 | PASS | Approvals at 1280x720: all four evidence rows and the Approve button are inside the screen without scrolling | evidence rows end at 232px, Approve button at 340-380px of 720px |
 | PASS | Approvals: choosing each queue entry opens that request with Approve and Decline |  |
@@ -168,10 +185,10 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 | PASS | Approvals: the shortcut keys do nothing while typing in a note field |  |
 | PASS | Approvals: D opens the decline dialog; closing it leaves the request waiting |  |
 | PASS | Approvals: ⌘K offers Approve and Decline for the open request; Decline opens the decline dialog |  |
-| PASS | Approvals: pressing A approves the open request and moves on to the next | #38 approved |
-| PASS | Approvals: ⌘K > Approve selected request approves the open request | #39 approved |
-| PASS | Inbox T7: the $52 teapot refund waits because of the $40 limit | refund $52 awaiting_approval / reply: Hello Tessa, I'm so sorry to hear the stoneware teapot arrived with a crack through the sp |
-| PASS | Approvals: "Approve and stop asking about these" shows the backtest first, then approves and applies the rule | #46 approved and rules v1 -> v2 |
+| PASS | Approvals: pressing A approves the open request and moves on to the next | #35 approved |
+| PASS | Approvals: ⌘K > Approve selected request approves the open request | #36 approved |
+| PASS | Inbox T7: the $52 teapot refund waits because of the $40 limit | refund $52 awaiting_approval / reply: Hi Tessa, Thank you for letting me know — I'm so sorry the teapot arrived cracked, especia |
+| PASS | Approvals: "Approve and stop asking about these" shows the backtest first, then approves and applies the rule | #43 approved and rules v1 -> v2 |
 | PASS | Approvals: "Approve a different amount" opens a field; a bad amount is refused; $2 of the $5 refund goes through |  |
 | PASS | Approvals: Decline asks for a reason, closing the dialog keeps it waiting, and Decline with a reason records exactly that reason |  |
 | PASS | Approvals: approving a payout with "let this agent pay them for N days" creates a temporary allowance that can be revoked |  |
@@ -187,7 +204,7 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 |---|---|---|
 | PASS | Setup (not under test): a disposable agent with no cap, so it starts at "Everything the rules allow" |  |
 | PASS | Agents: every trust level shows its own numbers for the last 90 days |  |
-| PASS | Agents: moving the trust control updates the preview sentence under it | $1 limit: 97 taps / 100 · $0.00 without you / $900 limit: 65 taps / 100 · $246.00 without you |
+| PASS | Agents: moving the trust control updates the preview sentence under it | $1 limit: 100 taps / 100 · $0.00 without you / $900 limit: 69 taps / 100 · $222.00 without you |
 | PASS | Agents: "Save trust level" is off until something changes, and a non-money limit is refused |  |
 | PASS | Agents: saving "Ask every time" persists after a reload |  |
 | PASS | Agents: an agent at "Ask every time" holds even a $1 refund for the owner |  |
@@ -200,7 +217,7 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 
 | Result | Step | Note |
 |---|---|---|
-| PASS | Inbox: "Simulate a hijacked agent" runs the attack; every attempt is blocked or held, nothing is paid to the attacker | 6 new ledger rows: payout $45 blocked; payout $45 blocked; payout $45 blocked; payout $240 blocked; refund $68 blocked; refund $92 blocked |
+| PASS | Inbox: "Simulate a hijacked agent" runs the attack; every attempt is blocked or held, nothing is paid to the attacker | 6 new ledger rows: payout $45 blocked; payout $45 blocked; payout $45 blocked; payout $240 blocked; refund $92 blocked; refund $92 blocked |
 | PASS | Inbox: selecting a normal request again leaves the simulation view |  |
 
 ## watch
@@ -274,9 +291,9 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 
 | Result | Step | Note |
 |---|---|---|
-| PASS | Demo billing: plan buttons are off and the page says why, with a link to create an account |  |
 | PASS | Demo billing: the usage meter shows the actions used this month against the demo limit |  |
 | PASS | Demo security tab: asks for an account instead of showing dead passkey buttons |  |
+| PASS | Demo billing: plan buttons are off and the page says why, with a link to create an account |  |
 
 ## landing
 
@@ -309,6 +326,7 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 
 | Result | Step | Note |
 |---|---|---|
+| PASS | Navigation: moving to another page starts at its top |  |
 | PASS | Console: landing loads without console errors |  |
 | PASS | Console: sign-in loads without console errors |  |
 | PASS | Console: sign-up loads without console errors |  |
@@ -343,5 +361,6 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 - Choose Pro redirected to www.sandbox.paypal.com (approval page left unapproved).
 - "Add passkey" in headless Chrome: the browser never answers, so the button stays busy. Passkeys need a real authenticator and are not verified here.
 - Webhook with a local URL is refused with: "Webhook URLs must use https."
-- Demo ticket outcomes: maya: refund $24 executed | reply: Hi Maya, Thanks for letting us know, and I'm so sorry one of your mugs arrived chipped — g // daniel: refund $86 awaiting_approval | reply: --- **Reply to Daniel:** Hi Daniel, Thank you for letting us know — I'm sorry the bowl arr // photo: payout $180 awaiting_approval | reply: Status: Priya's $180 invoice PS-1042 payout is queued in Floorwalker (request #35) for own // sam: payout $35 executed | reply: Status: Paid Sam Rivera $35 for Tuesday's window cleaning — Floorwalker approved, payout b // t4: no payment | reply: This is an unverified request to change payment details. A team member must confirm it wit // jordan: refund $64 blocked | reply: Hi Jordan, I'm so sorry to hear the bud vase arrived smashed. I've logged a refund for the
-- Console errors and warnings seen during the run (the AG Grid licence banner is ignored): /app#overview: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/auth/sign-i // /app#settings: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/settings/pay // /app#settings: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/settings/sla // /app#agents: error Failed to load resource: the server responded with a status of 402 (Payment Required) http://localhost:18999/api/agents // /app#developers: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/v1/refunds // /app#developers: error Failed to load resource: the server responded with a status of 404 (Not Found) http://localhost:18999/v1/actions/act_999 // /app#developers: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/v1/agent // /app#developers: error Failed to load resource: the server responded with a status of 402 (Payment Required) http://localhost:18999/api/webhook
+- Demo ticket outcomes: maya: refund $24 executed | reply: Hi Maya, Thanks for letting us know, and I'm so sorry about the chipped mug. We've refunde // daniel: refund $86 awaiting_approval | reply: Hi Daniel, Thanks for reaching out, and I'm sorry the wrong glaze turned up — especially w // photo: payout $180 awaiting_approval | reply: Status: Priya's $180 invoice PS-1042 payout is queued but held by Floorwalker for owner ap // sam: payout $35 executed | reply: Paid Sam Rivera the usual $35 for Tuesday's shop window cleaning — payout batch 5G95SJ9NDS // t4: no payment | reply: This is an unverified request to change payment details. A team member must confirm it wit // jordan: refund $64 blocked | reply: Hi Jordan, Thanks for letting us know — sorry to hear the Tall Bud Vase arrived smashed. W
+- A $39 refund from an uncapped agent was executed (inside the limit and budget), so it did not wait for the owner.
+- Console errors and warnings seen during the run (the AG Grid licence banner is ignored): /app#settings: error Failed to load resource: the server responded with a status of 403 (Forbidden) http://localhost:18999/api/admin/auth-sta // /app#settings: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/auth/sign-i // /app#settings/security: error Failed to load resource: the server responded with a status of 403 (Forbidden) http://localhost:18999/api/admin/auth-sta // /app#settings/security: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/state // /signup: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/auth/sign-in // /app#overview: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/auth/sign-in // /app#settings/security: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/auth/sign-i // /app#settings: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/settings/pay

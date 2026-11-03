@@ -6,9 +6,10 @@
 //   FLOWS=account,settings node tests/button-flows.mjs   run only some flows (account settings agents developers setup workspaces roles demo approvals trust hijack watch demo-agents ledger rules inbox demo-billing landing mobile pages)
 //   FLOW_COOKIES=file keeps the browser cookies between runs (so the demo workspace is reused); FLOW_RUN=name reuses one test account across partial reruns; FLOW_PROFILE=dir keeps the browser profile (and so the demo session) between runs
 //   FLOW_PAYPAL_CLIENT_ID / FLOW_PAYPAL_CLIENT_SECRET (a PayPal sandbox app) add the connect-real-credentials step; without them it is skipped
+//   FLOW_OUTBOX=notes/.next/outbox.jsonl must point beside the server's core database
 //
 // Run it against a throwaway local server, never the live site (it signs up accounts, creates keys, refunds sandbox orders):
-//   NODE_ENV=production PORT=18999 DATA_DIR=notes/.flow/ws FLOORWALKER_CORE_DB=notes/.flow/core.db \
+//   NODE_ENV=production PORT=18999 FLOORWALKER_DATA_DIR=notes/.next/ws FLOORWALKER_CORE_DB=notes/.next/core.db \
 //   FLOORWALKER_BASE_URL=http://localhost:18999 BETTER_AUTH_URL=http://localhost:18999 npx tsx server/index.ts
 // Anonymous sign-in is rationed at 6/hour per IP and email sign-up at 10/hour; restart the server to reset them.
 // PayPal is sandbox only. The script never approves a PayPal subscription.
@@ -21,6 +22,7 @@ import { join } from 'node:path';
 const BASE = (process.argv[2] ?? 'http://localhost:18999').replace(/\/$/, '');
 if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(BASE) && !process.env.FLOWS_ALLOW_REMOTE) { console.error('Refusing to run against a non-local server. Set FLOWS_ALLOW_REMOTE=1 only if you are sure.'); process.exit(2); }
 const ONLY = process.env.FLOWS?.split(',').filter(Boolean);
+const OUTBOX = process.env.FLOW_OUTBOX || 'notes/.next/outbox.jsonl';
 const DEBUG = 9500 + Math.floor(Math.random() * 400);
 const SHELL = process.env.CHROME_SHELL || '/Users/hudsonyu/Documents/Codex/2026-09-28/referenced-chatgpt-conversation-this-is-an-4/work/ai4s-v2/.pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -243,15 +245,55 @@ const notes = [];
 // ======================================================================
 const acct = { name: `Flow Owner ${run}`, email: `flow-${run}@example.com` };
 
+function readOutbox() {
+  try { return readFileSync(OUTBOX, 'utf8'); }
+  catch (e) { if (e.code === 'ENOENT') return ''; throw e; }
+}
+// Capture the cursor before sending. Ignore old emails, other recipients, notifications and a partially written final line.
+async function newestCode(email, after = 0) {
+  const until = Date.now() + 20000;
+  while (Date.now() < until) {
+    const lines = readOutbox().slice(after).split('\n').slice(0, -1);
+    for (const line of lines.reverse()) {
+      let mail; try { mail = JSON.parse(line); } catch { continue; }
+      if (mail.to?.toLowerCase() !== email.toLowerCase() || mail.tag !== 'code') continue;
+      const code = mail.text?.match(/^(\d{6})(?:\r?\n|$)/)?.[1];
+      if (code) return code;
+    }
+    await sleep(200);
+  }
+  throw new Error(`no new code for ${email} in ${OUTBOX} within 20s`);
+}
+const emailField = { sel: 'input', text: 'Email', exact: true };
+const codeField = { sel: 'input', text: 'Code', exact: true };
+const termsBox = { sel: 'input[type=checkbox]', text: 'I agree to the' };
+async function agreeTerms() {
+  if (!(await ev(`__f.one(${JSON.stringify(termsBox)})?.checked`))) await click(termsBox);
+}
+async function pageCode(email) {
+  await type(emailField, email); await agreeTerms();
+  const after = readOutbox().length;
+  await click({ sel: 'button', text: 'Send code', exact: true }); await waitText(`Code sent to ${email}`);
+  return newestCode(email, after);
+}
+// better-auth 1.7.14 installed routes, checked against the official docs:
+// https://better-auth.com/docs/plugins/email-otp (send-verification-otp and sign-in/email-otp).
+async function codeSignIn(email, name) {
+  const after = readOutbox().length;
+  const sent = await api('/api/auth/email-otp/send-verification-otp', { method: 'POST', body: { email, type: 'sign-in' } });
+  expect(sent.status === 200, `could not send the setup code (HTTP ${sent.status})`);
+  const otp = await newestCode(email, after);
+  const signed = await api('/api/auth/sign-in/email-otp', { method: 'POST', body: { email, otp, ...(name ? { name } : {}) } });
+  expect(signed.status === 200, `could not sign in with the setup code (HTTP ${signed.status})`);
+  return signed;
+}
 
 // Setup that is not under test: make sure the flow-owner account exists and this browser is signed in as it.
 async function ensureAccount() {
   const me = await signedInAs().catch(() => null);
   if (me?.email === acct.email) return;
   await goto('/signin'); await clearSession();
-  let r = await api('/api/auth/sign-in/email', { method: 'POST', body: { email: acct.email, password: PASSWORD } });
-  if (r.status !== 200) r = await api('/api/auth/sign-up/email', { method: 'POST', body: { name: acct.name, email: acct.email, password: PASSWORD } });
-  expect(r.status === 200, `could not set up the test account (HTTP ${r.status})`);
+  await codeSignIn(acct.email, acct.name);
 }
 const menu = () => click({ sel: 'button', text: 'Your account menu' });
 
@@ -261,36 +303,40 @@ flow('account', async () => {
     await goto('/'); await click({ sel: 'a', text: 'Sign in', exact: true, within: '.site-nav' });
     await waitFor(async () => (await ev('location.pathname')) === '/signin', { what: '/signin' });
   });
-  await step('Sign-in page: "Create account" link goes to /signup', async () => {
-    await click({ sel: 'a', text: 'Create account' });
-    await waitFor(async () => (await ev('location.pathname')) === '/signup', { what: '/signup' });
-    await waitText('Create your account');
-  });
-  await step('Sign-up page: "Sign in" link goes back to /signin', async () => {
-    await click({ sel: 'a', text: 'Sign in', exact: true });
-    await waitFor(async () => (await ev('location.pathname')) === '/signin', { what: '/signin' });
-    await waitText('Welcome back');
+  await step('Sign-in and sign-up share one page', async () => {
+    for (const path of ['/signin', '/signup']) {
+      await goto(path); await waitText('Sign in or sign up');
+      await waitControl(emailField); await waitControl({ sel: 'button', text: 'Sign in with a password', exact: true });
+      expect(!(await ev(`!!__f.one({ sel: 'input[type=password]' })`)), 'the code screen asks for a password');
+    }
   });
   await step('Landing: header "Get started" and all three pricing buttons go to /signup (signed out)', async () => {
     for (const spec of [{ sel: 'a', text: 'Get started', within: '.site-nav' }, ...[0, 1, 2].map(nth => ({ sel: '#pricing a', text: 'Get started', nth, page: true }))]) {
       await goto('/'); await click(spec);
       await waitFor(async () => (await ev('location.pathname')) === '/signup', { what: '/signup after clicking ' + (spec.nth ?? 'header') });
+      await waitText('Sign in or sign up'); await waitControl(emailField);
     }
   });
-  await step('Sign up: a too-short password is refused with the browser\'s own message and nothing is sent', async () => {
-    await goto('/signup');
-    await type('Full name', acct.name); await type({ sel: 'input', text: 'Email', exact: true }, acct.email); await type('Password', 'short');
+  await step('Terms: unticked consent shows a hint without sending', async () => {
+    await goto('/signup'); await type(emailField, acct.email);
     const before = await ev('__a.reqs.length');
-    await click({ sel: 'button[type=submit]', text: 'Create account' });
-    const msg = await ev(`document.querySelector('input[type=password]').validationMessage`);
-    expect(msg, 'no validation message for a 5-character password');
-    expect((await ev('__a.reqs.length')) === before, 'a request was sent despite the invalid password');
-    return `browser says: ${msg}`;
+    await click({ sel: 'button', text: 'Send code', exact: true });
+    await waitText('Please agree to the Terms and the Privacy notice to continue.');
+    expect((await ev('__a.reqs.length')) === before, 'a request was sent without consent');
   });
+  let signupCode;
+  await step('Send code: email arrives and the code field appears', async () => {
+    signupCode = await pageCode(acct.email); await waitControl(codeField);
+  }, { critical: true });
+  await step('Wrong code: four tries remain', async () => {
+    await type(codeField, signupCode === '000000' ? '999999' : '000000');
+    await waitText("That code isn't right. 4 tries left.");
+    expect((await ev('location.pathname')) === '/signup', 'a wrong code left the form');
+    expect((await ev(`__f.one(${JSON.stringify(codeField)}).getAttribute('aria-invalid')`)) === 'true', 'the code field is not marked invalid');
+  }, { ok4xx: true });
   await step('Sign up with valid details creates the account and opens the app', async () => {
-    await type('Password', PASSWORD);
-    await click({ sel: 'button[type=submit]', text: 'Create account' });
-    await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: 'to land in /app' });
+    await type(codeField, signupCode);
+    await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: 'to land in /app without clicking Continue' });
     await openApp('overview');
     await waitControl({ sel: 'button', text: 'Your account menu' });
   }, { critical: true });
@@ -312,18 +358,66 @@ flow('account', async () => {
     await waitFor(async () => (await ev('location.pathname')) === '/signin', { what: '/signin' });
     expect(!(await signedInAs()), 'still signed in after Sign out');
   });
+  await step('Password-free accounts explain how to sign in', async () => {
+    await click({ sel: 'button', text: 'Sign in with a password', exact: true });
+    await type(emailField, acct.email); await type({ sel: 'input[autocomplete=current-password]' }, PASSWORD); await agreeTerms();
+    await click({ sel: 'button[type=submit]', text: 'Continue', exact: true });
+    await waitText("This account doesn't have a password yet. Use a code to sign in.");
+    expect((await ev('location.pathname')) === '/signin', 'password-free sign-in left the form');
+    await click({ sel: 'button', text: 'Use a code instead', exact: true });
+  }, { ok4xx: true });
+  await step('Continue as remembers the signed-out email', async () => {
+    await agreeTerms(); const after = readOutbox().length;
+    await click({ sel: 'button', text: `Continue as ${acct.email}`, exact: true });
+    await waitText(`Code sent to ${acct.email}`);
+    await type(codeField, await newestCode(acct.email, after));
+    await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: '/app' });
+    expect((await signedInAs())?.email === acct.email, 'Continue as signed in the wrong account');
+  });
+  await openApp('settings/security'); await waitText('Set a password');
+  await step('Set a password: short values stay local', async () => {
+    await type({ sel: 'input[autocomplete=new-password]' }, 'short');
+    const before = await ev('__a.reqs.length');
+    await click({ sel: 'button', text: 'Set a password', exact: true });
+    const msg = await ev(`__f.one({ sel: 'input[autocomplete=new-password]' }).validationMessage`);
+    expect(msg, 'no validation message for a 5-character password');
+    expect((await ev('__a.reqs.length')) === before, 'a request was sent despite the invalid password');
+    return `browser says: ${msg}`;
+  });
+  await step('Set a password saves in Settings', async () => {
+    await type({ sel: 'input[autocomplete=new-password]' }, PASSWORD);
+    await click({ sel: 'button', text: 'Set a password', exact: true }); await waitToast('Password saved');
+    await waitText('Change password');
+    await menu(); await click({ sel: '[role=menuitem]', text: 'Sign out' }); await waitText('Sign in or sign up');
+  });
   await step('Sign in with the wrong password shows an error to the person', async () => {
-    await type({ sel: 'input', text: 'Email', exact: true }, acct.email); await type('Password', WRONG_PASSWORD);
-    await click({ sel: 'button[type=submit]', text: 'Sign in' });
-    const t = await waitToast(/invalid|incorrect|wrong|password|email/i);
+    await click({ sel: 'button', text: 'Sign in with a password', exact: true });
+    await type(emailField, acct.email); await type({ sel: 'input[autocomplete=current-password]' }, WRONG_PASSWORD); await agreeTerms();
+    await click({ sel: 'button[type=submit]', text: 'Continue', exact: true });
+    const t = await waitText(/invalid|incorrect|wrong/i);
     expect((await ev('location.pathname')) === '/signin', 'left the sign-in page after a failed sign-in');
     return t;
   }, { ok4xx: true });
   await step('Sign in with the right password opens the app', async () => {
-    await type('Password', PASSWORD); await click({ sel: 'button[type=submit]', text: 'Sign in' });
+    await type({ sel: 'input[autocomplete=current-password]' }, PASSWORD); await click({ sel: 'button[type=submit]', text: 'Continue', exact: true });
     await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: '/app' });
     await openApp('overview'); await menu(); await waitText(acct.email); await key('Escape');
   });
+  await step('Forgot password: a code sets a new password', async () => {
+    await menu(); await click({ sel: '[role=menuitem]', text: 'Sign out' }); await waitText('Sign in or sign up');
+    await click({ sel: 'button', text: 'Sign in with a password', exact: true }); await click({ sel: 'button', text: 'Forgot password', exact: true });
+    const code = await pageCode(acct.email);
+    await type(codeField, code); await type({ sel: 'input[autocomplete=new-password]' }, `${PASSWORD}-reset`);
+    await click({ sel: 'button[type=submit]', text: 'Continue', exact: true });
+    await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: '/app after the reset' });
+    expect((await signedInAs())?.email === acct.email, 'the reset did not sign in the account');
+    await menu(); await click({ sel: '[role=menuitem]', text: 'Sign out' }); await waitText('Sign in or sign up');
+    await click({ sel: 'button', text: 'Sign in with a password', exact: true }); await type(emailField, acct.email); await agreeTerms();
+    await type({ sel: 'input[autocomplete=current-password]' }, PASSWORD); await click({ sel: 'button[type=submit]', text: 'Continue', exact: true });
+    await waitText(/invalid|incorrect|wrong/i); expect((await ev('location.pathname')) === '/signin', 'the old password still works');
+    await type({ sel: 'input[autocomplete=current-password]' }, `${PASSWORD}-reset`); await click({ sel: 'button[type=submit]', text: 'Continue', exact: true });
+    await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: '/app with the new password' });
+  }, { ok4xx: true });
   await step('Signed in: /signin and /signup do not show the sign-in form again', async () => {
     for (const p of ['/signin', '/signup']) {
       await goto(p); await sleep(1500);
@@ -419,11 +513,13 @@ flow('settings', async () => {
     inviteLink = await ev(`[...document.querySelectorAll('pre code')].map(c => c.innerText).find(t => t.includes('/invite/'))`);
     await resetBrowser();
     await goto(new URL(inviteLink).pathname); await waitText('Sign in with the invited email');
-    await click({ sel: 'a', text: 'Create account' }); await waitFor(async () => (await ev('location.pathname')) === '/signup', { what: '/signup' });
+    await click({ sel: 'a', text: 'Sign in', exact: true }); await waitFor(async () => (await ev('location.pathname')) === '/signin', { what: '/signin' });
+    await waitText('Sign in or sign up');
     expect(decodeURIComponent(await ev('location.search')).includes('/invite/'), 'sign-up link lost the invitation');
-    await type('Full name', `Invitee ${run}`); await type({ sel: 'input', text: 'Email', exact: true }, inviteEmail); await type('Password', PASSWORD);
-    await click({ sel: 'button[type=submit]', text: 'Create account' });
+    await type(codeField, await pageCode(inviteEmail));
     await waitFor(async () => (await ev('location.pathname')).startsWith('/invite/'), { timeout: 20000, what: 'to come back to the invitation' });
+    // The code form has no name field; retain the fixture name used by the role and removal checks below.
+    const named = await api('/api/auth/update-user', { method: 'POST', body: { name: `Invitee ${run}` } }); expect(named.status === 200, `could not name the invitee (HTTP ${named.status})`);
     await waitText(/invited to/i); await click('Accept invitation'); await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: '/app' });
     await openApp('overview'); await menu(); const t = await waitText(/admin/i); await key('Escape');
   }, { ok4xx: true });
@@ -721,8 +817,13 @@ flow('demo', async () => {
     await openApp('inbox'); await waitText('Maya Chen'); await waitText('Explore Floorwalker');
   }, { critical: true });
   await step('Demo banner: "Create an account to keep it." goes to sign-up and says the demo comes along', async () => {
+    const workspace = (await stateNow()).workspace.id;
     await click({ sel: 'a', text: 'Create an account to keep it.' }); await waitFor(async () => (await ev('location.pathname')) === '/signup', { what: '/signup' });
-    await waitText('Your demo workspace comes with you'); await goto('/app#inbox');
+    await waitText('Sign in or sign up'); await waitText('Your demo workspace comes with you');
+    const email = `flow-demo-${run}@example.com`; await type(codeField, await pageCode(email));
+    await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: 'the kept demo workspace' });
+    const me = await signedInAs(); expect(me?.email === email && !me.isAnonymous, 'the demo did not become a signed-in account');
+    expect((await stateNow()).workspace.id === workspace, 'code sign-up lost the demo workspace'); await openApp('inbox');
   });
   const outcomes = {};
   await step('Inbox T1: Maya (chipped mug) is refunded automatically', async () => {
@@ -1211,7 +1312,7 @@ flow('roles', async () => {
   await step('Setup (not under test): invite a viewer by API, sign them up and accept', async () => {
     const inv = await api('/api/auth/organization/invite-member', { method: 'POST', body: { email, role: 'viewer', organizationId: orgId } }); expect(inv.status === 200, `invite failed (HTTP ${inv.status})`);
     await goto('/signin'); await clearSession();
-    const up = await api('/api/auth/sign-up/email', { method: 'POST', body: { name: `Viewer ${run}`, email, password: PASSWORD } }); expect(up.status === 200, `sign-up failed (HTTP ${up.status})`);
+    await codeSignIn(email, `Viewer ${run}`);
     const acc = await api('/api/auth/organization/accept-invitation', { method: 'POST', body: { invitationId: inv.json.id } }); expect(acc.status === 200, `accept failed (HTTP ${acc.status})`);
     await api('/api/auth/organization/set-active', { method: 'POST', body: { organizationId: orgId } });
   }, { critical: true });
@@ -1241,16 +1342,22 @@ flow('setup', async () => {
 
 flow('demo-billing', async () => {
   await ensureDemo(); await openApp('settings/billing');
-  await step('Demo billing: plan buttons are off and the page says why, with a link to create an account', async () => {
-    await waitText('Demo: every feature on'); const pos = await locate({ sel: 'button', text: 'Choose Pro' }, { allowDisabled: true }); expect(pos.disabled, 'Choose Pro should be off in the demo');
-    await click({ sel: 'a', text: 'Create an account to subscribe' }); await waitFor(async () => (await ev('location.pathname')) === '/signup', { what: '/signup' });
-  });
   await step('Demo billing: the usage meter shows the actions used this month against the demo limit', async () => {
     await openApp('settings/billing'); const u = (await api('/api/billing/usage')).json; await waitText('Actions this month'); const bar = await ev(`(() => { const b = document.querySelector('[role=progressbar][aria-label="Actions this month usage"]'); return b && { now: b.getAttribute('aria-valuenow'), max: b.getAttribute('aria-valuemax') }; })()`);
     expect(bar && Number(bar.max) === u.monthlyLimit && Number(bar.now) === Math.min(u.actionsUsed, u.monthlyLimit) && u.actionsUsed > 0, `the meter shows ${JSON.stringify(bar)} but the server says ${u.actionsUsed} of ${u.monthlyLimit}`); await openApp('settings/billing');
   });
   await step('Demo security tab: asks for an account instead of showing dead passkey buttons', async () => {
-    await openApp('settings/security'); await waitText('Create an account before adding passkeys'); await waitControl({ sel: 'a', text: 'Create account' });
+    await openApp('settings/security'); await waitText('Sign in or sign up before adding passkeys or managing sessions.'); await waitControl({ sel: 'a', text: 'Sign in or sign up', exact: true });
+  });
+  await step('Demo billing: plan buttons are off and the page says why, with a link to create an account', async () => {
+    await openApp('settings/billing'); await waitText('Demo: every feature on'); const pos = await locate({ sel: 'button', text: 'Choose Pro' }, { allowDisabled: true }); expect(pos.disabled, 'Choose Pro should be off in the demo');
+    const workspace = (await stateNow()).workspace.id;
+    await click({ sel: 'a', text: 'Create an account to subscribe' }); await waitFor(async () => (await ev('location.pathname')) === '/signup', { what: '/signup' });
+    await waitText('Sign in or sign up');
+    const email = `flow-billing-${run}@example.com`; await type(codeField, await pageCode(email));
+    await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: 'the signed-in app' });
+    const me = await signedInAs(); expect(me?.email === email && !me.isAnonymous, 'the billing link did not create an account');
+    expect((await stateNow()).workspace.id === workspace, 'sign-up lost the demo workspace');
   });
 });
 
@@ -1454,23 +1561,45 @@ flow('pages', async () => {
   });
 });
 
-// A second, throwaway account deletes itself; the run's main account is never touched.
+// Throwaway accounts delete themselves; the run's main account is never touched.
 flow('leave', async () => {
   await resetBrowser();
   const leaver = { name: `Flow leaver ${run}`, email: `flow-leaver-${run}@example.com` };
   await step('Setup (not under test): a second account signs up', async () => {
-    await goto('/signup'); await type('Full name', leaver.name); await type({ sel: 'input', text: 'Email', exact: true }, leaver.email); await type('Password', PASSWORD);
-    await click({ sel: 'button[type=submit]', text: 'Create account' }); await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: 'to land in /app' });
+    await goto('/signup'); await waitText('Sign in or sign up'); await type(codeField, await pageCode(leaver.email));
+    await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: 'to land in /app' });
+    const saved = await api('/api/account/set-password', { method: 'POST', body: { newPassword: PASSWORD } }); expect(saved.status === 200, `could not set the leaver password (HTTP ${saved.status})`);
   }, { critical: true });
   await step('Delete account: the dialog needs the password and the checkbox, then the account is gone', async () => {
     await openApp('settings'); await settingsTab('Security'); await click({ sel: 'button', text: 'Delete account' }); await waitText('Delete account?');
-    const off = await locate({ sel: 'button[type=submit]', text: 'Delete account', within: '[role=dialog]' }, { allowDisabled: true }); expect(off.disabled, 'Delete is on before the checkbox and password');
-    await type({ sel: 'input[type=password]', within: '[role=dialog]' }, PASSWORD); await click({ sel: 'label', text: "I understand this can't be undone" });
-    await click({ sel: 'button[type=submit]', text: 'Delete account', within: '[role=dialog]' });
+    const submit = { sel: 'button[type=submit]', text: 'Delete account', within: '[role=dialog]' };
+    const off = await locate(submit, { allowDisabled: true }); expect(off.disabled, 'Delete is on before the checkbox and password');
+    await click({ sel: 'label', text: "I understand this can't be undone" });
+    expect((await locate(submit, { allowDisabled: true })).disabled, 'Delete is on with only the checkbox');
+    await click({ sel: 'label', text: "I understand this can't be undone" });
+    await type({ sel: 'input[type=password]', within: '[role=dialog]' }, PASSWORD);
+    expect((await locate(submit, { allowDisabled: true })).disabled, 'Delete is on with only the password');
+    await click({ sel: 'label', text: "I understand this can't be undone" }); await click(submit);
     await waitFor(async () => (await ev('location.pathname')) === '/', { timeout: 20000, what: 'the landing page' });
-    const back = await ev(`fetch('/api/auth/sign-in/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ${JSON.stringify(leaver.email)}, password: ${JSON.stringify(PASSWORD)} }) }).then(r => r.status)`);
-    expect(back >= 400, `the deleted account could still sign in (${back})`);
-  });
+    expect(!(await signedInAs()), 'the deleted account still has a session');
+    const back = await api('/api/auth/sign-in/email', { method: 'POST', body: { email: leaver.email, password: PASSWORD } });
+    expect(back.status >= 400, `the deleted account could still sign in (${back.status})`);
+  }, { ok4xx: true });
+  await step('Setup: a password-free account signs up by code', async () => {
+    await resetBrowser(); await codeSignIn(`flow-leaver-no-password-${run}@example.com`, `Password-free leaver ${run}`);
+  }, { critical: true });
+  await step('Delete account: no password field for code accounts', async () => {
+    await openApp('settings/security'); await waitText('Set a password');
+    await click({ sel: 'button', text: 'Delete account', exact: true }); await waitText('Delete account?');
+    expect(!(await ev(`!!document.querySelector('[role=dialog] input[type=password]')`)), 'a password-free account is asked for a password');
+    await waitText('A recent sign-in is required.');
+    const submit = { sel: 'button[type=submit]', text: 'Delete account', within: '[role=dialog]' };
+    expect((await locate(submit, { allowDisabled: true })).disabled, 'Delete is on before the checkbox');
+    await click({ sel: 'label', text: "I understand this can't be undone" }); await click(submit);
+    await waitFor(async () => (await ev('location.pathname')) === '/', { timeout: 20000, what: 'the landing page' });
+    expect(!(await signedInAs()), 'the password-free deleted account still has a session');
+    const state = await api('/api/state'); expect(state.status === 401, `the deleted account can still access its workspace (HTTP ${state.status})`);
+  }, { ok4xx: true });
 });
 
 //FLOWS-GO-HERE

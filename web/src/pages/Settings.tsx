@@ -1,5 +1,5 @@
 import { BillingUsageMeter } from "../components/BillingUsageMeter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, Fingerprint, Plus, ShieldCheck } from "lucide-react";
 import { account, isFilm, type TeamRole } from "../auth";
@@ -864,7 +864,7 @@ export function PlanCards({
             )
           ) : (
             <Button asChild variant={plan.id === "pro" ? "default" : "outline"}>
-              <a href="/signup">Create account</a>
+              <a href="/signup">Sign in or sign up</a>
             </Button>
           )}
         </Card>
@@ -1030,6 +1030,42 @@ function deviceLabel(ua: string | null | undefined) {
   return `${device} · ${browser}`;
 }
 
+function AccountCredentials({ hasPassword, refresh, isAdmin }: { hasPassword: boolean; refresh: () => Promise<unknown>; isAdmin: boolean }) {
+  const [current, setCurrent] = useState("");
+  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [sent, setSent] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [show, setShow] = useState(false);
+  const { busy, run } = useTask();
+  useEffect(() => { if (!seconds) return; const timer = setTimeout(() => setSeconds(seconds - 1), 1000); return () => clearTimeout(timer); }, [seconds]);
+  const admin = { data: isAdmin };
+  return <Card className="p-6 space-y-5">
+    <h2>{hasPassword ? "Change password" : "Set a password"}</h2>
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); void run(async () => {
+      if (hasPassword) await account.changePassword(current, password); else await account.setPassword(password);
+      setCurrent(""); setPassword(""); await refresh();
+    }, "Password saved"); }}>
+      {hasPassword && <Field label="Current password"><Input required type={show ? "text" : "password"} autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} /></Field>}
+      <Field label="New password" hint="8 to 200 characters"><Input required type={show ? "text" : "password"} autoComplete="new-password" minLength={8} maxLength={200} value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+      <Button type="button" variant="outline" onClick={() => setShow(!show)}>{show ? "Hide password" : "Show password"}</Button>{" "}
+      <Button disabled={busy}>{hasPassword ? "Change password" : "Set a password"}</Button>
+    </form>
+    <h2 className="border-t pt-5">Change email</h2>
+    <p className="text-sm text-muted-foreground">Verify your new email to keep a way to sign in. We'll notify your old address.</p>
+    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); void run(async () => {
+      if (!sent) { await account.sendEmailChange(email); setSent(true); setSeconds(60); }
+      else { await account.changeEmail(email, code); location.reload(); }
+    }); }}>
+      <Field label="New email"><Input required type="email" autoComplete="email" readOnly={sent} value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+      {sent && <><p className="text-xs">Code sent to {email}, valid for 10 minutes · <button type="button" className="underline" onClick={() => { setSent(false); setCode(""); }}>Change</button></p><Field label="Code"><Input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} /></Field><Button type="button" variant="outline" disabled={busy || seconds > 0} onClick={() => void run(async () => { await account.sendEmailChange(email); setSeconds(60); })}>{seconds ? `Resend in ${seconds}s` : "Send a new code"}</Button></>}
+      <Button disabled={busy || (!sent && seconds > 0)}>{sent ? "Change email" : "Send code"}</Button>
+    </form>
+    {admin.data && <a className="text-sm underline" href="/app#admin" onClick={() => setTimeout(() => location.reload(), 0)}>Sign-in events</a>}
+  </Card>;
+}
+
 function Security({ state }: PageProps) {
   const passkeys = useQuery({
     queryKey: ["passkeys"],
@@ -1048,15 +1084,16 @@ function Security({ state }: PageProps) {
       <Card className="p-6">
         <h2>Keep your workspace</h2>
         <p className="text-sm text-muted-foreground">
-          Create an account before adding passkeys or managing sessions.
+          Sign in or sign up before adding passkeys or managing sessions.
         </p>
         <Button asChild>
-          <a href="/signup">Create account</a>
+          <a href="/signup">Sign in or sign up</a>
         </Button>
       </Card>
     );
   return (
     <div className="max-w-3xl space-y-6">
+      {passwordAccount.isSuccess && <AccountCredentials isAdmin={!!state.me?.admin} hasPassword={passwordAccount.data} refresh={() => passwordAccount.refetch()} />}
       <Card className="p-6">
         <div className="flex items-center gap-2">
           <Fingerprint />
@@ -1107,7 +1144,7 @@ function Security({ state }: PageProps) {
               </div>
               <Confirm
                 title="Delete passkey?"
-                description="You will no longer be able to sign in with this passkey. Your password remains available."
+                description="You will no longer be able to sign in with this passkey. You can still sign in with an email code."
                 label="Delete passkey"
                 done="Passkey deleted"
                 onConfirm={async () => {

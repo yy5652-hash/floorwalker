@@ -1101,3 +1101,9 @@ body .assistant-workspace .assistant-panel { top: 72px; bottom: auto; max-height
   .c2-agent *, .inbox-layout *, .ledger-surface *, .incident-timeline * { animation: none !important; transition: none !important; }
 }
 /* End C2 */
+
+/* === Launch: the sign-in page follows the white redesign (no filled colour block) === */
+.auth-layout > div:first-child { background: var(--background); color: var(--foreground); border-radius: 0; border-left: 1px solid var(--border); position: relative; }
+.auth-layout > div:first-child::before { content: ""; position: absolute; left: -1px; top: 48px; width: 2px; height: 120px; background: linear-gradient(180deg, #00b8d9, #6d3df5, #f0268f, #f59300); }
+.auth-layout > div:first-child p { color: var(--muted-foreground); }
+.auth-layout > div:first-child span { color: var(--primary); }

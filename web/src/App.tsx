@@ -1,7 +1,7 @@
 import { isFilm } from "./auth";
 import { canApprove, canManage } from "./api";
 import { IncidentBanner } from "./components/IncidentBanner";
-import { AuthPage } from "./pages/Auth";
+import { AuthPage, AuthAdmin, AuthNotice } from "./pages/Auth";
 import { Developers, developerTabs } from "./pages/Developers";
 import { Settings as WorkspaceSettings, settingsTabs } from "./pages/Settings";
 import {
@@ -816,6 +816,7 @@ function Routes() {
     return <AuthPage invitationId={decodeURIComponent(path.slice(8))} />;
   if (path === "/") return <><Landing /><Suspense fallback={null}><Assistant /></Suspense></>;
   if (path === "/approve") return <Workspace mobile />;
+  if (path === "/app" && location.hash === "#admin") return <AuthAdmin />;
   if (path === "/app") return <Workspace mobile={false} />;
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-6 p-6">
@@ -847,6 +848,7 @@ export function App() {
   }, []);
   return (
     <>
+      <AuthNotice />
       <Routes />
       <UpgradePrompt />
     </>

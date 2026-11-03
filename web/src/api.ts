@@ -213,6 +213,7 @@ export type State = {
     workspaceId: string;
     sessionId: string;
     signedInAt: number | string;
+    admin?: boolean;
   };
   workspace?: {
     id: string;

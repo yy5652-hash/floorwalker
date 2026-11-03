@@ -159,11 +159,21 @@ Requirements: Node.js 22.13 or newer, a free [PayPal Developer](https://develope
 
 Floorwalker only talks to `api-m.sandbox.paypal.com`; there is no setting for the live API.
 
-Sign-in, workspaces and the demo pool need nothing else: a secret and VAPID keys for push are created in `data/` on first start (or set `BETTER_AUTH_SECRET`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`). Set `FLOORWALKER_BASE_URL` to the public URL when you host it; passkeys and cookies are bound to it. See [.env.example](.env.example).
+Password/passkey sign-in, workspaces and the demo pool need nothing else: a secret and VAPID keys for push are created in `data/` on first start (or set `BETTER_AUTH_SECRET`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`). Set `FLOORWALKER_BASE_URL` to the public URL when you host it; passkeys and cookies are bound to it. See [.env.example](.env.example).
 
 Optional **Ask Floorwalker**: set server-only `DEEPSEEK_API_KEY` and restart. With no key the widget is hidden. The code and `.env.example` default to `deepseek-flash`, verified against DeepSeek's [official model list](https://api-docs.deepseek.com/quick_start/pricing/) on 2026-10-31. Streaming follows the [Chat Completions API](https://api-docs.deepseek.com/api/create-chat-completion/) with thinking disabled and a 500-token cap. A live DeepSeek call has not been tested; automated tests mock fetch.
 
 The landing chat sends product facts and chat only. Demo workspaces also send a compact activity summary. Real workspaces default to no activity sharing; only the owner can enable **Settings → General → Let the assistant read this workspace's activity**, and changes are audited. The panel explains what goes to DeepSeek. Credentials, sealed values and raw PayPal payloads are excluded. The assistant has no tools and cannot move money, approve or edit rules. Requests allow 1,000 characters, retain at most 10 turns, time out after 30 seconds and cancel on disconnect. Limits are 15/hour per public IP and 60/hour per signed-in user and IP (in-memory, per server process).
+
+### Email sign-in setup
+
+Set `POSTMARK_SERVER_TOKEN` and `FLOORWALKER_MAIL_FROM` in your local, ignored `.env` (or the server's environment). Verify the sender/domain in Postmark and enable its `outbound` message stream. These settings stay on the server. Without a token, development prints only the recipient, a generic subject, and the local code; production refuses delivery with “Email isn't set up on this server”. Never enable request-body or query-string logging on authentication routes: sign-in links contain tokens.
+
+`/signin` and `/signup` share email-code sign-in. Codes expire after 10 minutes, links after 15; both are stored hashed and single use. Sending is limited per address across code purposes to five per rolling hour and ten per rolling day. Passwords are optional (8–200 characters); existing password accounts continue to work. Password resets revoke all sessions, then the form signs in again. Sessions expire after 30 days, or seven when “Keep me signed in” is unchecked; the oldest session ends when a ninth is created. Session renewal is disabled so the seven-day choice stays seven days.
+
+Set `FLOORWALKER_ADMIN_EMAILS` to comma-separated admin addresses. Those accounts can open **Sign-in events** in account settings or `/app#admin`. Daily UTC statistics show new accounts, logins, sends and code/link logins divided by sends; delayed logins can appear on a different day. Core `auth_event` records have timestamps, email and method, never codes or IPs. A changed address requires verification and the old address receives a notice.
+
+Implementation follows installed better-auth **1.7.14** declarations and [official email OTP documentation](https://better-auth.com/docs/plugins/email-otp), with Postmark's [Email API](https://postmarkapp.com/developer/api/email-api). Context7 has no separately indexed 1.7.14 release; installed source was checked for version-specific behavior. Tests inject a fake email transport and use temporary databases.
 
 ### Use it from your own agent
 

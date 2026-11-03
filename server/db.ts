@@ -139,6 +139,7 @@ const COLUMNS: [table: string, column: string, type: string][] = [
   ["tickets", "confirmation_code", "TEXT"],
 
   ["agents", "freeze_explanation", "TEXT"],
+  ["ledger", "currency", "TEXT NOT NULL DEFAULT 'USD'"],
   ["ledger", "agent_id", "TEXT"],
   ["ledger", "facts", "TEXT"],
   ["ledger", "policy_id", "INTEGER"],
@@ -387,6 +388,7 @@ export type LedgerRow = {
   tool: string;
   kind: string;
   params: string;
+  currency: string;
   amount: number;
   counterparty: string | null;
   justification: string | null;
@@ -417,6 +419,7 @@ export function recordProposal(p: {
   tool: string;
   kind: string;
   params: unknown;
+  currency?: string;
   amount: number;
   counterparty?: string;
   justification?: string;
@@ -428,11 +431,11 @@ export function recordProposal(p: {
   idempotencyKey?: string;
   source?: string;
 }): number {
-  const r = db().prepare(`INSERT INTO ledger (ticket_id, agent_id, tool, kind, params, amount, counterparty, justification, decision, checks, review, status, created_at, facts, policy_id, expires_at, idempotency_key, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+  const r = db().prepare(`INSERT INTO ledger (ticket_id, agent_id, tool, kind, params, amount, counterparty, justification, decision, checks, review, status, created_at, facts, policy_id, expires_at, idempotency_key, source, currency)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     p.ticketId ?? null, p.agentId ?? null, p.tool, p.kind, JSON.stringify(p.params), p.amount, p.counterparty ?? null, p.justification ?? null,
     p.decision, JSON.stringify(p.checks), p.review ? JSON.stringify(p.review) : null, p.status, nowIso(),
-    p.facts === undefined ? null : JSON.stringify(p.facts), p.policyId ?? null, p.expiresAt ?? null, p.idempotencyKey ?? null, p.source ?? null,
+    p.facts === undefined ? null : JSON.stringify(p.facts), p.policyId ?? null, p.expiresAt ?? null, p.idempotencyKey ?? null, p.source ?? null, p.currency ?? "USD",
   );
   return Number(r.lastInsertRowid);
 }

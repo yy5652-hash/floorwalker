@@ -1,3 +1,4 @@
+import { StartChecklist } from "./Setup";
 import { MoneyChart } from "../components/MoneyChart";
 import { canManage } from "../api";
 import { TapsChart } from "../components/TapsChart";
@@ -15,6 +16,8 @@ import {
   agentName,
   amountOf,
   money,
+  moneyTotals,
+  entryCurrency,
   relativeTime,
   why,
   type LedgerEntry,
@@ -41,7 +44,7 @@ const outcomes: {
 function activity(e: LedgerEntry, state: State) {
   const name = agentName(state, e.agent_id),
     who = personName(e.counterparty),
-    value = money(amountOf(e));
+    value = money(amountOf(e), entryCurrency(e));
   if (e.status === "awaiting_approval")
     return `Waiting for you: ${e.kind} of ${value} to ${who}`;
   if (e.status === "blocked")
@@ -70,7 +73,7 @@ export function Overview(
     {
       key: "moved",
       label: "Moved by your agents",
-      value: money(m.moved),
+      value: moneyTotals(state.ledger.filter(row => ["executed", "approved"].includes(row.status)), state.policy.policy.currency),
       sub: plural(m.movedCount, "refund or payout", "refunds and payouts"),
       icon: ArrowDownLeft,
       tone: "allow",
@@ -78,7 +81,7 @@ export function Overview(
     {
       key: "waiting",
       label: "Waiting for you",
-      value: money(m.waiting),
+      value: moneyTotals(waiting, state.policy.policy.currency),
       sub: plural(m.waitingCount, "request to review", "requests to review"),
       icon: Clock3,
       tone: "hold",
@@ -86,7 +89,7 @@ export function Overview(
     {
       key: "stopped",
       label: "Stopped before PayPal",
-      value: money(m.stopped),
+      value: moneyTotals(state.ledger.filter(row => ["blocked", "declined"].includes(row.status)), state.policy.policy.currency),
       sub: `${m.stoppedCount} blocked or declined`,
       icon: ShieldCheck,
       tone: "block",
@@ -108,6 +111,7 @@ export function Overview(
   ];
   return (
     <div className="flex flex-col gap-6 overview">
+      <StartChecklist state={state} />
       <section className="overview-attention" aria-labelledby="attention-title">
         <div className="section-heading"><h2 id="attention-title">What needs you now</h2><span>{waiting.length + incidents.length ? "Your next decisions" : "All caught up"}</span></div>
         <div className="attention-links">
@@ -116,7 +120,7 @@ export function Overview(
         </div>
         {incidentsQuery.isError && <p role="status">Couldn't refresh incidents. Showing the last available records.</p>}
         {!!incidents.length && <div className="attention-incidents">{incidents.slice(0, 2).map(incident => <a key={incident.id} href="/app#watch"><span className="text-block">Needs review</span> {incident.detail} <ArrowRight size={14} /></a>)}</div>}
-        {!!waiting.length && <div className="attention-requests">{waiting.slice(0, 3).map(entry => <a key={entry.id} href={`/app#approvals/${entry.id}`}><span>{personName(entry.counterparty)}</span><strong>{money(entry.amount)}</strong><span>{agentName(state, entry.agent_id)}</span><ArrowRight size={14} /></a>)}</div>}
+        {!!waiting.length && <div className="attention-requests">{waiting.slice(0, 3).map(entry => <a key={entry.id} href={`/app#approvals/${entry.id}`}><span>{personName(entry.counterparty)}</span><strong>{money(entry.amount, entryCurrency(entry))}</strong><span>{agentName(state, entry.agent_id)}</span><ArrowRight size={14} /></a>)}</div>}
       </section>
       <TapsChart state={state} />
       <section className="overview-money" aria-label="Money moved and stopped">

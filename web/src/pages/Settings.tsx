@@ -1,3 +1,4 @@
+import { PAYPAL_CURRENCIES } from "../../../server/paypal/currency";
 import { InboxSettings } from './InboxSettings';
 import { BillingUsageMeter } from "../components/BillingUsageMeter";
 import { useState, useEffect } from "react";
@@ -145,6 +146,10 @@ function General({ state, refresh }: PageProps) {
                   await account.rename(state.workspace!.id, name.trim());
                   await refresh();
                 }
+                const currency = String(form.get("currency"));
+                if (currency !== (state.policy.policy.currency ?? "USD")) {
+                  await api("/api/policy", "POST", { text: state.policy.text, policy: { ...state.policy.policy, currency } });
+                }
                 await api("/api/settings", "PATCH", {
                   approval_ttl_hours: Number(form.get("ttl")),
                   reminder_after_minutes: Number(form.get("reminder")),
@@ -163,6 +168,11 @@ function General({ state, refresh }: PageProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
+              </Field>
+              <Field label="Workspace currency" hint="Limits and budgets use this currency. Changing it does not convert existing limits or past money moves.">
+                <select className={selectClass} name="currency" defaultValue={state.policy.policy.currency ?? "USD"}>
+                  {Object.entries(PAYPAL_CURRENCIES).map(([code, name]) => <option key={code} value={code}>{code} — {name}</option>)}
+                </select>
               </Field>
               <Field
                 label="Approval expiry (hours)"
@@ -191,7 +201,7 @@ function General({ state, refresh }: PageProps) {
                 />
               </Field>
               <Field
-                label="Step-up amount (USD)"
+                label={`Step-up amount (${state.policy.policy.currency ?? "USD"})`}
                 hint="Approvals above this amount require a fresh passkey sign-in when the approver has a passkey."
               >
                 <Input

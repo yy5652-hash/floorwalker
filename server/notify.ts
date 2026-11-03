@@ -1,3 +1,4 @@
+import { formatCheckMoney, formatMoney as money } from "./paypal/currency.ts";
 // Telling people a request is waiting: Web Push to approvers' phones and browsers (with Approve and
 // Decline right on the notification), Slack for the team channel, and a reminder when nobody answers.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -76,9 +77,9 @@ export function setPrefs(userId: string, wsId: string, p: Partial<Prefs>) {
 }
 
 // ---------------------------------------------------------------- sending
-type ActionData = { id: string; type: string; amount: number; counterparty: string | null; agent_id: string | null; review: { verdict: string; summary: string; injection_detected: boolean } | null; checks: { outcome: string; label: string; detail: string }[] };
+type ActionData = { currency?: string; id: string; type: string; amount: number; counterparty: string | null; agent_id: string | null; review: { verdict: string; summary: string; injection_detected: boolean } | null; checks: { outcome: string; label: string; detail: string }[] };
 
-const money = (n: number) => `$${n.toFixed(2)}`;
+
 const agentName = (id: string | null) => (id ? (store.agent(id)?.name ?? id) : "An agent");
 const link = (ws: Workspace, a: ActionData) => `${config.baseUrl.replace(/\/$/, "")}/approve?ws=${ws.id}#${a.id.replace(/^act_/, "")}`;
 
@@ -101,7 +102,7 @@ async function pushTo(ws: Workspace, pref: keyof Prefs, payload: Record<string, 
 function pushHeld(ws: Workspace, a: ActionData, reminder = false) {
   const stepUp = a.amount > store.setting<number>("step_up_over", 250);
   return pushTo(ws, reminder ? "push_reminders" : "push_held", {
-    title: `${reminder ? "Still waiting: " : ""}Approve a ${money(a.amount)} ${a.type}?`,
+    title: `${reminder ? "Still waiting: " : ""}Approve a ${money(a.amount, a.currency)} ${a.type}?`,
     body: `${agentName(a.agent_id)} → ${a.counterparty ?? "unknown"}${a.review ? ` · AI review: ${a.review.verdict}` : ""}`,
     tag: `${ws.id}:${a.id}`,
     url: link(ws, a),
@@ -136,10 +137,10 @@ async function postSlack(url: string, body: unknown) {
 
 function slackMessage(ws: Workspace, e: FloorwalkerEvent, a: ActionData, reminder = false) {
   const head = {
-    "action.held": `${reminder ? "Still waiting" : "Approval needed"}: ${money(a.amount)} ${a.type} to ${a.counterparty ?? "unknown"}`,
-    "action.blocked": `Blocked before PayPal: ${money(a.amount)} ${a.type} to ${a.counterparty ?? "unknown"}`,
-    "action.executed": `Done: ${money(a.amount)} ${a.type} to ${a.counterparty ?? "unknown"}`,
-    "action.expired": `Expired unanswered: ${money(a.amount)} ${a.type} to ${a.counterparty ?? "unknown"}`,
+    "action.held": `${reminder ? "Still waiting" : "Approval needed"}: ${money(a.amount, a.currency)} ${a.type} to ${a.counterparty ?? "unknown"}`,
+    "action.blocked": `Blocked before PayPal: ${money(a.amount, a.currency)} ${a.type} to ${a.counterparty ?? "unknown"}`,
+    "action.executed": `Done: ${money(a.amount, a.currency)} ${a.type} to ${a.counterparty ?? "unknown"}`,
+    "action.expired": `Expired unanswered: ${money(a.amount, a.currency)} ${a.type} to ${a.counterparty ?? "unknown"}`,
   }[e.type as (typeof SLACK_EVENTS)[number]];
   const flagged = a.checks.filter((c) => c.outcome !== "pass").slice(0, 3).map((c) => `• *${c.label}:* ${c.detail}`).join("\n");
   return {
@@ -174,9 +175,9 @@ subscribe(async (e, ws) => {
   await Promise.allSettled([
     e.type === "action.held" ? pushHeld(ws, a) : null,
     e.type === "action.blocked" && a.review?.injection_detected
-      ? pushTo(ws, "push_blocked", { title: `Blocked: ${money(a.amount)} ${a.type}`, body: `${agentName(a.agent_id)} was steered by a message. Nothing reached PayPal.`, tag: `${ws.id}:${a.id}`, url: link(ws, a), actions: ["open"] })
+      ? pushTo(ws, "push_blocked", { title: `Blocked: ${money(a.amount, a.currency)} ${a.type}`, body: `${agentName(a.agent_id)} was steered by a message. Nothing reached PayPal.`, tag: `${ws.id}:${a.id}`, url: link(ws, a), actions: ["open"] })
       : null,
-    e.type === "action.executed" ? pushTo(ws, "push_executed", { title: `Done: ${money(a.amount)} ${a.type}`, body: `${agentName(a.agent_id)} → ${a.counterparty}`, tag: `${ws.id}:${a.id}`, url: link(ws, a), actions: [] }) : null,
+    e.type === "action.executed" ? pushTo(ws, "push_executed", { title: `Done: ${money(a.amount, a.currency)} ${a.type}`, body: `${agentName(a.agent_id)} → ${a.counterparty}`, tag: `${ws.id}:${a.id}`, url: link(ws, a), actions: [] }) : null,
     slack(ws, e),
     e.type === "action.held" || e.type === "action.blocked" ? emailRequest(ws, Number(a.id.replace(/^act_/, "")), e.type === "action.blocked" ? "blocked" : "held") : null,
   ]);
@@ -220,11 +221,13 @@ function compose(ws: Workspace, to: string, subject: string, lines: string[], li
   const footer: [string, string][] = [...links, ['Notification settings', settings]];
   return { to, subject, tag,
     text: [...lines, '', ...footer.map(([label, url]) => `${label}: ${url}`), '', ws.name].join('\n'),
-    html: `<html lang="en"><body>${lines.map(l => `<p>${escapeHtml(l)}</p>`).join('')}${footer.map(([label, url]) => `<p><a${label.startsWith("Approve $") || label === "Decline" ? ' style="display:inline-block;padding:12px 18px;border:1px solid #333;border-radius:6px"' : ""} href="${escapeHtml(url)}">${escapeHtml(label)}</a></p>`).join('')}<footer>${escapeHtml(ws.name)}</footer></body></html>` };
+    html: `<html lang="en"><body>${lines.map(l => `<p>${escapeHtml(l)}</p>`).join('')}${footer.map(([label, url]) => `<p><a${label.startsWith("Approve ") || label === "Decline" ? ' style="display:inline-block;padding:12px 18px;border:1px solid #333;border-radius:6px"' : ""} href="${escapeHtml(url)}">${escapeHtml(label)}</a></p>`).join('')}<footer>${escapeHtml(ws.name)}</footer></body></html>` };
 }
 /** The same four groups and priority order as ApprovalEvidence. */
 export function emailEvidence(row: store.LedgerRow) {
-  const checks = JSON.parse(row.checks) as { id: string; outcome: string; detail: string }[];
+  const rawChecks = JSON.parse(row.checks) as { id: string; outcome: string; detail: string }[];
+  const limitsCurrency = rawChecks.find(c => c.id === "currency")?.detail.match(/your limits are in ([A-Z]{3})/)?.[1] ?? row.currency;
+  const checks = rawChecks.map(check => ({ ...check, detail: formatCheckMoney(check, row.currency, limitsCurrency) }));
   const limits = new Set(['auto_limit', 'hard_limit', 'budget', 'payee_limit', 'agent_cap', 'agent_budget']);
   const rules = checks.filter(c => !['ai_review', 'injection'].includes(c.id));
   const priority: Record<string, number> = { pass: 0, hold: 1, block: 2 };
@@ -246,7 +249,7 @@ export async function emailRequest(ws: Workspace, id: number, kind: 'held' | 'bl
   if (ws.demo) return;
   const row = store.ledgerEntry(id);
   if (!row || (kind !== 'blocked' && (row.status !== 'awaiting_approval' || (row.expires_at && Date.parse(row.expires_at) <= Date.now())))) return;
-  const title = `${money(row.amount)} ${row.kind} to ${row.counterparty ?? 'unknown'}`;
+  const title = `${money(row.amount, row.currency)} ${row.kind} to ${row.counterparty ?? 'unknown'}`;
   const review = row.review ? JSON.parse(row.review) : null;
   const checks = JSON.parse(row.checks) as { outcome: string; detail: string }[];
   const conclusion = (checks.find(c => c.outcome === 'block') ?? checks.find(c => c.outcome === 'hold'))?.detail ?? review?.summary ?? 'This request is waiting for your decision.';
@@ -257,7 +260,7 @@ export async function emailRequest(ws: Workspace, id: number, kind: 'held' | 'bl
   await Promise.allSettled(recipients(ws).filter(m => can(m.role, { ledger: ['approve'] }) && prefs(m.id, ws.id)[`email_${kind}`]).map(m =>
     deliverOnce(ws, m.id, `${kind}:${id}`, () => compose(ws, m.email,
       kind === 'blocked' ? `Blocked: ${title}` : `${kind === 'reminders' ? 'Still waiting: ' : ''}Approve a ${title}?`, lines,
-      [...(kind === 'blocked' ? [] : [[`Approve ${money(row.amount)}`, actionToken(ws, row, m.id, 'approve')], ['Decline', actionToken(ws, row, m.id, 'decline')]] as [string,string][]),
+      [...(kind === 'blocked' ? [] : [[`Approve ${money(row.amount, row.currency)}`, actionToken(ws, row, m.id, 'approve')], ['Decline', actionToken(ws, row, m.id, 'decline')]] as [string,string][]),
         ['Open in Floorwalker', openLink(ws.id, id)]], `request-${kind}`))));
 }
 // Installed when the email routes are mounted, so the Overview owns the money/count formulas.
@@ -265,6 +268,15 @@ type OverviewMetrics = (rows: store.LedgerRow[]) => { moved: number; stopped: nu
 let overviewMetrics: OverviewMetrics | undefined;
 export function useOverviewMetrics(metrics: OverviewMetrics) { overviewMetrics = metrics; }
 /** Completed Monday–Monday reporting weeks; tap calculations and suggestions reuse Overview functions. */
+export function currencyTotals(rows: store.LedgerRow[], emptyCurrency = "USD") {
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    const currency = row.currency ?? "USD";
+    const amount = ['blocked', 'declined'].includes(row.status) ? row.amount : row.approved_amount ?? row.amount;
+    totals.set(currency, (totals.get(currency) ?? 0) + amount);
+  }
+  return totals.size ? [...totals].sort(([a], [b]) => a.localeCompare(b)).map(([currency, amount]) => money(amount, currency)).join(' · ') : money(0, emptyCurrency);
+}
 export function weeklySummary(now = new Date()) {
   const end = new Date(now);
   end.setUTCHours(0, 0, 0, 0);
@@ -277,6 +289,8 @@ export function weeklySummary(now = new Date()) {
   const suggestion = learnedChanges(store.activePolicy().policy)[0] ?? null;
   return { week: new Date(start).toISOString().slice(0,10), moves: week.length,
     taps: tapsPer100(week.map(r => r.decision)), lastTaps: tapsPer100(last.map(r => r.decision)),
+    automaticByCurrency: currencyTotals(week.filter(r => r.status === 'executed'), store.activePolicy().policy.currency),
+    stoppedByCurrency: currencyTotals(week.filter(r => ['blocked', 'declined'].includes(r.status)), store.activePolicy().policy.currency),
     automatic: overviewMetrics(week.filter(r => r.status === 'executed')).moved,
     stopped: overviewMetrics(week).stopped,
     waiting: overviewMetrics(store.ledger()).waitingCount, suggestion };
@@ -290,8 +304,8 @@ export async function sendWeeklySummary(now = new Date()) {
     deliverOnce(ws, m.id, `weekly:${summary.week}`, () => compose(ws, m.email, 'Your Floorwalker weekly summary', [
       `Week of ${summary.week}`,
       `Taps per 100 money moves: ${summary.taps} this week vs ${summary.lastTaps} last week`,
-      `Money done without the owner: ${money(summary.automatic)}`,
-      `Money stopped: ${money(summary.stopped)}`,
+      `Money done without the owner: ${summary.automaticByCurrency}`,
+      `Money stopped: ${summary.stoppedByCurrency}`,
       `Requests still waiting: ${summary.waiting}`,
       summary.suggestion ? `Best learned suggestion: ${summary.suggestion.title} — saves ${summary.suggestion.impact.tapsSaved} taps in the learning window.` : 'No learned suggestion is supported by the recorded decisions yet.',
     ], [['Open in Floorwalker', `${config.baseUrl}/app?ws=${encodeURIComponent(ws.id)}#overview`]], 'weekly'))));

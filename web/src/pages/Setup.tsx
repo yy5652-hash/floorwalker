@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { type InboxData } from "./InboxSettings";
 import { useQuery } from "@tanstack/react-query";
 import { account, isFilm } from "../auth";
-import { canManage } from "../api";
+import { api, canManage } from "../api";
 import { useResource } from "../components/Management";
 import { type AgentKey } from "./Developers";
 import { type NotificationSettings } from "./Settings";
@@ -144,6 +145,7 @@ function Checklist({ state }: PageProps) {
       href: "settings/paypal",
       action: "Connect PayPal",
     },
+    { label: "Handle the first request", ready: state.ledger.some(row => row.source !== "history" && ["executed", "approved", "declined", "blocked", "failed"].includes(row.status)), detail: "Review a real request and record its first decision.", href: "approvals", action: "Review requests" },
     {
       label: "Create an agent",
       ready: state.agents.length > 0,
@@ -252,4 +254,30 @@ function Checklist({ state }: PageProps) {
       </Card>
     </div>
   );
+}
+
+/** The short launch checklist shares the inbox's real-delivery signal. */
+export function StartChecklist({ state }: Pick<PageProps, "state">) {
+  const workspace = state.workspace;
+  const inbox = useQuery({
+    queryKey: ["/api/inbox/settings", workspace?.id],
+    queryFn: () => api<InboxData>("/api/inbox/settings"),
+    enabled: !!workspace && !workspace.demo && !isFilm(),
+    refetchInterval: 10_000,
+  });
+  const key = `floorwalker:start-dismissed:${workspace?.id}`;
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const items = [
+    { label: "Connect PayPal", ready: !!workspace?.paypal.connected, href: "settings/paypal" },
+    { label: "Forward your support email", ready: !!inbox.data?.received, href: "settings/inbox" },
+    { label: "Handle the first request", ready: state.ledger.some(row => row.source !== "history" && ["executed", "approved", "declined", "blocked", "failed"].includes(row.status)), href: "approvals" },
+  ];
+  if (!workspace || workspace.demo || isFilm() || dismissed === key || (typeof localStorage !== "undefined" && localStorage.getItem(key) === "true") || items.every(item => item.ready)) return null;
+  return <Card className="setup-checklist gap-4 p-5">
+    <div className="flex items-center justify-between gap-3"><h2>Start in three steps</h2><Button type="button" variant="ghost" onClick={() => { localStorage.setItem(key, "true"); setDismissed(key); }}>Dismiss</Button></div>
+    <ol className="space-y-3">{items.map((item, index) => <li key={item.href}><a className="flex items-center gap-3" href={`/app#${item.href}`}>
+      {item.ready ? <CheckCircle2 size={20} className="text-allow" /> : <Circle size={20} />}<span>{index + 1}. {item.label}</span><span className="ml-auto text-sm">{item.ready ? "Done" : "Get started"}</span>
+    </a></li>)}</ol>
+    {inbox.isError && <p role="status">Couldn't refresh email status. Open Inbox settings to check forwarding.</p>}
+  </Card>;
 }

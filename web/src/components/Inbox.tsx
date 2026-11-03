@@ -48,15 +48,14 @@ function toolSentence(
       >
     | undefined,
   ticket?: Ticket,
+  currency = "USD",
 ) {
   const input = call.input ?? {};
-  const amount =
-    typeof input.amount === "number"
-      ? money(input.amount)
-      : typeof input.amount === "string" &&
-          Number.isFinite(Number(input.amount))
-        ? money(Number(input.amount))
-        : "the requested amount";
+  const nested = input.amount && typeof input.amount === "object" ? input.amount as { value?: unknown; currency_code?: unknown } : undefined;
+  const value = nested ? nested.value : input.amount;
+  const code = typeof nested?.currency_code === "string" ? nested.currency_code : typeof input.currency === "string" ? input.currency : currency;
+  const amount = (typeof value === "number" || typeof value === "string") && Number.isFinite(Number(value))
+    ? money(Number(value), code) : "the requested amount";
   const complete = !!result && !result.isError;
   const email = String(input.email ?? "the customer");
   const customer = ticket?.from_email === email ? ticket.from_name : email;
@@ -125,7 +124,7 @@ function Trace({
                 </span>
                 <div className="min-w-0 flex-1 space-y-2 [&>strong]:text-xs [&>strong]:font-medium">
                   <strong>
-                    {toolSentence(event, result, ticket)}
+                    {toolSentence(event, result, ticket, state.policy.policy.currency)}
                     {result && !event.guarded && (
                       <span className="font-normal text-muted-foreground">
                         {" "}

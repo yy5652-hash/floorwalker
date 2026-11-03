@@ -2,7 +2,7 @@ import { paypal } from "./client.ts";
 
 export type Money = { currency_code: string; value: string };
 
-export const usd = (n: number): Money => ({ currency_code: "USD", value: n.toFixed(2) });
+export const usd = (n: number, currency = "USD"): Money => ({ currency_code: currency, value: n.toFixed(2) });
 
 // PayPal's published sandbox test card (developer.paypal.com → Card testing).
 const TEST_CARD = { number: "4111111111111111", expiry: "2030-12", security_code: "123" };

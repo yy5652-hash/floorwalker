@@ -36,6 +36,7 @@ import {
   agentName,
   amountOf,
   money,
+  entryCurrency,
   STATUS_LABEL,
   statusTone,
   why,
@@ -107,6 +108,8 @@ function LedgerView({
   const [selected, setSelected] = useState<number | undefined>(selectedId);
   useEffect(() => setSelected(selectedId), [selectedId]);
   const entry = state.ledger.find((e) => e.id === selected);
+  const mixedCurrencies = new Set(state.ledger.map(entryCurrency)).size > 1;
+  const ledgerCurrency = entryCurrency(state.ledger[0] ?? { currency: state.policy.policy.currency });
   const storageKey = `floorwalker:ledger-views:c2:${state.workspace?.id ?? "film"}:${state.me?.userId ?? "demo"}`;
   const [savedViews] = useState<Record<string, GridState>>(() => {
     try { const value = JSON.parse(localStorage.getItem(storageKey) ?? "{}"); return value && typeof value === "object" && !Array.isArray(value) ? value : {}; } catch { return {}; }
@@ -125,7 +128,7 @@ function LedgerView({
     const api = grid.current?.api;
     if (!api) return;
     remember(api); activeView.current = name; setView(name); setSearch(savedViews[name]?.quickFilter?.text ?? "");
-    if (savedViews[name]) api.setState(savedViews[name]);
+    if (savedViews[name]) api.setState(mixedCurrencies ? { ...savedViews[name], aggregation: undefined } : savedViews[name]);
     else {
       api.setFilterModel(name === "All" ? null : { status: { filterType: "set", values: name === "Waiting" ? ["awaiting_approval"] : name === "Stopped" ? ["blocked", "declined", "failed"] : ["executed"] } });
     }
@@ -167,19 +170,18 @@ function LedgerView({
       {
         field: "amount",
         headerName: "Amount",
-        aggFunc: "sum", enableValue: true, chartDataType: "series",
+        aggFunc: mixedCurrencies ? undefined : "sum", enableValue: !mixedCurrencies, chartDataType: mixedCurrencies ? "excluded" : "series",
         useValueFormatterForExport: false,
         width: 125,
         valueGetter: (p) => (p.data ? amountOf(p.data) : 0),
         valueFormatter: (p) =>
           p.data
-            ? `${money(amountOf(p.data))}${p.data.approved_amount != null && p.data.approved_amount !== p.data.amount ? ` of ${money(p.data.amount)}` : ""}`
-            : p.value == null ? "" : money(p.value),
+            ? `${money(amountOf(p.data), entryCurrency(p.data))}${p.data.approved_amount != null && p.data.approved_amount !== p.data.amount ? ` of ${money(p.data.amount, entryCurrency(p.data))}` : ""}`
+            : p.value == null || mixedCurrencies ? "" : money(p.value, p.data ? entryCurrency(p.data) : ledgerCurrency),
         cellClass: ["currency", "tabular-nums", "font-medium"],
         cellRenderer: (p: ICellRendererParams<LedgerEntry>) => {
           if (p.value == null) return null;
-          const [whole, cents] = money(Number(p.value)).split(".");
-          return <span className="ledger-amount-cell"><span>{whole}<small>.{cents}</small></span>{p.data?.approved_amount != null && p.data.approved_amount !== p.data.amount && <small>of {money(p.data.amount)}</small>}</span>;
+          return <span className="ledger-amount-cell"><span>{p.data ? money(Number(p.value), entryCurrency(p.data)) : ""}</span>{p.data?.approved_amount != null && p.data.approved_amount !== p.data.amount && <small>of {money(p.data.amount, entryCurrency(p.data))}</small>}</span>;
         },
       },
       {
@@ -224,9 +226,9 @@ function LedgerView({
       { colId: "requests", headerName: "Count", hide: true, valueGetter: (p) => p.data ? 1 : null, aggFunc: "sum", width: 85, chartDataType: "excluded" },
       ...Object.entries(STATUS_LABEL).map(([status, label]): ColDef<LedgerEntry> => ({
         colId: `chart_${status}`, headerName: label, hide: true, suppressColumnsToolPanel: true,
-        chartDataType: "series", aggFunc: "sum", cellClass: "currency",
+        chartDataType: mixedCurrencies ? "excluded" : "series", aggFunc: mixedCurrencies ? undefined : "sum", cellClass: "currency",
         valueGetter: (p) => p.data ? p.data.status === status ? amountOf(p.data) : 0 : null,
-        valueFormatter: (p) => p.value == null ? "" : money(p.value),
+        valueFormatter: (p) => p.value == null || mixedCurrencies ? "" : money(p.value, p.data ? entryCurrency(p.data) : ledgerCurrency),
       })),
       {
         field: "paypal_ref",
@@ -239,7 +241,7 @@ function LedgerView({
             : p.data?.paypal_ref,
       },
     ],
-    [state.agents],
+    [state.agents, mixedCurrencies, ledgerCurrency],
   );
   return (
     <Card className="ledger-surface min-w-0 gap-0 overflow-hidden py-0 shadow-xs">
@@ -275,7 +277,7 @@ function LedgerView({
           api.setSideBarVisible(!visible);
           if (!visible) api.openToolPanel("columns");
         }}>Columns &amp; filters</Button>
-        <Button variant="outline" onClick={() => {
+        <Button variant="outline" disabled={mixedCurrencies} title={mixedCurrencies ? "Use the per-currency charts on Overview for mixed currencies." : undefined} onClick={() => {
           const api = grid.current?.api;
           if (!api) return;
           // The category is always Agent, regardless of the previous row grouping.
@@ -284,7 +286,7 @@ function LedgerView({
           chartType: "stackedColumn", aggFunc: "sum",
           cellRange: { columns: ["agent_id", ...Object.keys(STATUS_LABEL).map((status) => `chart_${status}`)] },
           chartThemeName: resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light",
-          chartThemeOverrides: { common: { title: { enabled: true, text: "Money moves by agent and outcome" }, animation: { enabled: !isFilm() && !window.matchMedia("(prefers-reduced-motion: reduce)").matches } } },
+          chartThemeOverrides: { common: { title: { enabled: true, text: `Money moves by agent and outcome · ${ledgerCurrency}` }, animation: { enabled: !isFilm() && !window.matchMedia("(prefers-reduced-motion: reduce)").matches } } },
           });
         }}>Chart</Button>
         <Button variant="outline" onClick={() => grid.current?.api.exportDataAsExcel({ fileName: "floorwalker-ledger.xlsx", sheetName: "Ledger" })}>
@@ -300,7 +302,7 @@ function LedgerView({
                 const row = p.node?.data as LedgerEntry | undefined;
                 const raw =
                   field === "amount" && row
-                    ? `${money(amountOf(row))}${row.approved_amount != null ? ` of ${money(row.amount)}` : ""}`
+                    ? `${money(amountOf(row), entryCurrency(row))}${row.approved_amount != null ? ` of ${money(row.amount, entryCurrency(row))}` : ""}`
                     : field === "status" && row
                       ? `${STATUS_LABEL[row.status]}${row.source === "history" ? " · Demo history" : ""}`
                       : p.value;
@@ -321,7 +323,7 @@ function LedgerView({
       <div className="h-[max(520px,calc(100dvh-230px))] min-w-0 w-full">
         <AgGridReact<LedgerEntry>
           ref={grid}
-          initialState={savedViews.All}
+          initialState={mixedCurrencies && savedViews.All ? { ...savedViews.All, aggregation: undefined } : savedViews.All}
           onStateUpdated={e => remember(e.api)}
           onGridPreDestroyed={e => remember(e.api)}
           theme={theme}
@@ -336,15 +338,15 @@ function LedgerView({
           onColumnRowGroupChanged={(e) => setGroupBy(e.api.getRowGroupColumns()[0]?.getColId() ?? "")}
           rowSelection={{ mode: "multiRow", enableClickSelection: false, selectAll: "filtered" }}
           cellSelection
-          enableCharts
+          enableCharts={!mixedCurrencies}
           chartThemes={[resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light"]}
           customChartThemes={{ [resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light"]: chartTheme(resolvedTheme === "dark") }}
           sideBar={{ toolPanels: ["columns", "filters"], hiddenByDefault: true }}
           statusBar={{ statusPanels: [
             { statusPanel: LedgerTotals, align: "left" },
-            { statusPanel: "agAggregationComponent", statusPanelParams: { aggFuncs: ["sum", "count"] } },
+            { statusPanel: "agAggregationComponent", statusPanelParams: { aggFuncs: mixedCurrencies ? ["count"] : ["sum", "count"] } },
           ] }}
-          excelStyles={[{ id: "currency", dataType: "Number", numberFormat: { format: '$#,##0.00' } }]}
+          excelStyles={[{ id: "currency", dataType: "Number", numberFormat: { format: mixedCurrencies ? '0.00' : `"${ledgerCurrency}" #,##0.00` } }]}
           defaultColDef={{ sortable: true, resizable: true, cellDataType: false }}
           quickFilterText={search}
           getRowId={(p) => String(p.data.id)}

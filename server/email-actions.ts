@@ -1,3 +1,4 @@
+import { formatMoney } from "./paypal/currency.ts";
 import { createHash, randomBytes } from 'node:crypto';
 import express from 'express';
 import { can } from './auth.ts';
@@ -55,8 +56,8 @@ export async function emailAction(token: string, method: 'GET' | 'POST', reason 
   const { t, ws, row, member } = state;
   const url = openLink(ws.id, t.ledger_id);
   if (state.error) return page(state.error, url);
-  const label = t.action === 'approve' ? `Approve $${row!.amount.toFixed(2)}` : 'Decline';
-  if (method === 'GET') return page(`$${row!.amount.toFixed(2)} ${row!.kind} to ${row!.counterparty ?? 'unknown'}`, url,
+  const label = t.action === 'approve' ? `Approve ${formatMoney(row!.amount, row!.currency)}` : 'Decline';
+  if (method === 'GET') return page(`${formatMoney(row!.amount, row!.currency)} ${row!.kind} to ${row!.counterparty ?? 'unknown'}`, url,
     `<form method="post" action="/email/act"><input type="hidden" name="t" value="${escapeHtml(token)}">${t.action === 'decline' ? '<label>Reason <textarea name="reason" required maxlength="500"></textarea></label>' : ''}<button type="submit">${label}</button></form>`);
   if (t.action === 'decline' && !reason.trim()) return page('Enter a reason for declining this request.', url);
   if (core.prepare('UPDATE email_action SET used=1 WHERE hash=? AND used=0').run(t.hash).changes !== 1) return page('This link has already been used.', url);

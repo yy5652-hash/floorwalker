@@ -27,6 +27,8 @@ import { useRef, useState } from "react";
 import {
   errorMessage,
   money,
+  entryCurrency,
+  moneyTotals,
   post,
   relativeTime,
   STATUS_LABEL,
@@ -55,6 +57,8 @@ export function AgentCard({
     typeof agent.budget === "number"
       ? { amount: agent.budget, period: agent.budget_period ?? "month" }
       : agent.budget;
+  const spendRows = state.ledger.filter(row => ["executed", "approved"].includes(row.status) && (typeof agent.budget !== "number" || row.agent_id === agent.id) && Date.parse(row.decided_at ?? row.created_at) >= Date.now() - ({ day: 1, week: 7, month: 30 }[allowance?.period ?? "month"]) * 86400000);
+  const mixedSpend = spendRows.some(row => entryCurrency(row) !== (state.policy.policy.currency ?? "USD"));
   const percent = allowance
     ? Math.min(
         100,
@@ -102,11 +106,11 @@ export function AgentCard({
     {!compact && <AgentTrust key={`${state.workspace?.id ?? "film"}:${agent.id}`} agent={agent} state={state} refresh={refresh} notify={notify} />}
     <div className="agent-activity">
       <div className="agent-budget">
-        {allowance ? <><div><strong>{money(agent.spent)}</strong> of {money(allowance.amount)} {typeof agent.budget === "number" ? "per" : "shared /"} {allowance.period} <span>{Math.round(percent)}%</span></div>
-          <Progress value={percent} aria-label={`${agent.name} allowance used`} className={`h-1.5 ${percent >= 100 ? "[&>div]:bg-destructive" : "[&>div]:bg-foreground"}`} /></>
+        {allowance ? <><div><strong>{mixedSpend ? moneyTotals(spendRows) : money(agent.spent, state.policy.policy.currency)}</strong> of {money(allowance.amount, state.policy.policy.currency)} {typeof agent.budget === "number" ? "per" : "shared /"} {allowance.period} {!mixedSpend && <span>{Math.round(percent)}%</span>}</div>
+          {!mixedSpend && <Progress value={percent} aria-label={`${agent.name} allowance used`} className={`h-1.5 ${percent >= 100 ? "[&>div]:bg-destructive" : "[&>div]:bg-foreground"}`} />}</>
           : <p>No shared allowance assigned</p>}
       </div>
-      <p>Last action · {lastAction ? <a href={`/app#ledger/${lastAction.id}`}>{STATUS_LABEL[lastAction.status]} · {money(amountOf(lastAction))} · {relativeTime(lastAction.created_at)}</a> : agent.last ? relativeTime(agent.last) : "No actions yet"}</p>
+      <p>Last action · {lastAction ? <a href={`/app#ledger/${lastAction.id}`}>{STATUS_LABEL[lastAction.status]} · {money(amountOf(lastAction), entryCurrency(lastAction))} · {relativeTime(lastAction.created_at)}</a> : agent.last ? relativeTime(agent.last) : "No actions yet"}</p>
     </div>
     {!compact && <details className="agent-more"><summary>Permissions &amp; activity</summary>
       <div><span>Refunds {agent.can_refund ? "allowed" : "not allowed"}</span> · <span>Payouts {agent.can_payout ? "allowed" : "not allowed"}</span></div>
@@ -224,6 +228,7 @@ export function FreezeAll({ state, refresh, notify }: PageProps) {
   );
 }
 function AgentEditor({
+  state,
   agent,
   close,
   refresh,
@@ -321,7 +326,7 @@ function AgentEditor({
           <Toggle label="Payouts" checked={payout} onChange={setPayout} />
         </div>
         <Field
-          label="Cap per action (USD)"
+          label={`Cap per action (${state.policy.policy.currency ?? "USD"})`}
           hint="Leave blank to use workspace limits."
         >
           <Input
@@ -352,7 +357,7 @@ function AgentEditor({
         </Field>
         {budgetMode === "custom" && (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Budget (USD)">
+            <Field label={`Budget (${state.policy.policy.currency ?? "USD"})`}>
               <Input
                 type="number"
                 required

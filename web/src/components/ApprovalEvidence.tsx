@@ -1,3 +1,4 @@
+import { formatCheckMoney, limitsCurrency, entryCurrency } from "../lib/money";
 import { type Check, type LedgerEntry } from "../api";
 
 const labels = { pass: "Passed", hold: "Needs you", block: "Blocked", missing: "Not recorded" };
@@ -10,7 +11,7 @@ function summarize(checks: Check[], fallback: string) {
 
 /** Keep the recorded deterministic outcome visible beside the separate AI opinion. */
 export function ApprovalEvidence({ entry }: { entry: LedgerEntry }) {
-  const rules = entry.checks.filter(c => !["ai_review", "injection"].includes(c.id));
+  const rules = entry.checks.filter(c => !["ai_review", "injection"].includes(c.id)).map(check => ({ ...check, detail: formatCheckMoney(check, entryCurrency(entry), limitsCurrency(entry)) }));
   const record = summarize(rules.filter(c => ["capture", "buyer"].includes(c.id)),
     entry.kind === "payout" ? "No recipient payment record is verified for this payout; see the payee rule below." : "No PayPal evidence was recorded for this request.");
   const policy = summarize(rules.filter(c => !limits.has(c.id) && !["capture", "buyer"].includes(c.id)), "No other rule applies to this request.");

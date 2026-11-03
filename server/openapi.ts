@@ -18,7 +18,7 @@ const Action = {
     decision: { enum: ["allow", "hold", "block"] },
     amount: { type: "number" },
     approved_amount: { type: ["number", "null"], description: "Set when the owner approved a smaller amount" },
-    currency: { const: "USD" },
+    currency: { type: "string", example: "USD", description: "Recorded action currency; refunds use the PayPal capture currency" },
     counterparty: { type: ["string", "null"] },
     agent_id: { type: "string" },
     reason: { type: "string" },

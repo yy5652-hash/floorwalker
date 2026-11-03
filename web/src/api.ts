@@ -51,6 +51,7 @@ export type LedgerEntry = ActionExplanationFields & {
   tool: "create_refund" | "send_payout";
   kind: "refund" | "payout" | "invoice";
   params: Record<string, unknown>;
+  currency?: string;
   amount: number;
   approved_amount: number | null;
   counterparty: string | null;
@@ -88,6 +89,7 @@ export type LedgerEntry = ActionExplanationFields & {
 };
 export type Budget = { amount: number; period: "day" | "week" | "month" };
 export type Policy = {
+  currency?: string;
   refunds: {
     auto_approve_up_to: number;
     hard_limit: number;
@@ -406,10 +408,7 @@ export async function streamEvents(
     reader.releaseLock();
   }
 }
-export const money = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
-    n,
-  );
+export { money, entryCurrency, moneyTotals } from "./lib/money";
 export const errorMessage = (e: unknown) =>
   e instanceof Error ? e.message : "Something went wrong. Please try again.";
 export const amountOf = (e: LedgerEntry) => e.approved_amount ?? e.amount;

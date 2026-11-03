@@ -1,3 +1,4 @@
+import { formatCheckMoney } from "./paypal/currency.ts";
 import * as store from "./db.ts";
 import type { Check } from "./guard/rules.ts";
 
@@ -17,7 +18,7 @@ export function blockExplanations(row: store.LedgerRow) {
   if (!blocked.length) return [];
   let facts: any = null;
   try { facts = row.facts ? JSON.parse(row.facts) : null; } catch { /* Older rows may have no usable replay evidence. */ }
-  return blocked.map(c => ({ check: c.id, rule: c.label, evidence: c.detail,
+  return blocked.map(c => ({ check: c.id, rule: c.label, evidence: formatCheckMoney(c, row.currency, checks.find(check => check.id === "currency")?.detail.match(/your limits are in ([A-Z]{3})/)?.[1] ?? row.currency),
     facts: facts ? { rules: facts.rules, paypal_capture: facts.review?.paypal_capture ?? null } : null,
     freeze: c.id === "agent" ? facts?.freeze ?? (row.agent_id && store.agent(row.agent_id)?.status === "frozen" ? agentView(store.agent(row.agent_id)!).freeze_explanation : null) : null,
     next_step: c.id === "agent" ? "Review this agent's freeze, access expiry, permissions and payee list on the Agents page before submitting a corrected request."

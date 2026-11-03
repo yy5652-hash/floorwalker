@@ -33,6 +33,7 @@ import {
   amountOf,
   errorMessage,
   money,
+  entryCurrency,
   personName,
   relativeTime,
   why,
@@ -227,9 +228,9 @@ export function ApprovalCard({
         updated.status === "failed"
           ? `Payment failed: ${updated.error ?? "PayPal could not complete this request."}`
           : action === "decline"
-            ? `Declined · ${money(entry.amount)} to ${personName(entry.counterparty)}`
+            ? `Declined · ${money(entry.amount, entryCurrency(entry))} to ${personName(entry.counterparty)}`
             : updated.status === "approved"
-              ? `PayPal ${entry.kind} ${updated.paypal_ref ?? ""} submitted · ${money(amountOf(updated))}`
+              ? `PayPal ${entry.kind} ${updated.paypal_ref ?? ""} submitted · ${money(amountOf(updated), entryCurrency(updated))}`
               : `Request #${entry.id} · processing in PayPal`,
       );
       onDecided?.(updated, learningMessage);
@@ -280,7 +281,7 @@ export function ApprovalCard({
       tabIndex={-1}
       style={{ scrollMarginTop: 90 }}
       data-film="approval"
-      aria-label={`Request ${entry.id}: ${money(entry.amount)} to ${entry.counterparty ?? "the buyer"}`}
+      aria-label={`Request ${entry.id}: ${money(entry.amount, entryCurrency(entry))} to ${entry.counterparty ?? "the buyer"}`}
     >
       <div className="approval-body">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground [&_time]:ml-auto">
@@ -296,7 +297,7 @@ export function ApprovalCard({
         </span>
       </div>
       <div className="approval-heading">
-        <div><span className="text-xs text-muted-foreground">{entry.kind === "refund" ? "Refund request" : "Payout request"}</span><div className="approval-amount"><Money value={money(entry.amount)} /></div></div>
+        <div><span className="text-xs text-muted-foreground">{entry.kind === "refund" ? "Refund request" : "Payout request"}</span><div className="approval-amount"><Money value={money(entry.amount, entryCurrency(entry))} /></div></div>
         <div className="approval-payee"><strong>{personName(entry.counterparty)}</strong><span className="check-status status-hold">{entry.status === "awaiting_approval" ? frozen ? "Blocked by freeze" : "Needs you" : "Decision recorded"}</span></div>
       </div>
       <p className="approval-reason">{conclusion.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() || conclusion}</p>
@@ -418,7 +419,7 @@ export function ApprovalCard({
               <Check size={16} />
               {busy === "approve"
                 ? "Approving…"
-                : `Approve ${money(entry.amount)}`}
+                : `Approve ${money(entry.amount, entryCurrency(entry))}`}
             </Button>
             <Button
               className="text-muted-foreground"
@@ -460,7 +461,7 @@ export function ApprovalCard({
               }}
             >
               <Label htmlFor={`amount-${entry.id}`}>
-                Amount in USD · up to {money(entry.amount)}
+                Amount in {entryCurrency(entry)} · up to {money(entry.amount, entryCurrency(entry))}
               </Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -489,12 +490,12 @@ export function ApprovalCard({
                   variant="default"
                   type="submit"
                 >
-                  Confirm {valid ? money(custom) : "amount"}
+                  Confirm {valid ? money(custom, entryCurrency(entry)) : "amount"}
                 </Button>
               </div>
               {amount && !valid && (
                 <small className="mt-3 text-sm text-block break-words">
-                  Enter a positive amount up to {money(entry.amount)}, with at
+                  Enter a positive amount up to {money(entry.amount, entryCurrency(entry))}, with at
                   most two decimals.
                 </small>
               )}
@@ -520,7 +521,7 @@ export function ApprovalCard({
       </Modal>
       <Modal
         title="Decline this request?"
-        description={`Decline ${money(entry.amount)} to ${personName(entry.counterparty)}. No payment will be made.`}
+        description={`Decline ${money(entry.amount, entryCurrency(entry))} to ${personName(entry.counterparty)}. No payment will be made.`}
         open={declining}
         onClose={() => !busy && setDeclining(false)}
       >
@@ -664,7 +665,7 @@ export function Approvals(props: PageProps & {
       <nav className="approval-queue" aria-label="Approval queue">
         {list.map((entry, index) => <button key={entry.id} type="button" disabled={busy} aria-current={selected?.id === entry.id ? "true" : undefined} onClick={() => setSelectedId(entry.id)}>
           <span>{agentName(props.state, entry.agent_id)} <time dateTime={entry.created_at}>{relativeTime(entry.created_at)}</time></span>
-          <strong><Money value={money(entry.amount)} /></strong><span>{personName(entry.counterparty)}</span><small>Request {index + 1} of {list.length} · #{entry.id}</small>
+          <strong><Money value={money(entry.amount, entryCurrency(entry))} /></strong><span>{personName(entry.counterparty)}</span><small>Request {index + 1} of {list.length} · #{entry.id}</small>
         </button>)}
       </nav>
       <div className="approval-detail">
@@ -707,7 +708,7 @@ export function Approvals(props: PageProps & {
               href={`/app#ledger/${e.id}`}
             >
               <div>
-                <strong>{money(amountOf(e))}</strong>
+                <strong>{money(amountOf(e), entryCurrency(e))}</strong>
                 <span>{e.counterparty}</span>
                 {e.decline_reason && (
                   <span className="text-xs text-muted-foreground">
@@ -734,6 +735,7 @@ type Grant = {
   max_amount: number;
   expires_at: string;
   created_by: string;
+  ledger_id?: number | null;
 };
 function TemporaryAllowances({ state }: PageProps) {
   const grants = useResource<Grant[]>("/api/grants");
@@ -755,7 +757,7 @@ function TemporaryAllowances({ state }: PageProps) {
                   {personName(grant.counterparty)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Up to {money(grant.max_amount)} · until{" "}
+                  Up to {money(grant.max_amount, entryCurrency(state.ledger.find(row => row.id === grant.ledger_id) ?? {}))} · until{" "}
                   {new Date(grant.expires_at).toLocaleDateString("en-US")} · by{" "}
                   {grant.created_by}
                 </p>

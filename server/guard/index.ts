@@ -1,3 +1,4 @@
+import { currencyCheck, recordedCurrency, formatMoney } from "../paypal/currency.ts";
 import { observeShadow } from "./observe.ts";
 import { agentView, blockExplanations } from "../explanations.ts";
 import { audit } from "../audit.ts";
@@ -44,7 +45,7 @@ export type GuardContext = {
 };
 
 // ruleFacts are the rule engine's inputs, kept with the ledger row so a draft policy can be replayed later.
-type Prepared = { action: MoneyAction; counterparty: string; facts: unknown; ruleFacts: RefundFacts | PayoutFacts | null; checks: Check[] };
+type Prepared = { action: MoneyAction; currency: string; currencyChecks: Check[]; counterparty: string; facts: unknown; ruleFacts: RefundFacts | PayoutFacts | null; checks: Check[] };
 
 function toRefundAction(input: any): RefundAction {
   const v = input?.amount?.value;
@@ -98,8 +99,10 @@ async function prepareRefund(a: RefundAction, ctx: GuardContext): Promise<Prepar
     refunds_to_this_customer_last_30d: rf.customerRefunds30d,
     requester: ctx.ticket ? `${ctx.ticket.from_name} <${ctx.ticket.from_email}>` : "none",
   };
+  const currency = capture?.amount?.currency_code ?? "USD";
+  const currencyChecks = currencyCheck("refund", currency, policy.currency);
   const checks = checkRefund(a, rf, policy, store.spendHistory());
-  return { action: { ...a, amount: actionAmount(a, rf) }, counterparty: buyerEmail ?? "unknown", facts, ruleFacts: rf, checks };
+  return { currency, currencyChecks, action: { ...a, amount: actionAmount(a, rf) }, counterparty: buyerEmail ?? "unknown", facts, ruleFacts: rf, checks };
 }
 
 /** Temporary allowances ("allow this payee for 7 days") join the payee list until they expire. */
@@ -117,12 +120,13 @@ function withGrants(policy: ReturnType<typeof store.activePolicy>["policy"]) {
   return p;
 }
 
-async function preparePayout(a: PayoutAction, ctx: GuardContext): Promise<Prepared> {
+async function preparePayout(a: PayoutAction, ctx: GuardContext, currency: string): Promise<Prepared> {
   const policy = withGrants(store.activePolicy().policy);
   const paid = store.paidToPayee(a.email, 30);
   const recent = store.paidToPayee(a.email, 1);
   const pf: PayoutFacts = { paidToPayee30d: paid.total, samePayeeSameAmount24h: recent.amounts.some((r) => Math.abs(r.amount - a.amount) < 0.005), requestedByOwner: ctx.ticket?.channel === "task" };
-  const checks = Number.isFinite(a.amount) && a.amount > 0
+  const currencyChecks = currencyCheck("payout", currency, policy.currency);
+  const checks: Check[] = Number.isFinite(a.amount) && a.amount > 0
     ? checkPayout(a, pf, policy, store.spendHistory())
     : [{ id: "amount", label: "Amount", outcome: "block" as const, detail: "The payout amount is missing or not positive." }];
   const payee = policy.payouts.payees.find((p) => p.email.toLowerCase() === a.email.toLowerCase());
@@ -131,7 +135,7 @@ async function preparePayout(a: PayoutAction, ctx: GuardContext): Promise<Prepar
     payee_list: policy.payouts.payees.map((p) => `${p.name} <${p.email}> (${p.role})`),
     paid_to_this_address_last_30d: paid.total,
   };
-  return { action: a, counterparty: a.email, facts, ruleFacts: Number.isFinite(a.amount) && a.amount > 0 ? pf : null, checks };
+  return { currency, currencyChecks, action: a, counterparty: a.email, facts, ruleFacts: Number.isFinite(a.amount) && a.amount > 0 ? pf : null, checks };
 }
 
 function reviewChecks(review: Review | null, reviewError?: string): Check[] {
@@ -149,11 +153,11 @@ function reviewChecks(review: Review | null, reviewError?: string): Check[] {
   return checks;
 }
 
-function agentMessage(decision: Decision, entry: number, amount: number, checks: Check[], paypalNote = ""): string {
+function agentMessage(decision: Decision, entry: number, amount: number, checks: Check[], paypalNote = "", currency = "USD"): string {
   const reasons = checks.filter((c) => c.outcome !== "pass").map((c) => `${c.label}: ${c.detail}`).join(" ");
   if (decision === "allow") return `Floorwalker approved and executed this. ${paypalNote}`.trim();
   if (decision === "hold") {
-    return `Floorwalker held this $${amount.toFixed(2)} action for the owner's approval (request #${entry}). ${reasons} Do not retry it or try another way to move this money. Tell the sender a team member is reviewing it and will follow up within one business day.`;
+    return `Floorwalker held this ${formatMoney(amount, currency)} action for the owner's approval (request #${entry}). ${reasons} Do not retry it or try another way to move this money. Tell the sender a team member is reviewing it and will follow up within one business day.`;
   }
   return `Floorwalker blocked this action (request #${entry}). ${reasons} Do not retry it or try another way to move this money. Do not tell the sender which check stopped it; reply politely that a team member will follow up.`;
 }
@@ -174,14 +178,14 @@ async function execute(id: number): Promise<{ ok: boolean; ref?: string; note: s
   if (row.approved_amount !== null) params.amount = row.approved_amount;
   if (row.tool === "create_refund") {
     const input: any = { capture_id: params.captureId, note_to_payer: params.note ?? `Refund from ${current().ws.name}` };
-    if (params.amount !== undefined) input.amount = usd(params.amount);
+    if (params.amount !== undefined) input.amount = usd(params.amount, recordedCurrency(row));
     try {
       const res = await deps.callToolkit("create_refund", input, requestKey(row));
       if (!res || res.error || !res.id) {
         const msg = res?.error?.message ?? String(JSON.stringify(res)).slice(0, 300);
         return { ok: false, note: `PayPal refused the refund: ${msg}`, error: msg };
       }
-      return { ok: true, ref: res.id, result: res, note: `PayPal refund ${res.id} is ${res.status} for $${res.amount?.value ?? params.amount}.` };
+      return { ok: true, ref: res.id, result: res, note: `PayPal refund ${res.id} is ${res.status} for ${formatMoney(Number(res.amount?.value ?? params.amount), recordedCurrency(row))}.` };
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
       return { ok: false, note: `PayPal refused the refund: ${message}`, error: message };
@@ -189,9 +193,9 @@ async function execute(id: number): Promise<{ ok: boolean; ref?: string; note: s
   }
   if (row.tool === "send_payout") {
     try {
-      const res = await deps.sendPayout({ email: params.email, amount: usd(params.amount), note: params.note || `Payment from ${current().ws.name}`, batchId: requestKey(row) });
+      const res = await deps.sendPayout({ email: params.email, amount: usd(params.amount, recordedCurrency(row)), note: params.note || `Payment from ${current().ws.name}`, batchId: requestKey(row) });
       const batch = res.batch_header?.payout_batch_id;
-      return { ok: true, ref: batch, result: res, note: `PayPal payout batch ${batch} is ${res.batch_header?.batch_status} for $${params.amount.toFixed(2)} to ${params.email}.` };
+      return { ok: true, ref: batch, result: res, note: `PayPal payout batch ${batch} is ${res.batch_header?.batch_status} for ${formatMoney(params.amount, recordedCurrency(row))} to ${params.email}.` };
     } catch (e: any) {
       return { ok: false, note: `PayPal refused the payout: ${e.message}`, error: e.message };
     }
@@ -210,7 +214,7 @@ export function actionView(row: store.LedgerRow) {
     decision: row.decision,
     amount: row.amount,
     approved_amount: row.approved_amount,
-    currency: "USD",
+    currency: recordedCurrency(row),
     counterparty: row.counterparty,
     agent_id: row.agent_id,
     reason: row.justification,
@@ -252,7 +256,7 @@ export async function guard(tool: string, input: unknown, ctx: GuardContext): Pr
     const seen = store.ledgerByIdempotencyKey(ctx.agentId, ctx.idempotencyKey);
     if (seen) return { text: `Already handled as request #${seen.id} (${seen.status}).`, row: seen };
   }
-  const prepared = tool === "create_refund" ? await prepareRefund(toRefundAction(input), ctx) : await preparePayout(toPayoutAction(input), ctx);
+  const prepared = tool === "create_refund" ? await prepareRefund(toRefundAction(input), ctx) : await preparePayout(toPayoutAction(input), ctx, (input as any)?.currency ?? store.activePolicy().policy.currency ?? "USD");
   const agent = ctx.agentId ? store.agent(ctx.agentId) : undefined;
   const amount = actionAmount(prepared.action);
   const spent = agent?.budget != null ? store.agentSpent(agent.id, new Date(Date.now() - PERIOD_DAYS[agent.budget_period ?? "week"] * 86_400_000).toISOString()) : 0;
@@ -270,10 +274,10 @@ export async function guard(tool: string, input: unknown, ctx: GuardContext): Pr
       reviewError = e.message;
     }
   }
-  const checks = [...prepared.checks, ...reviewChecks(review, reviewError)];
+  const checks = [...prepared.currencyChecks, ...prepared.checks, ...reviewChecks(review, reviewError)];
   const decision = decide(checks);
   const id = store.recordProposal({
-    ticketId: ctx.ticket?.id, agentId: ctx.agentId, tool, kind: prepared.action.kind, params: prepared.action, amount, counterparty: prepared.counterparty,
+    ticketId: ctx.ticket?.id, agentId: ctx.agentId, tool, kind: prepared.action.kind, params: prepared.action, currency: prepared.currency, amount, counterparty: prepared.counterparty,
     justification: ctx.justification, decision, checks, review: review ?? undefined, policyId,
     facts: prepared.ruleFacts ? { rules: prepared.ruleFacts, review: prepared.facts, ...(agent?.status === "frozen" ? { freeze: agentView(agent).freeze_explanation } : {}) } : undefined,
     status: decision === "allow" ? "executing" : decision === "hold" ? "awaiting_approval" : "blocked",
@@ -289,7 +293,7 @@ export async function guard(tool: string, input: unknown, ctx: GuardContext): Pr
     event.status = decision === "hold" ? "awaiting_approval" : "blocked";
     ctx.emit?.(event);
     announce(id);
-    return { text: agentMessage(decision, id, amount, checks), row: store.ledgerEntry(id)! };
+    return { text: agentMessage(decision, id, amount, checks, "", prepared.currency), row: store.ledgerEntry(id)! };
   }
   const run = await execute(id);
   store.updateLedger(id, { status: run.ok ? "executed" : "failed", paypalRef: run.ref, paypalResult: run.result, error: run.error });

@@ -1,21 +1,23 @@
 import { z } from "zod/v4";
+import { PAYPAL_CURRENCIES } from "../paypal/currency.ts";
 
 // Every money-moving kind of action gets the same three numbers:
 //   auto_approve_up_to  the agent may do this alone
 //   hard_limit          the agent may never do this, even with approval
 //   budget              rolling total the agent may move without asking
 const Budget = z.object({
-  amount: z.number().describe("Total in USD the agent may move in the period without asking"),
+  amount: z.number().describe("Total in the workspace currency the agent may move in the period without asking"),
   period: z.enum(["day", "week", "month"]),
 });
 
 const Limits = {
-  auto_approve_up_to: z.number().describe("USD amount at or below which the agent may act without asking"),
-  hard_limit: z.number().describe("USD amount above which the action is always blocked, even with owner approval"),
+  auto_approve_up_to: z.number().describe("Workspace currency amount at or below which the agent may act without asking"),
+  hard_limit: z.number().describe("Workspace currency amount above which the action is always blocked, even with owner approval"),
   budget: Budget,
 };
 
 export const PolicySchema = z.object({
+  currency: z.enum(Object.keys(PAYPAL_CURRENCIES) as [keyof typeof PAYPAL_CURRENCIES, ...(keyof typeof PAYPAL_CURRENCIES)[]]).default("USD"),
   refunds: z.object({
     ...Limits,
     max_order_age_days: z.number().describe("Orders older than this need owner approval to refund"),
@@ -28,7 +30,7 @@ export const PolicySchema = z.object({
       name: z.string(),
       email: z.string(),
       role: z.string().describe("What they do for the business, e.g. window cleaning"),
-      monthly_limit: z.number().describe("USD the agent may pay this person per 30 days"),
+      monthly_limit: z.number().describe("Workspace currency the agent may pay this person per 30 days"),
     })),
     unknown_payee: z.enum(["block", "ask"]).describe("What to do when the agent tries to pay someone not on the payee list"),
     only_owner_requests: z.boolean().describe("Pay without asking only when the owner requested it in a to-do note; a payment an email asks for needs approval"),
@@ -48,6 +50,7 @@ Invoices: invoices up to $500 can go out on their own; never more than 15% disco
 Be kind to first-time customers, but a story that doesn't match the order or the tracking should come to me.`;
 
 export const DEFAULT_POLICY: Policy = {
+  currency: "USD",
   refunds: {
     auto_approve_up_to: 40,
     hard_limit: 250,

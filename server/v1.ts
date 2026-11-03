@@ -1,3 +1,4 @@
+import { PAYPAL_CURRENCIES } from "./paypal/currency.ts";
 import { MessageBody, addMessage } from './inbound.ts';
 import { agentView } from "./explanations.ts";
 // The agent API: what an agent built anywhere calls instead of PayPal, with an agent key.
@@ -34,6 +35,7 @@ const RefundBody = z.object({
   requester_email: z.email().describe("Who asked for this refund; Floorwalker checks it against the buyer on the PayPal order"),
 });
 const PayoutBody = z.object({
+  currency: z.enum(Object.keys(PAYPAL_CURRENCIES) as [keyof typeof PAYPAL_CURRENCIES, ...(keyof typeof PAYPAL_CURRENCIES)[]]).optional().describe("PayPal currency; defaults to the workspace currency"),
   email: z.email(),
   amount: z.number().positive().max(100_000),
   note: z.string().max(255).optional(),
@@ -104,8 +106,8 @@ async function moveMoney(req: Request, res: Response, tool: "create_refund" | "s
     return fail(res, 402, e.code ?? "plan_limit", e.message);
   }
   const input = tool === "create_refund"
-    ? { capture_id: b.capture_id, ...(b.amount ? { amount: { value: b.amount.toFixed(2), currency_code: "USD" } } : {}), note_to_payer: b.note }
-    : { email: b.email, amount: b.amount, note: b.note ?? "" };
+    ? { capture_id: b.capture_id, ...(b.amount ? { amount: { value: b.amount.toFixed(2), currency_code: store.activePolicy().policy.currency ?? "USD" } } : {}), note_to_payer: b.note }
+    : { email: b.email, amount: b.amount, currency: b.currency, note: b.note ?? "" };
   try {
     const out = await guard(tool, input, { agentId: agentId(res), justification: b.reason, ticket: requestTicket(b), idempotencyKey: idem, source: "api" });
     res.json({ ...actionView(out.row), message: out.text });

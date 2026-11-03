@@ -127,6 +127,10 @@ export const account = {
     checked(authClient().passkey.addPasskey({ name })),
   deletePasskey: (id: string) =>
     checked(authClient().passkey.deletePasskey({ id })),
+  sessions: () => checked(authClient().listSessions()),
+  revokeSession: (token: string) => checked(authClient().revokeSession({ token })),
+  hasPassword: async () => (await checked(authClient().listAccounts()))?.some((a) => a.providerId === "credential") ?? false,
+  deleteUser: (password?: string) => checked(authClient().deleteUser({ password })),
   revokeOtherSessions: () => checked(authClient().revokeOtherSessions()),
 };
 export async function startDemo() {

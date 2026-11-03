@@ -491,6 +491,17 @@ flow('settings', async () => {
     await click({ sel: 'button', text: 'Sign out other sessions' }); await click({ sel: 'button', text: 'Sign out other sessions', within: '[role=dialog]' }); await waitToast(/./);
     expect(!!(await signedInAs()), 'this session was signed out too');
   });
+  await step('Security: the signed-in devices list marks this device', async () => {
+    await openApp('settings'); await settingsTab('Security'); const t = await waitText('This device'); expect(/Last used/.test(t), 'no last-used time on the device rows');
+  });
+  await step('Export: "Export workspace data" downloads the workspace without any secret', async () => {
+    await waitControl({ sel: 'a', text: 'Export workspace data' });
+    const r = await ev(`fetch('/api/export').then(async r => ({ status: r.status, disp: r.headers.get('content-disposition'), body: await r.text() }))`);
+    expect(r.status === 200 && /attachment/.test(r.disp ?? ''), `export answered ${r.status}`);
+    const j = JSON.parse(r.body); expect(['rules', 'agents', 'ledger', 'audit_log'].every(k => k in j), 'the export is missing a section');
+    expect(!/client_secret|secret_hash|hooks\.slack\.com|"password"/i.test(r.body), 'the export contains a secret');
+    return `${(r.body.length / 1024).toFixed(0)} KB`;
+  });
 });
 
 
@@ -1440,6 +1451,25 @@ flow('pages', async () => {
     await visit(page, `/app#${page}`, page === 'ledger' ? async () => { await waitFor(async () => (await ev(`document.querySelectorAll('.ag-row').length`)) > 0, { what: 'ledger rows' }); await sleep(1000); } : undefined);
   await step('Overview: the first screen says what needs the owner now and shows the interruption count', async () => {
     await openApp('overview'); const t = await pageText(); expect(/What needs you now/.test(t), 'no "What needs you now" section'); expect(/taps per 100/i.test(t), 'no taps-per-100 interruption figure on the overview');
+  });
+});
+
+// A second, throwaway account deletes itself; the run's main account is never touched.
+flow('leave', async () => {
+  await resetBrowser();
+  const leaver = { name: `Flow leaver ${run}`, email: `flow-leaver-${run}@example.com` };
+  await step('Setup (not under test): a second account signs up', async () => {
+    await goto('/signup'); await type('Full name', leaver.name); await type({ sel: 'input', text: 'Email', exact: true }, leaver.email); await type('Password', PASSWORD);
+    await click({ sel: 'button[type=submit]', text: 'Create account' }); await waitFor(async () => (await ev('location.pathname')) === '/app', { timeout: 20000, what: 'to land in /app' });
+  }, { critical: true });
+  await step('Delete account: the dialog needs the password and the checkbox, then the account is gone', async () => {
+    await openApp('settings'); await settingsTab('Security'); await click({ sel: 'button', text: 'Delete account' }); await waitText('Delete account?');
+    const off = await locate({ sel: 'button[type=submit]', text: 'Delete account', within: '[role=dialog]' }, { allowDisabled: true }); expect(off.disabled, 'Delete is on before the checkbox and password');
+    await type({ sel: 'input[type=password]', within: '[role=dialog]' }, PASSWORD); await click({ sel: 'label', text: "I understand this can't be undone" });
+    await click({ sel: 'button[type=submit]', text: 'Delete account', within: '[role=dialog]' });
+    await waitFor(async () => (await ev('location.pathname')) === '/', { timeout: 20000, what: 'the landing page' });
+    const back = await ev(`fetch('/api/auth/sign-in/email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ${JSON.stringify(leaver.email)}, password: ${JSON.stringify(PASSWORD)} }) }).then(r => r.status)`);
+    expect(back >= 400, `the deleted account could still sign in (${back})`);
   });
 });
 

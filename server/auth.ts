@@ -1,5 +1,6 @@
 import { passkey } from "@better-auth/passkey";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { getMigrations } from "better-auth/db/migration";
 import { anonymous, organization } from "better-auth/plugins";
 import { createAccessControl } from "better-auth/plugins/access";
@@ -138,6 +139,18 @@ export function latestWorkspaceOf(userId: string): string | null {
   return row?.id ?? null;
 }
 
+/** Remove private workspaces through the same path as normal workspace removal. */
+export function removeUserWorkspaces(userId: string) {
+  const memberships = core.prepare("SELECT organizationId, role FROM member WHERE userId = ?").all(userId) as { organizationId: string; role: string }[];
+  for (const membership of memberships) {
+    if (!membership.role.split(",").some((r) => r.trim() === "owner")) continue;
+    const others = core.prepare("SELECT role FROM member WHERE organizationId = ? AND userId != ?").all(membership.organizationId, userId) as { role: string }[];
+    if (!others.some((m) => m.role.split(",").some((r) => r.trim() === "owner"))) removeWorkspace(membership.organizationId);
+  }
+  core.prepare("DELETE FROM member WHERE userId = ?").run(userId);
+  core.prepare("DELETE FROM passkey WHERE userId = ?").run(userId);
+}
+
 const origin = config.baseUrl.replace(/\/$/, "");
 
 const options = {
@@ -147,6 +160,16 @@ const options = {
   database: core,
   trustedOrigins: [origin],
   emailAndPassword: { enabled: true, minPasswordLength: 10, autoSignIn: true },
+  user: { deleteUser: { enabled: true, beforeDelete: async (user) => { removeUserWorkspaces(user.id); } } },
+  // better-auth otherwise lets a fresh password session delete without a password.
+  hooks: { before: createAuthMiddleware(async (ctx) => {
+    if (ctx.path !== "/delete-user" && ctx.path !== "/delete-user/callback") return;
+    const session = await getSessionFromCtx(ctx);
+    if (!session) throw new APIError("UNAUTHORIZED", { message: "Sign in to continue." });
+    if (session.user.isAnonymous) throw new APIError("FORBIDDEN", { message: "Create an account first." });
+    const credential = core.prepare("SELECT password FROM account WHERE userId = ? AND providerId = 'credential'").get(session.user.id) as { password: string | null } | undefined;
+    if (credential?.password && !ctx.body?.password) throw new APIError("BAD_REQUEST", { message: "Enter your password to delete your account." });
+  }) },
   session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
   rateLimit: {
     enabled: true,

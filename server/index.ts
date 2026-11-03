@@ -1,3 +1,5 @@
+import { downloadWorkspace } from "./account-export.ts";
+import { healthEndpoint } from "./health.ts";
 import { agentView, blockExplanations } from "./explanations.ts";
 import { createAssistant, assistantContextAllowed } from "./assistant.ts";
 import { toNodeHandler } from "better-auth/node";
@@ -44,6 +46,8 @@ app.use(helmet({
   strictTransportSecurity: config.baseUrl.startsWith("https:"),
   crossOriginEmbedderPolicy: false,
 }));
+app.get("/healthz", healthEndpoint);
+
 // better-auth reads its own request bodies, so it is mounted before the JSON parser.
 app.all("/api/auth/*splat", toNodeHandler(auth));
 app.use(express.json({ limit: "200kb" }));
@@ -146,6 +150,8 @@ app.use("/api", assistant.publicRoutes);
 app.use("/api", signedIn);
 app.use("/api", assistant.workspaceRoutes);
 app.use("/api", manage);
+
+app.get("/api/export", need({ organization: ["delete"] }), handle(downloadWorkspace));
 
 app.get("/api/state", (req, res) => {
   expireOverdue();

@@ -1023,12 +1023,24 @@ function Billing({ state, refresh }: PageProps) {
     </Resource>
   );
 }
+function deviceLabel(ua: string | null | undefined) {
+  if (!ua) return "Unknown device · Unknown browser";
+  const device = /iPad|Tablet/i.test(ua) ? "Tablet" : /Mobile|iPhone|Android/i.test(ua) ? "Phone" : "Computer";
+  const browser = /Edg(?:e|A|iOS)?\//i.test(ua) ? "Edge" : /OPR\//i.test(ua) ? "Opera" : /Firefox|FxiOS/i.test(ua) ? "Firefox" : /Chrome|CriOS/i.test(ua) ? "Chrome" : /Safari/i.test(ua) ? "Safari" : "Unknown browser";
+  return `${device} · ${browser}`;
+}
+
 function Security({ state }: PageProps) {
   const passkeys = useQuery({
     queryKey: ["passkeys"],
     queryFn: account.passkeys,
     enabled: !state.me?.anonymous,
   });
+  const sessions = useQuery({ queryKey: ["account-sessions"], queryFn: account.sessions, enabled: !state.me?.anonymous });
+  const passwordAccount = useQuery({ queryKey: ["account-password"], queryFn: account.hasPassword, enabled: !state.me?.anonymous });
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [understood, setUnderstood] = useState(false);
   const [name, setName] = useState("");
   const { busy, run } = useTask();
   if (state.me?.anonymous)
@@ -1116,23 +1128,54 @@ function Security({ state }: PageProps) {
       </Card>
       <Card className="p-6">
         <h2>Sessions</h2>
-        <p className="text-sm text-muted-foreground">
-          Signed in{" "}
-          {state.me?.signedInAt
-            ? new Date(state.me.signedInAt).toLocaleString("en-US")
-            : "on this device"}
-          . End every other session while keeping this one open.
-        </p>
+        <Resource query={sessions}>
+          {sessions.data?.map((session) => (
+            <div key={session.id} className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+              <div>
+                <p className="text-sm font-medium">{deviceLabel(session.userAgent)} {session.id === state.me?.sessionId && <Badge variant="outline">This device</Badge>}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Last used {new Date(session.updatedAt).toLocaleString("en-US")}</p>
+              </div>
+              {session.id !== state.me?.sessionId && <Button variant="outline" disabled={busy} onClick={() => void run(async () => {
+                await account.revokeSession(session.token);
+                await sessions.refetch();
+              }, "Device signed out")}>Sign out</Button>}
+            </div>
+          ))}
+        </Resource>
         <Confirm
           title="Sign out other sessions?"
           description="Your other browsers and devices will need to sign in again."
           label="Sign out other sessions"
           done="Other sessions signed out"
-          onConfirm={() => account.revokeOtherSessions()}
+          onConfirm={async () => { await account.revokeOtherSessions(); await sessions.refetch(); }}
         >
           Sign out other sessions
         </Confirm>
       </Card>
+      {isOwner(state) && <Card className="p-6">
+        <h2>Workspace data</h2>
+        <p className="text-sm text-muted-foreground">Download your workspace records and settings without credentials or secrets.</p>
+        <Button variant="outline" asChild><a href="/api/export" download>Export workspace data</a></Button>
+      </Card>}
+      <div className="border-t pt-6">
+        <Button variant="ghost" className="text-destructive" onClick={() => setDeleteOpen(true)}>Delete account</Button>
+      </div>
+      <Modal title="Delete account?" description="This deletes your user account, all your sessions and passkeys, and every workspace where you are the only owner, including its ledger, rules, agents and keys. Workspaces with another owner are kept and you are removed from them. This can't be undone." open={deleteOpen} onClose={() => { if (!busy) { setDeleteOpen(false); setPassword(""); setUnderstood(false); } }}>
+        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (!understood || !passwordAccount.isSuccess || (passwordAccount.data && !password)) return; void run(async () => {
+          await account.deleteUser(passwordAccount.data ? password : undefined);
+          location.assign("/");
+        }); }}>
+          <Resource query={passwordAccount}>
+            {passwordAccount.data && <Field label="Password"><Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></Field>}
+            {passwordAccount.data === false && <p className="text-sm text-muted-foreground">A recent sign-in is required. If your session has expired, sign in again before deleting.</p>}
+          </Resource>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} required />I understand this can't be undone</label>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" disabled={busy} onClick={() => { setDeleteOpen(false); setPassword(""); setUnderstood(false); }}>Cancel</Button>
+            <Button type="submit" variant="outline" className="text-destructive" disabled={busy || !understood || !passwordAccount.isSuccess || (passwordAccount.data && !password)}>Delete account</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

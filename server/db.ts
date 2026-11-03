@@ -129,6 +129,15 @@ CREATE TABLE IF NOT EXISTS incidents (
 // Columns added after the first release; older databases get them here.
 const COLUMNS: [table: string, column: string, type: string][] = [
   ["policies", "created_by", "TEXT"],
+  ["tickets", "message_id", "TEXT"],
+  ["tickets", "external_id", "TEXT"],
+  ["tickets", "thread_references", "TEXT"],
+  ["tickets", "attachment_note", "TEXT"],
+  ["tickets", "reply_sent_at", "TEXT"],
+  ["tickets", "inbound_kind", "TEXT"],
+  ["tickets", "confirmation_link", "TEXT"],
+  ["tickets", "confirmation_code", "TEXT"],
+
   ["agents", "freeze_explanation", "TEXT"],
   ["ledger", "agent_id", "TEXT"],
   ["ledger", "facts", "TEXT"],
@@ -160,6 +169,7 @@ export function openDb(path: string): DatabaseSync {
     if (!have.get(table)!.has(col)) d.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
   }
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS ledger_idempotency ON ledger (agent_id, idempotency_key) WHERE idempotency_key IS NOT NULL");
+  d.exec("CREATE UNIQUE INDEX IF NOT EXISTS ticket_message_id ON tickets(message_id) WHERE message_id IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS ticket_external_id ON tickets(external_id) WHERE external_id IS NOT NULL;");
   return d;
 }
 
@@ -336,6 +346,15 @@ export type Ticket = {
   received_at: string;
   status: "open" | "handled";
   reply: string | null;
+  message_id?: string | null;
+  external_id?: string | null;
+  thread_references?: string | null;
+  attachment_note?: string | null;
+  reply_sent_at?: string | null;
+  inbound_kind?: string | null;
+  confirmation_link?: string | null;
+  confirmation_code?: string | null;
+
 };
 
 export function upsertTicket(t: Omit<Ticket, "status" | "reply">) {

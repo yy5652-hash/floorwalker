@@ -1,3 +1,4 @@
+import { postmark, inboxSettings, saveInboxSettings, rotateAddress, addMessage, sendReply, maybeSendReply, running, drain } from './inbound.ts';
 import { downloadWorkspace } from "./account-export.ts";
 import { healthEndpoint } from "./health.ts";
 import { agentView, blockExplanations } from "./explanations.ts";
@@ -56,6 +57,7 @@ app.use("/email", emailActions);
 
 // better-auth reads its own request bodies, so it is mounted before the JSON parser.
 app.all("/api/auth/*splat", toNodeHandler(auth));
+app.use(postmark);
 app.use(express.json({ limit: "200kb" }));
 
 // PayPal webhooks: verified with PayPal, then matched against the ledger (see watch.ts). Demo workspaces share one app.
@@ -155,6 +157,35 @@ app.use("/api", assistant.publicRoutes);
 // Everything under /api below needs a signed-in member and runs inside their active workspace.
 app.use("/api", signedIn);
 app.use("/api", assistant.workspaceRoutes);
+app.get('/api/inbox/settings', handle(() => inboxSettings()));
+app.patch('/api/inbox/settings', need({ agents: ['manage'] }), handle(req => saveInboxSettings(req.body)));
+app.post('/api/inbox/rotate', need({ agents: ['manage'] }), handle(req => {
+  if (req.body?.confirm !== true) throw new HttpError(400, 'Confirm address rotation');
+  return rotateAddress();
+}));
+app.post('/api/inbox/messages', need({ agents: ['manage'] }), handle(req => addMessage(req.body)));
+app.post('/api/inbox/:id/reply', need({ agents: ['manage'] }), handle(req => sendReply(String(req.params.id), req.body?.confirm === true)));
+// Coordinate all manual and automatic runs through the same workspace lock.
+app.use(['/api/tickets/:id/run', '/api/attack'], (req, res, next) => {
+  if (req.method !== 'POST') return next();
+  const ws = ctx().ws, actor = ctx().actor;
+  const ticketId = /\/tickets\/([^/]+)\/run/.exec(req.originalUrl)?.[1];
+  if (running.has(ws.id)) return void res.status(409).json({ error: 'The agent is already working on something.' });
+  running.add(ws.id);
+  let released = false;
+  const release = () => {
+    if (released) return; released = true;
+    void inWorkspace(ws, actor, async () => {
+      try { if (ticketId && res.statusCode < 300) await maybeSendReply(decodeURIComponent(ticketId)); } catch { console.warn('Automatic reply could not be sent'); }
+      running.delete(ws.id);
+      await drain();
+    });
+  };
+  res.on('finish', release);
+  // Keep the lock until work finishes, including when the browser disconnects.
+  next();
+});
+
 // Accept the email switches as well as the existing push switches.
 app.patch("/api/me/notifications", handle(async (req) => {
   const { prefs, setPrefs } = await import("./notify.ts");

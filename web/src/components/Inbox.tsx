@@ -1,3 +1,8 @@
+import { api } from '../api';
+import { Modal, Field, useResource } from './Management';
+import { type InboxData } from '../pages/InboxSettings';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { MessageBody } from "./MessageEvidence";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -209,6 +214,20 @@ export function Inbox({
   onRunningChange?: (running: boolean) => void;
   disabled?: boolean;
 }) {
+  const inbox = useResource<InboxData>('/api/inbox/settings');
+  const [addOpen, setAddOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const controls = <div className="space-y-4 mb-4">
+    <div className="flex flex-wrap gap-3"><Button onClick={() => setAddOpen(true)}>Add a message</Button><Button asChild variant="outline"><a href="/app#settings/inbox">Email settings</a></Button></div>
+    {inbox.data?.confirmations.map(c => <Card className="p-4" key={c.id}><h2>Confirm your forwarding</h2><p className="text-sm whitespace-pre-wrap">{c.body}</p>{c.confirmation_code && <p>Code: <code>{c.confirmation_code}</code></p>}{c.confirmation_link && <a className="underline" href={c.confirmation_link} target="_blank" rel="noreferrer">Confirm forwarding</a>}</Card>)}
+    {!!inbox.data?.skipped.length && <details><summary>Skipped ({inbox.data.skipped.length})</summary><ul>{inbox.data.skipped.map((v, i) => <li key={i}>{v.reason} · {new Date(v.at).toLocaleString("en-US")}</li>)}</ul></details>}
+    <Modal title="Add a message" description="Paste a customer email for the Support agent." open={addOpen} onClose={() => { if (!saving) setAddOpen(false); }}>
+      <form className="space-y-4" onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); setSaving(true); void api<{ticket: Ticket}>('/api/inbox/messages', 'POST', { from_name: f.get('name'), from_email: f.get('email'), subject: f.get('subject'), body: f.get('body') }).then(async r => { setSelected(r.ticket.id); setAddOpen(false); await refresh(); }).catch(e => notify(errorMessage(e))).finally(() => setSaving(false)); }}>
+        <Field label="Customer name"><Input name="name" maxLength={200} /></Field><Field label="Customer email"><Input name="email" type="email" required /></Field><Field label="Subject"><Input name="subject" maxLength={1000} required /></Field><Field label="Message"><Textarea name="body" maxLength={200000} required /></Field><Button disabled={saving}>Add message</Button>
+      </form>
+    </Modal>
+  </div>;
   const [selected, setSelected] = useState(state.tickets[0]?.id ?? "");
   const [events, setEvents] = useState<Record<string, AgentEvent[]>>({});
   const [running, setRunning] = useState<string | null>(null);
@@ -222,7 +241,7 @@ export function Inbox({
     }
   }, [attackRequest]);
   const ticket =
-    state.tickets.find((t) => t.id === selected) ?? state.tickets[0];
+    state.tickets.find((t) => t.id === selected && (t as Ticket & { inbound_kind?: string }).inbound_kind !== "confirmation") ?? state.tickets.find(t => (t as Ticket & { inbound_kind?: string }).inbound_kind !== "confirmation");
   const reviews: Review[] = ticket ? [
     ...state.ledger.filter(e => e.ticket_id === ticket.id).flatMap(e => e.review ? [e.review] : []),
     ...(events[ticket.id] ?? []).flatMap(e => e.type === "guard" && e.review ? [e.review] : []),
@@ -288,9 +307,10 @@ export function Inbox({
       </div>
     );
   }
-  if (!state.tickets.length)
+  const messages = state.tickets.filter(t => (t as Ticket & { inbound_kind?: string }).inbound_kind !== "confirmation");
+  if (!messages.length)
     return (
-      <Card className="min-w-0 gap-0 py-0 shadow-xs">
+      <div>{controls}<Card className="min-w-0 gap-0 py-0 shadow-xs">
         {state.workspace?.demo ? (
           <EmptyState title="Your inbox is ready for its first request">
             <p>Load the demo shop to give your agents something to work on.</p>
@@ -301,19 +321,17 @@ export function Inbox({
         ) : (
           <EmptyState title="No requests yet">
             <p>
-              The sample inbox lives in the demo workspace. In your own
-              workspace, requests arrive from your agents over the API or MCP
-              and show up in Approvals and the ledger.
+              Forward your support mailbox in Email settings, paste a message here, or connect your help desk with POST /v1/messages.
             </p>
             <Button asChild className="mt-4">
               <a href="/app#developers/quickstart">Open the quickstart</a>
             </Button>
           </EmptyState>
         )}
-      </Card>
+      </Card></div>
     );
   return (
-    <div className="inbox-layout">
+    <div>{controls}<div className="inbox-layout">
       <Card className="min-w-0 gap-0 overflow-hidden py-0 shadow-xs">
         <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4 [&_h2]:flex [&_h2]:items-center [&_h2]:gap-2">
           <h2>All messages</h2>
@@ -322,7 +340,7 @@ export function Inbox({
           </Badge>
         </CardHeader>
         <div className="max-h-[340px] overflow-y-auto xl:max-h-[520px]">
-          {state.tickets.map((t) => {
+          {messages.map((t) => {
             const last = state.ledger.find((e) => e.ticket_id === t.id);
             return (
               <Button
@@ -435,10 +453,12 @@ export function Inbox({
               </div>
               <CardContent className="space-y-4 p-5">
                 <MessageBody body={ticket.body} reviews={reviews} />
+                {(ticket as Ticket & { attachment_note?: string }).attachment_note && <p className="text-sm">{(ticket as Ticket & { attachment_note?: string }).attachment_note}</p>}
                 <div className="flex flex-wrap items-center gap-3 border-y py-4 [&>button]:h-auto [&>button]:min-h-10 [&>button]:whitespace-normal">
                   <Button
                     data-film="run"
                     disabled={!!running || !ready || agent?.status === "frozen"}
+                    title={disabled ? "Only owners and admins can run agents." : !ready ? "Connect PayPal and an AI provider first." : agent?.status === "frozen" ? "This agent is frozen." : undefined}
                     onClick={() =>
                       void run(
                         `/api/tickets/${encodeURIComponent(ticket.id)}/run`,
@@ -479,6 +499,11 @@ export function Inbox({
               </section>
               <section className="inbox-agent-result" aria-label="What the agent did">
                 <h2>What the agent did</h2>
+                {ticket.channel === 'email' && ticket.reply && <div className="flex flex-wrap gap-3 my-3">
+                  <Button disabled={sending} onClick={() => { const sent = (ticket as Ticket & { reply_sent_at?: string }).reply_sent_at; if (sent && !window.confirm('This reply was already sent. Send it again?')) return; setSending(true); void api(`/api/inbox/${ticket.id}/reply`, 'POST', { confirm: !!sent }).then(async () => { await refresh(); notify('Reply sent'); }).catch(e => notify(errorMessage(e))).finally(() => setSending(false)); }}>Send reply</Button>
+                  <Button variant="outline" onClick={() => void navigator.clipboard.writeText(ticket.reply!).then(() => notify('Copied')).catch(e => notify(errorMessage(e)))}>Copy</Button>
+                  {(ticket as Ticket & { reply_sent_at?: string }).reply_sent_at && <p>Reply sent · {new Date((ticket as Ticket & { reply_sent_at: string }).reply_sent_at).toLocaleString("en-US")}</p>}
+                </div>}
                 {events[ticket.id]?.length ? (
                   <Trace
                     state={state}
@@ -494,6 +519,6 @@ export function Inbox({
           )
         )}
       </Card>
-    </div>
+    </div></div>
   );
 }

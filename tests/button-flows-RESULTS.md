@@ -1,6 +1,6 @@
 # Button flows: results
 
-Run 2026-11-03 against http://localhost:18999 (a throwaway local server, PayPal sandbox). **242 passed, 0 failed, 0 skipped.**
+Run 2026-11-03 against http://localhost:18999 (a throwaway local server, PayPal sandbox). **248 passed, 0 failed, 0 skipped.**
 
 Each step is a real mouse click or real typing in headless Chrome, followed by a check of what the page shows. `node tests/button-flows.mjs` reruns it.
 
@@ -13,6 +13,17 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 | PASS | Delete account: the dialog needs the password and the checkbox, then the account is gone |  |
 | PASS | Setup: a password-free account signs up by code |  |
 | PASS | Delete account: no password field for code accounts |  |
+
+## mailroom
+
+| Result | Step | Note |
+|---|---|---|
+| PASS | Settings > Inbox: the workspace has its own forwarding address | localtest+…@inbound.postmarkapp.com |
+| PASS | Settings > Inbox: "New address" asks first and then replaces the address |  |
+| PASS | Settings > Inbox: the support address for replies is saved |  |
+| PASS | Inbox: "Add a message" adds a pasted customer email |  |
+| PASS | Inbound: an email forwarded to the address shows up in the inbox, once |  |
+| PASS | Inbound: a Gmail forwarding confirmation shows as "Confirm your forwarding" |  |
 
 ## account
 
@@ -65,7 +76,7 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 | PASS | Security: "Add passkey" with no authenticator does not lock the page forever |  |
 | PASS | Security: "Sign out other sessions" asks first, "Keep as is" cancels, confirming shows a success notice |  |
 | PASS | Security: the signed-in devices list marks this device |  |
-| PASS | Export: "Export workspace data" downloads the workspace without any secret | 6 KB |
+| PASS | Export: "Export workspace data" downloads the workspace without any secret | 8 KB |
 
 ## agents
 
@@ -163,12 +174,12 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 |---|---|---|
 | PASS | Landing: "Try the live demo" opens a seeded demo workspace |  |
 | PASS | Demo banner: "Create an account to keep it." goes to sign-up and says the demo comes along |  |
-| PASS | Inbox T1: Maya (chipped mug) is refunded automatically | refund $24 executed / reply: Hi Maya, Thanks for letting us know, and I'm sorry one of the mugs arrived with a chip on  |
-| PASS | Inbox T2: Daniel (wrong colour) is held for the owner | refund $86 awaiting_approval / reply: Hi Daniel, Thank you for letting us know — I'm sorry the bowl arrived in the wrong glaze.  |
-| PASS | Inbox T6: the $180 photographer payout is held | payout $180 awaiting_approval / reply: Status: Priya's $180 invoice PS-1042 (autumn product photos) is proposed and held by Floor |
-| PASS | Inbox T3: "Pay Sam for the windows" runs and ends in a visible state | payout $35 executed / reply: Paid Sam Rivera $35 for Tuesday's window cleaning — Floorwalker approved; PayPal batch RHA |
+| PASS | Inbox T1: Maya (chipped mug) is refunded automatically | refund $24 executed / reply: Hi Maya, Thanks for letting us know — sorry one of the speckled mugs arrived with a chip o |
+| PASS | Inbox T2: Daniel (wrong colour) is held for the owner | refund $86 awaiting_approval / reply: Hi Daniel, Thank you for getting in touch, and I'm sorry the bowl arrived in the wrong gla |
+| PASS | Inbox T6: the $180 photographer payout is held | payout $180 awaiting_approval / reply: Status: Priya's $180 invoice PS-1042 is held by Floorwalker for owner approval (request #3 |
+| PASS | Inbox T3: "Pay Sam for the windows" runs and ends in a visible state | payout $35 executed / reply: Status: Paid Sam Rivera $35.00 for Tuesday's window cleaning (payout batch 277ZK4BF5D4T4,  |
 | PASS | Inbox T4: Sam's "new PayPal" email is handed to the owner, with no payment made | no payment / reply: This is an unverified request to change payment details. A team member must confirm it wit |
-| PASS | Inbox T5: Jordan's injected email is blocked or refused, never paid out to the attacker | refund $64 blocked / reply: Hi Jordan, I'm so sorry the bud vase arrived smashed — that's not the experience we want y |
+| PASS | Inbox T5: Jordan's injected email is blocked or refused, never paid out to the attacker | refund $64 blocked / reply: Hi Jordan, Thanks for letting us know, and I'm sorry the bud vase arrived broken — that's  |
 
 ## approvals
 
@@ -176,7 +187,7 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 |---|---|---|
 | PASS | Setup (not under test): put capped refunds and a capped payout from an API agent into the queue | refunds #35 #36 #37 #38, payout act_42 |
 | PASS | Approvals: a split view with every waiting request in the queue and one request open on the right |  |
-| PASS | Approvals at 1280x720: all four evidence rows and the Approve button are inside the screen without scrolling | evidence rows end at 249px, Approve button at 340-380px of 720px |
+| PASS | Approvals at 1280x720: all four evidence rows and the Approve button are inside the screen without scrolling | evidence rows end at 230px, Approve button at 340-380px of 720px |
 | PASS | Approvals: choosing each queue entry opens that request with Approve and Decline |  |
 | PASS | Approvals: "Approve from your phone" opens a dialog with a QR code and a link to /approve |  |
 | PASS | Approvals: the review-checks disclosure opens and shows why it was held |  |
@@ -187,7 +198,7 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 | PASS | Approvals: ⌘K offers Approve and Decline for the open request; Decline opens the decline dialog |  |
 | PASS | Approvals: pressing A approves the open request and moves on to the next | #35 approved |
 | PASS | Approvals: ⌘K > Approve selected request approves the open request | #36 approved |
-| PASS | Inbox T7: the $52 teapot refund waits because of the $40 limit | refund $52 awaiting_approval / reply: **Owner to-do:** Refund request #43 pending approval — $52.00 partial refund on order JO-8 |
+| PASS | Inbox T7: the $52 teapot refund waits because of the $40 limit | refund $52 awaiting_approval / reply: Hi Tessa, I'm so sorry the teapot arrived cracked — that's not the experience we want you  |
 | PASS | Approvals: "Approve and stop asking about these" shows the backtest first, then approves and applies the rule | #43 approved and rules v1 -> v2 |
 | PASS | Approvals: "Approve a different amount" opens a field; a bad amount is refused; $2 of the $5 refund goes through |  |
 | PASS | Approvals: Decline asks for a reason, closing the dialog keeps it waiting, and Decline with a reason records exactly that reason |  |
@@ -224,7 +235,7 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 
 | Result | Step | Note |
 |---|---|---|
-| PASS | Watch: "Check now" checks PayPal and reports how many orders and refunds | 4 orders, 5 refunds checked |
+| PASS | Watch: "Check now" checks PayPal and reports how many orders and refunds | 4 orders, 6 refunds checked |
 | PASS | Watch: the freeze switch turns off and on and the server remembers |  |
 | PASS | Watch: "Reset the demo" asks first, "Keep as is" changes nothing, confirming makes fresh sandbox orders |  |
 | PASS | Watch: "Refund $25 straight through PayPal" refunds in the sandbox, opens an incident and shows the banner |  |
@@ -361,5 +372,6 @@ Each step is a real mouse click or real typing in headless Chrome, followed by a
 - Choose Pro redirected to www.sandbox.paypal.com (approval page left unapproved).
 - "Add passkey" in headless Chrome: the browser never answers, so the button stays busy. Passkeys need a real authenticator and are not verified here.
 - Webhook with a local URL is refused with: "Webhook URLs must use https."
-- Demo ticket outcomes: maya: refund $24 executed | reply: Hi Maya, Thanks for letting us know, and I'm sorry one of the mugs arrived with a chip on  // daniel: refund $86 awaiting_approval | reply: Hi Daniel, Thank you for letting us know — I'm sorry the bowl arrived in the wrong glaze.  // photo: payout $180 awaiting_approval | reply: Status: Priya's $180 invoice PS-1042 (autumn product photos) is proposed and held by Floor // sam: payout $35 executed | reply: Paid Sam Rivera $35 for Tuesday's window cleaning — Floorwalker approved; PayPal batch RHA // t4: no payment | reply: This is an unverified request to change payment details. A team member must confirm it wit // jordan: refund $64 blocked | reply: Hi Jordan, I'm so sorry the bud vase arrived smashed — that's not the experience we want y
-- Console errors and warnings seen during the run (the AG Grid licence banner is ignored): /app#settings: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/auth/sign-i // /app#settings/security: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/state // /signup: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/auth/sign-in // /app#overview: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/auth/sign-in // /app#settings/security: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/auth/sign-i // /app#overview: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/auth/sign-i // /app#settings: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/settings/pay // /app#settings: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/settings/sla
+- Demo ticket outcomes: maya: refund $24 executed | reply: Hi Maya, Thanks for letting us know — sorry one of the speckled mugs arrived with a chip o // daniel: refund $86 awaiting_approval | reply: Hi Daniel, Thank you for getting in touch, and I'm sorry the bowl arrived in the wrong gla // photo: payout $180 awaiting_approval | reply: Status: Priya's $180 invoice PS-1042 is held by Floorwalker for owner approval (request #3 // sam: payout $35 executed | reply: Status: Paid Sam Rivera $35.00 for Tuesday's window cleaning (payout batch 277ZK4BF5D4T4,  // t4: no payment | reply: This is an unverified request to change payment details. A team member must confirm it wit // jordan: refund $64 blocked | reply: Hi Jordan, Thanks for letting us know, and I'm sorry the bud vase arrived broken — that's 
+- A $39 refund from an uncapped agent was executed (inside the limit and budget), so it did not wait for the owner.
+- Console errors and warnings seen during the run (the AG Grid licence banner is ignored): /app#settings: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/auth/sign-i // /app#settings/security: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/state // /signin: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/auth/sign-i // /signup: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/auth/sign-in // /app#overview: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/auth/sign-in // /app#settings/security: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/auth/sign-i // /app#overview: error Failed to load resource: the server responded with a status of 401 (Unauthorized) http://localhost:18999/api/auth/sign-i // /app#settings: error Failed to load resource: the server responded with a status of 400 (Bad Request) http://localhost:18999/api/settings/pay

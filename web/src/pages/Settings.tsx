@@ -1,3 +1,4 @@
+import { InboxSettings } from './InboxSettings';
 import { BillingUsageMeter } from "../components/BillingUsageMeter";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -26,6 +27,7 @@ import {
 
 export const settingsTabs = [
   ["general", "General"],
+  ["inbox", "Inbox"],
   ["paypal", "PayPal"],
   ["team", "Team"],
   ["notifications", "Notifications"],
@@ -1252,6 +1254,8 @@ export function Settings(props: PageProps & { tab?: string }) {
             Account settings are unavailable during filming.
           </p>
         </Card>
+      ) : tab === "inbox" ? (
+        <InboxSettings {...props} />
       ) : tab === "general" ? (
         <General {...props} />
       ) : tab === "paypal" ? (

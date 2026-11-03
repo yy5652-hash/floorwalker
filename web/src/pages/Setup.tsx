@@ -1,3 +1,4 @@
+import { type InboxData } from "./InboxSettings";
 import { useQuery } from "@tanstack/react-query";
 import { account, isFilm } from "../auth";
 import { canManage } from "../api";
@@ -123,6 +124,7 @@ export function Setup(
   return isFilm() ? <LegacySetup {...props} /> : <Checklist {...props} />;
 }
 function Checklist({ state }: PageProps) {
+  const inbox = useResource<InboxData>("/api/inbox/settings");
   const manageable = canManage(state);
   const keys = useResource<AgentKey[]>("/api/keys", manageable);
   const notifications = useResource<NotificationSettings>(
@@ -134,6 +136,7 @@ function Checklist({ state }: PageProps) {
     enabled: !!state.workspace,
   });
   const items = [
+    { label: "Forward your support email", ready: inbox.data?.received, detail: "Connect your support mailbox; done when the first real email arrives.", href: "settings/inbox", action: "Set up forwarding" },
     {
       label: "Connect PayPal",
       ready: state.workspace?.paypal.connected,
@@ -200,7 +203,7 @@ function Checklist({ state }: PageProps) {
         <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
           <h2>Your workspace, ready for work.</h2>
           <Badge variant="secondary">
-            {items.filter((i) => i.ready).length} / 6 ready
+            {items.filter((i) => i.ready).length} / {items.length} ready
           </Badge>
         </CardHeader>
         {items.map((item) => (
@@ -228,7 +231,7 @@ function Checklist({ state }: PageProps) {
           </div>
         ))}
       </Card>
-      {(keys.error || notifications.error || team.error) && (
+      {(keys.error || notifications.error || team.error || inbox.error) && (
         <p role="alert" className="text-sm text-destructive">
           Some checklist statuses couldn't be loaded. Open the relevant page to
           retry.

@@ -233,3 +233,56 @@ Credits: UI state transitions use [Motion](https://github.com/motiondivision/mot
 ## License
 
 MIT
+
+### Customer support inbox
+
+Set `POSTMARK_INBOUND_ADDRESS` to Postmark's base address (for example,
+`hash@inbound.postmarkapp.com`, without a plus part), and set
+`POSTMARK_INBOUND_USER` / `POSTMARK_INBOUND_PASSWORD` to random credentials.
+Configure Postmark's inbound webhook as `https://USER:PASSWORD@YOUR_HOST/api/inbound/postmark`
+(using HTTPS and URL-encoded credentials). The endpoint accepts up to 1 MB.
+Postmark's inbound payload contract is described at
+https://postmarkapp.com/developer/webhooks/inbound-webhook.
+
+Open **Settings → Inbox**, copy the workspace forwarding address, and add it to
+Gmail or Outlook forwarding settings. Confirmation messages appear above the
+inbox with a confirmation link/code. For Shopify, forward the mailbox used as
+your customer support email. Rotating the address immediately drops messages
+to the old address; update your forwarding rule afterwards.
+
+Set a support address for Reply-To and configure `FLOORWALKER_MAIL_FROM` plus
+`POSTMARK_SERVER_TOKEN` for outbound delivery. Both automatic handling and
+sending start off. Automatic handling uses the existing Support agent and money
+checks.
+Automatic sending never sends a reply associated with a held or blocked move.
+Attachments are noted but not retained. Auto-replies and bulk mail appear in
+Skipped. You can also paste emails with **Add a message**.
+
+Existing help desks can POST `/v1/messages` using an agent bearer key:
+
+```sh
+curl http://localhost:3000/v1/messages \
+  -H "Authorization: Bearer $FLOORWALKER_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"from_email":"customer@example.com","from_name":"Customer","subject":"Order help","body":"Please help with my order.","external_id":"helpdesk-123","run":false}'
+```
+
+`external_id` is idempotent within the workspace. Optional `received_at` is an
+ISO timestamp; `run: true` queues handling. Repeating the external id returns the
+original ticket and never queues another run. OpenAPI: `/v1/openapi.json`.
+
+For the fresh-shop HTTP sandbox flow, start a local server with the mail outbox
+and inbound settings configured, then run:
+
+```sh
+FLOW_PAYPAL_CLIENT_ID=... FLOW_PAYPAL_CLIENT_SECRET=... \
+FLOW_OUTBOX=notes/.next/outbox.jsonl \
+node --import tsx tests/e2e-merchant.mjs http://localhost:18999
+```
+
+Also supply the matching `POSTMARK_INBOUND_USER` / `POSTMARK_INBOUND_PASSWORD`.
+The script refuses non-local targets, creates a fresh account/workspace and one
+paid PayPal sandbox order, and writes `tests/e2e-merchant-RESULTS.md` without
+printing codes, keys or email-action tokens. It leaves the shop and refund
+records available for inspection. Sandbox credentials must support test-card
+order creation. Missing prerequisites are reported as FAIL.

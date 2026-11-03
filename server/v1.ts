@@ -1,3 +1,4 @@
+import { MessageBody, addMessage } from './inbound.ts';
 import { agentView } from "./explanations.ts";
 // The agent API: what an agent built anywhere calls instead of PayPal, with an agent key.
 //   POST /v1/refunds, POST /v1/payouts   ask to move money; the answer says executed, held or blocked
@@ -42,7 +43,7 @@ const PayoutBody = z.object({
 
 let openapi: unknown;
 v1.get("/openapi.json", (_req, res) => {
-  openapi ??= buildOpenApi({ refund: z.toJSONSchema(RefundBody, { io: "input" }), payout: z.toJSONSchema(PayoutBody, { io: "input" }) });
+  openapi ??= buildOpenApi({ refund: z.toJSONSchema(RefundBody, { io: "input" }), payout: z.toJSONSchema(PayoutBody, { io: "input" }), message: z.toJSONSchema(MessageBody, { io: "input" }) });
   res.json(openapi);
 });
 
@@ -112,6 +113,12 @@ async function moveMoney(req: Request, res: Response, tool: "create_refund" | "s
     fail(res, 502, "upstream_error", e.message);
   }
 }
+
+v1.post('/messages', (req, res) => {
+  const parsed = MessageBody.safeParse(req.body);
+  if (!parsed.success) return fail(res, 400, 'invalid_request', z.prettifyError(parsed.error));
+  res.json(addMessage(parsed.data));
+});
 
 v1.post("/refunds", (req, res) => moveMoney(req, res, "create_refund"));
 v1.post("/payouts", (req, res) => moveMoney(req, res, "send_payout"));

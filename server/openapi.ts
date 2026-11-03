@@ -35,7 +35,7 @@ const Action = {
 };
 
 /** OpenAPI 3.1 description of the agent API; request bodies come from the same schemas the server validates with. */
-export function buildOpenApi(bodies: { refund: unknown; payout: unknown }) {
+export function buildOpenApi(bodies: { refund: unknown; payout: unknown; message?: unknown }) {
   return {
     openapi: "3.1.0",
     info: {
@@ -46,6 +46,7 @@ export function buildOpenApi(bodies: { refund: unknown; payout: unknown }) {
     servers: [{ url: `${config.baseUrl.replace(/\/$/, "")}/v1` }],
     security: [{ agentKey: [] }],
     paths: {
+      "/messages": { post: { summary: "Add a customer message (idempotent on external_id); optionally run the Support agent", requestBody: { required: true, content: json(bodies.message ?? {}) }, responses: { "200": { description: "Stored ticket and duplicate flag" }, ...errors } } },
       "/agent": { get: { summary: "The agent this key belongs to, with its permissions and limits", responses: { "200": { description: "The agent, including freeze_explanation (check, evidence, next_step) when frozen" }, ...errors } } },
       "/refunds": {
         post: {

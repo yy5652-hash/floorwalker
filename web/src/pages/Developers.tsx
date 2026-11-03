@@ -112,6 +112,11 @@ export function Quickstart() {
         />
       </section>
       <section className="space-y-3">
+        <h3>Send a customer message from your help desk</h3>
+        <p className="text-sm text-muted-foreground">Use external_id to retry safely. Add run: true to queue the Support agent; workspace money checks still apply.</p>
+        <Code text={`curl ${appOrigin()}/v1/messages -H "Authorization: Bearer $FLOORWALKER_KEY" -H "Content-Type: application/json" -d '{"from_email":"customer@example.com","subject":"Order help","body":"Please help with my order.","external_id":"helpdesk-123","run":false}'`} />
+      </section>
+      <section className="space-y-3">
         <h3>Connect Claude Code over MCP</h3>
         <Code text={mcpCommand()} />
         <Code

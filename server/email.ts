@@ -2,7 +2,7 @@ import { config } from './config.ts';
 import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-export type Email = { to: string; subject: string; text: string; html: string; tag: string };
+export type Email = { to: string; subject: string; text: string; html: string; tag: string; from?: string; replyTo?: string; headers?: { Name: string; Value: string }[] };
 type Transport = (email: Email) => Promise<void>;
 let transport: Transport | undefined;
 /** Tests replace delivery without exposing credentials or email contents. */
@@ -38,7 +38,7 @@ export async function sendEmail(email: Email) {
   const response = await fetch('https://api.postmarkapp.com/email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Postmark-Server-Token': token },
-    body: JSON.stringify({ From: config.mailFrom, To: email.to, Subject: email.subject,
+    body: JSON.stringify({ From: email.from ?? config.mailFrom, ReplyTo: email.replyTo, Headers: email.headers, To: email.to, Subject: email.subject,
       TextBody: email.text, HtmlBody: email.html, Tag: email.tag, MessageStream: 'outbound' }),
   });
   if (!response.ok) throw new Error('Email could not be sent. Please try again later.');

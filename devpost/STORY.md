@@ -4,7 +4,7 @@
 
 ## Try it
 
-- **Live:** https://floorwalker.43-160-214-187.sslip.io. Open the demo for a ready shop with sandbox money in a couple of seconds, no sign-up; or create an account and connect your own PayPal sandbox app.
+- **Live:** https://floorwalker.yingzhilu.cn. Open the demo for a ready shop with sandbox money in a couple of seconds, no sign-up; or create an account and connect your own PayPal sandbox app.
 - **Code (MIT):** https://github.com/yy5652-hash/floorwalker, with setup and run instructions in the README.
 
 ## Inspiration

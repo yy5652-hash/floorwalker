@@ -4,14 +4,15 @@
 set -euo pipefail
 HOST=${1:-ubuntu@43.160.214.187}
 NODE=v24.21.0
-DOMAIN=floorwalker.43-160-214-187.sslip.io
+DOMAIN=floorwalker.yingzhilu.cn
+OLD_DOMAIN=floorwalker.43-160-214-187.sslip.io
 SSH=(ssh ${DEPLOY_KEY:+-i "$DEPLOY_KEY"})
 cd "$(dirname "$0")/.."
 npm run build
 rsync -e "${SSH[*]}" -az --delete --exclude node_modules --exclude .git --exclude data --exclude .env --exclude 'film/work' --exclude 'film/out' --exclude 'film/music' --exclude 'film/.venv' --exclude notes --exclude PLAN.md --exclude COMPETITOR_ANALYSIS.md --exclude REDESIGN_PLAN.md \
   ./ "$HOST:/tmp/floorwalker-src/"
 scp -q ${DEPLOY_KEY:+-i "$DEPLOY_KEY"} .env "$HOST:/tmp/floorwalker.env"
-"${SSH[@]}" "$HOST" NODE=$NODE DOMAIN=$DOMAIN 'bash -s' <<'REMOTE'
+"${SSH[@]}" "$HOST" NODE=$NODE DOMAIN=$DOMAIN OLD_DOMAIN=$OLD_DOMAIN 'bash -s' <<'REMOTE'
 set -euo pipefail
 id floorwalker >/dev/null 2>&1 || sudo useradd --system --home /opt/floorwalker --shell /usr/sbin/nologin floorwalker
 sudo mkdir -p /opt/floorwalker/app
@@ -32,15 +33,23 @@ sudo install -m 600 -o floorwalker -g floorwalker /tmp/floorwalker.env /opt/floo
 sudo chown -R floorwalker:floorwalker /opt/floorwalker
 cd /opt/floorwalker/app && sudo -u floorwalker env PATH=/opt/floorwalker/node/bin:/usr/bin:/bin npm ci --no-audit --no-fund --loglevel=error
 sudo install -m 644 deploy/floorwalker.service /etc/systemd/system/floorwalker.service
-if [ ! -e /etc/nginx/sites-enabled/floorwalker ]; then
+# The old sslip.io address redirects pages to $DOMAIN and keeps proxying /api/ and /v1/ (webhooks and agents registered there).
+if sudo test -e "/etc/letsencrypt/live/$OLD_DOMAIN/fullchain.pem"; then
+  sudo install -m 644 deploy/nginx-old-address.conf /etc/nginx/sites-available/floorwalker-old-address
+  sudo ln -sf /etc/nginx/sites-available/floorwalker-old-address /etc/nginx/sites-enabled/floorwalker-old-address
+fi
+if sudo test -e /etc/letsencrypt/live/allowance.43-160-214-187.sslip.io/fullchain.pem; then
+  sudo install -m 644 deploy/nginx-old-name.conf /etc/nginx/sites-available/allowance-redirect
+  sudo ln -sf /etc/nginx/sites-available/allowance-redirect /etc/nginx/sites-enabled/allowance-redirect
+fi
+# The main site serves $DOMAIN. Written once (also when the address moves; the preview instance may have held $DOMAIN).
+if ! sudo grep -q "server_name $DOMAIN;" /etc/nginx/sites-available/floorwalker 2>/dev/null; then
+  sudo rm -f /etc/nginx/sites-enabled/floorwalker-next
+  sudo systemctl disable --now floorwalker-next 2>/dev/null || true
   sudo install -m 644 deploy/nginx.conf /etc/nginx/sites-available/floorwalker
-  sudo ln -s /etc/nginx/sites-available/floorwalker /etc/nginx/sites-enabled/floorwalker
+  sudo ln -sf /etc/nginx/sites-available/floorwalker /etc/nginx/sites-enabled/floorwalker
   sudo nginx -t && sudo systemctl reload nginx
   sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email --redirect
-fi
-if sudo test -e /etc/letsencrypt/live/allowance.43-160-214-187.sslip.io/fullchain.pem && [ ! -e /etc/nginx/sites-enabled/allowance-redirect ]; then
-  sudo install -m 644 deploy/nginx-old-name.conf /etc/nginx/sites-available/allowance-redirect
-  sudo ln -s /etc/nginx/sites-available/allowance-redirect /etc/nginx/sites-enabled/allowance-redirect
 fi
 sudo nginx -t && sudo systemctl reload nginx
 sudo systemctl daemon-reload && sudo systemctl enable --now floorwalker && sudo systemctl restart floorwalker

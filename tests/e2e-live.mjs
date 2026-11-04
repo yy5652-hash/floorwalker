@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
-const base = new URL(process.argv[2] ?? 'https://floorwalker.43-160-214-187.sslip.io').origin;
+const base = new URL(process.argv[2] ?? 'https://floorwalker.yingzhilu.cn').origin;
 const began = new Date().toISOString();
 const focused = process.env.E2E_FOCUS === 'developers';
 const focusedSteps = new Set(['Anonymous sign-in', 'Instant demo with simulated history', 'Create agent and ephemeral key', 'Agent permission refusal', 'Agent permission patch preserves other permissions', '/v1/payouts', 'MCP tools/list over HTTP', 'MCP tools/call over HTTP', 'Revoked key refused', 'Cleanup endpoints and keys; freeze agents with history', 'Sign out and confirm access refused']);

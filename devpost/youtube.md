@@ -16,7 +16,7 @@ Floorwalker sits between AI agents and a business's PayPal account. Every refund
 
 This video replays recorded live runs against the PayPal sandbox: real refunds and payouts through the PayPal Agent Toolkit and REST APIs, a phone approval, a prompt injection hidden in an email, a hijacked agent that gets frozen, a rule change learned from the owner's decisions, a refund made straight through the PayPal API and caught within seconds, an outside agent calling Floorwalker's API, and FloorwalkerBench: on 198 labelled cases, no guard loses $3,796 to the attacks, giving the model the rules loses $52 on average at 49 owner taps per 100 money moves, Floorwalker loses $0 at 30.
 
-Try it live: https://floorwalker.43-160-214-187.sslip.io
+Try it live: https://floorwalker.yingzhilu.cn
 
 Built with the PayPal Agent Toolkit, PayPal Orders, Payments, Payouts, Webhooks and Subscriptions APIs (sandbox), Gemini, DeepSeek (chat), shadcn/ui, AG Grid Enterprise, AG Charts and MCP.
 Code: https://github.com/yy5652-hash/floorwalker

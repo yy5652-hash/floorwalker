@@ -4,7 +4,7 @@
 # Usage: [DEPLOY_KEY=~/.ssh/key] deploy/preview.sh [user@host]
 set -euo pipefail
 HOST=${1:-ubuntu@43.160.214.187}
-DOMAIN=${PREVIEW_DOMAIN:-floorwalker.yingzhilu.cn}
+DOMAIN=${PREVIEW_DOMAIN:?set PREVIEW_DOMAIN to a name that points at the server (the main instance owns floorwalker.yingzhilu.cn)}
 PORT=${PREVIEW_PORT:-18811}
 SSH=(ssh ${DEPLOY_KEY:+-i "$DEPLOY_KEY"})
 cd "$(dirname "$0")/.."

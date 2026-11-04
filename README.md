@@ -4,7 +4,7 @@
 
 Built for the PayPal AI Hackathon with the **PayPal Agent Toolkit**, the **PayPal REST APIs** (Orders, Payments, Payouts, Shipment Tracking, Webhooks, Subscriptions) in the sandbox, **Gemini** (`gemini-3.8-flash`, or Claude when an Anthropic key is set), **shadcn/ui** and **AG Grid**.
 
-- **Try it:** https://floorwalker.43-160-214-187.sslip.io (press *Try the live demo*: you get your own demo shop with real sandbox orders, no sign-up)
+- **Try it:** https://floorwalker.yingzhilu.cn (press *Try the live demo*: you get your own demo shop with real sandbox orders, no sign-up)
 - **Demo video:** TODO
 - **Benchmark:** [FloorwalkerBench, 198 cases and four guards](bench/all-RESULTS.md)
 
@@ -57,7 +57,7 @@ Any refund or payout the ledger can't account for opens an **incident**: the own
 
 - **Accounts and teams.** Sign up with email and password or a passkey. Each business is a workspace with its own database file; teammates join by invite as owner, admin, approver (answers requests) or viewer.
 - **Your own PayPal.** A workspace connects its own PayPal sandbox app; Floorwalker checks the credentials with PayPal and stores the secret encrypted (AES-256-GCM).
-- **Any agent.** Give an agent a key (shown once, stored as a hash, revocable) and it calls Floorwalker instead of PayPal: `POST /v1/refunds`, `POST /v1/payouts`, `GET /v1/actions/:id`, with `Idempotency-Key`, or the same tools over MCP at `/v1/mcp`. OpenAPI at [`/v1/openapi.json`](https://floorwalker.43-160-214-187.sslip.io/v1/openapi.json).
+- **Any agent.** Give an agent a key (shown once, stored as a hash, revocable) and it calls Floorwalker instead of PayPal: `POST /v1/refunds`, `POST /v1/payouts`, `GET /v1/actions/:id`, with `Idempotency-Key`, or the same tools over MCP at `/v1/mcp`. OpenAPI at [`/v1/openapi.json`](https://floorwalker.yingzhilu.cn/v1/openapi.json).
 - **Limits per agent.** On top of the workspace rules, each agent can have a cap per action, its own rolling budget, a payee list and an end date; one switch freezes every agent.
 - **Approvals wherever you are.** Push notifications with Approve and Decline on the notification (installable web app), Slack, a reminder when a request waits, and automatic decline when it expires. Decline with a reason the agent can read; approving a payout can let the agent pay that person on its own for a few days. Large approvals need a fresh passkey sign-in.
 - **Audit log.** Every money move and every change, with who did it and on whose behalf, hash-chained and append-only (the database refuses edits), with an integrity check and CSV export.
@@ -180,7 +180,7 @@ Implementation follows installed better-auth **1.7.14** declarations and [offici
 Create a key under **Developers**, then:
 
 ```bash
-curl https://floorwalker.43-160-214-187.sslip.io/v1/refunds \
+curl https://floorwalker.yingzhilu.cn/v1/refunds \
   -H "Authorization: Bearer $FLOORWALKER_KEY" -H "Content-Type: application/json" \
   -H "Idempotency-Key: ticket-4471" \
   -d '{"capture_id":"…","amount":24,"reason":"One mug arrived chipped","requester_email":"maya.chen@example.com"}'
@@ -189,7 +189,7 @@ curl https://floorwalker.43-160-214-187.sslip.io/v1/refunds \
 The answer is the action with its status (`executed`, `awaiting_approval`, `blocked`), every check and the AI review. A held action is followed with `GET /v1/actions/act_…` or a webhook. Over MCP:
 
 ```bash
-claude mcp add --transport http floorwalker https://floorwalker.43-160-214-187.sslip.io/v1/mcp --header "Authorization: Bearer $FLOORWALKER_KEY"
+claude mcp add --transport http floorwalker https://floorwalker.yingzhilu.cn/v1/mcp --header "Authorization: Bearer $FLOORWALKER_KEY"
 ```
 
 A local stdio MCP server works on the local workspace without a key: `claude mcp add floorwalker -- npx tsx server/mcp.ts`. Money-moving tools take two extra fields, `requester_email` and `source_message`, which the reviewer weighs against PayPal's records.

@@ -167,13 +167,13 @@ The landing chat sends product facts and chat only. Demo workspaces also send a 
 
 ### Email sign-in setup
 
-Set `POSTMARK_SERVER_TOKEN` and `FLOORWALKER_MAIL_FROM` in your local, ignored `.env` (or the server's environment). Verify the sender/domain in Postmark and enable its `outbound` message stream. These settings stay on the server. Without a token, development prints only the recipient, a generic subject, and the local code; production refuses delivery with “Email isn't set up on this server”. Never enable request-body or query-string logging on authentication routes: sign-in links contain tokens.
+Set `RESEND_API_KEY` and `FLOORWALKER_MAIL_FROM` in your local, ignored `.env` (or the server's environment). Verify the sender's domain in Resend. These settings stay on the server. Without a key, development prints only the recipient, a generic subject, and the local code; production refuses delivery with “Email isn't set up on this server”. Never enable request-body or query-string logging on authentication routes: sign-in links contain tokens.
 
 `/signin` and `/signup` share email-code sign-in. Codes expire after 10 minutes, links after 15; both are stored hashed and single use. Sending is limited per address across code purposes to five per rolling hour and ten per rolling day. Passwords are optional (8–200 characters); existing password accounts continue to work. Password resets revoke all sessions, then the form signs in again. Sessions expire after 30 days, or seven when “Keep me signed in” is unchecked; the oldest session ends when a ninth is created. Session renewal is disabled so the seven-day choice stays seven days.
 
 Set `FLOORWALKER_ADMIN_EMAILS` to comma-separated admin addresses. Those accounts can open **Sign-in events** in account settings or `/app#admin`. Daily UTC statistics show new accounts, logins, sends and code/link logins divided by sends; delayed logins can appear on a different day. Core `auth_event` records have timestamps, email and method, never codes or IPs. A changed address requires verification and the old address receives a notice.
 
-Implementation follows installed better-auth **1.7.14** declarations and [official email OTP documentation](https://better-auth.com/docs/plugins/email-otp), with Postmark's [Email API](https://postmarkapp.com/developer/api/email-api). Context7 has no separately indexed 1.7.14 release; installed source was checked for version-specific behavior. Tests inject a fake email transport and use temporary databases.
+Implementation follows installed better-auth **1.7.14** declarations and [official email OTP documentation](https://better-auth.com/docs/plugins/email-otp), with Resend's [send email API](https://resend.com/docs/api-reference/emails/send-email). Context7 has no separately indexed 1.7.14 release; installed source was checked for version-specific behavior. Tests inject a fake email transport and use temporary databases.
 
 ### Use it from your own agent
 
@@ -236,13 +236,15 @@ MIT
 
 ### Customer support inbox
 
-Set `POSTMARK_INBOUND_ADDRESS` to Postmark's base address (for example,
-`hash@inbound.postmarkapp.com`, without a plus part), and set
-`POSTMARK_INBOUND_USER` / `POSTMARK_INBOUND_PASSWORD` to random credentials.
-Configure Postmark's inbound webhook as `https://USER:PASSWORD@YOUR_HOST/api/inbound/postmark`
-(using HTTPS and URL-encoded credentials). The endpoint accepts up to 1 MB.
-Postmark's inbound payload contract is described at
-https://postmarkapp.com/developer/webhooks/inbound-webhook.
+Set `FLOORWALKER_INBOUND_DOMAIN` to a domain Resend receives for (a verified
+domain with receiving turned on, or your `xxxx.resend.app` domain); each
+workspace gets `TOKEN@that-domain`. In Resend, add a webhook for
+`email.received` pointing at `https://YOUR_HOST/api/inbound/resend` and put its
+signing secret in `RESEND_WEBHOOK_SECRET`. Requests are verified with the Svix
+signature over the raw body (5-minute window) and may be up to 1 MB. The event
+only carries metadata, so the server reads the message from Resend's
+[received emails API](https://resend.com/docs/api-reference/emails/retrieve-received-email)
+with `RESEND_API_KEY` (a full-access key).
 
 Open **Settings → Inbox**, copy the workspace forwarding address, and add it to
 Gmail or Outlook forwarding settings. Confirmation messages appear above the
@@ -251,7 +253,7 @@ your customer support email. Rotating the address immediately drops messages
 to the old address; update your forwarding rule afterwards.
 
 Set a support address for Reply-To and configure `FLOORWALKER_MAIL_FROM` plus
-`POSTMARK_SERVER_TOKEN` for outbound delivery. Both automatic handling and
+`RESEND_API_KEY` for outbound delivery. Both automatic handling and
 sending start off. Automatic handling uses the existing Support agent and money
 checks.
 Automatic sending never sends a reply associated with a held or blocked move.
@@ -280,7 +282,7 @@ FLOW_OUTBOX=notes/.next/outbox.jsonl \
 node --import tsx tests/e2e-merchant.mjs http://localhost:18999
 ```
 
-Also supply the matching `POSTMARK_INBOUND_USER` / `POSTMARK_INBOUND_PASSWORD`.
+Also supply the server's `RESEND_WEBHOOK_SECRET`.
 The script refuses non-local targets, creates a fresh account/workspace and one
 paid PayPal sandbox order, and writes `tests/e2e-merchant-RESULTS.md` without
 printing codes, keys or email-action tokens. It leaves the shop and refund

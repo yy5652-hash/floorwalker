@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
 import express from 'express';
+import { createHmac, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 const dir = mkdtempSync(join(tmpdir(), 'fw-inbound-'));
 process.env.FLOORWALKER_CORE_DB = join(dir, 'core.db');
@@ -12,9 +13,10 @@ process.env.FLOORWALKER_DATA_DIR = dir;
 process.env.FLOORWALKER_DB = ':memory:';
 process.env.BETTER_AUTH_SECRET = 'inbound-test-secret-with-enough-characters';
 process.env.FLOORWALKER_DEMO_POOL = '0';
-process.env.POSTMARK_INBOUND_ADDRESS = 'hash@inbound.postmarkapp.com';
-process.env.POSTMARK_INBOUND_USER = 'inbound-test';
-process.env.POSTMARK_INBOUND_PASSWORD = 'test-password';
+process.env.FLOORWALKER_INBOUND_DOMAIN = 'in.floorwalker.test';
+const SECRET = 'whsec_' + Buffer.from('inbound-test-signing-key-32-bytes').toString('base64');
+process.env.RESEND_WEBHOOK_SECRET = SECRET;
+delete process.env.RESEND_API_KEY;
 const { auth } = await import('../server/auth.ts');
 const store = await import('../server/db.ts');
 const { inWorkspace } = await import('../server/context.ts');
@@ -34,54 +36,69 @@ function workspace() {
   const ws = openWorkspace(id);
   const run = <T>(fn: () => T) => inWorkspace(ws, actor, fn);
   const address = run(() => inbound.inboxSettings().address)!;
-  return { ws, run, token: address.split('+')[1].split('@')[0] };
+  return { ws, run, token: address.split('@')[0] };
 }
-const payload = (token: string, id = `message-${++sequence}`) => ({ MailboxHash: token, MessageID: id,
-  FromFull: { Email: 'buyer@example.com', Name: 'A Customer' }, Subject: 'Help with order', TextBody: 'Original email', Date: '2026-11-03T10:00:00Z' });
+const payload = (token: string, id = `message-${++sequence}`): any => ({ to: [`${token}@in.floorwalker.test`], message_id: id,
+  from: 'A Customer <buyer@example.com>', subject: 'Help with order', text: 'Original email', headers: { date: '2026-11-03T10:00:00Z' } });
+const event = (data: any) => ({ type: 'email.received', created_at: new Date().toISOString(), data: { email_id: randomUUID(), ...data } });
+const deliver = (data: any) => inbound.receiveResend(event(data));
+const sign = (body: string, id = 'msg_test', ts = String(Math.floor(Date.now() / 1000))) =>
+  ({ 'svix-id': id, 'svix-timestamp': ts, 'svix-signature': `v1,${createHmac('sha256', Buffer.from(SECRET.slice(6), 'base64')).update(`${id}.${ts}.${body}`).digest('base64')}` });
 beforeEach(() => { mail.length = 0; setEmailTransport(async e => { mail.push(e); }); inbound.setInboundRunner(); config.mailFrom = 'floorwalker@example.com'; });
 after(() => { setEmailTransport(); core.close(); rmSync(dir, { recursive: true, force: true }); });
 
-test('webhook Basic auth fails closed and accepts only configured credentials', () => {
-  for (const value of [undefined, '', 'Bearer nope', 'Basic !!!!', `Basic ${Buffer.from('inbound-test:wrong').toString('base64')}`]) assert.equal(inbound.authorized(value), false);
-  const correct = `Basic ${Buffer.from('inbound-test:test-password').toString('base64')}`;
-  assert.equal(inbound.authorized(correct), true);
-  delete process.env.POSTMARK_INBOUND_PASSWORD; assert.equal(inbound.authorized(correct), false); process.env.POSTMARK_INBOUND_PASSWORD = 'test-password';
+test('webhook signature fails closed: wrong secret, stale timestamp, tampered body, missing headers', () => {
+  const body = JSON.stringify(event(payload('x')));
+  assert.equal(inbound.authorized(sign(body), body), true);
+  assert.equal(inbound.authorized({ ...sign(body), 'svix-signature': 'v1,AAAA v1,' + sign(body)['svix-signature'].slice(3) }, body), true);
+  assert.equal(inbound.authorized(sign(body), body + ' '), false);
+  assert.equal(inbound.authorized(sign(body, 'msg', String(Math.floor(Date.now() / 1000) - 400)), body), false);
+  assert.equal(inbound.authorized({}, body), false);
+  process.env.RESEND_WEBHOOK_SECRET = ''; assert.equal(inbound.authorized(sign(body), body), false); process.env.RESEND_WEBHOOK_SECRET = SECRET;
 });
-test('routes by MailboxHash, de-duplicates MessageID, drops unknown and rotated addresses', () => {
+test('routes by recipient token, de-duplicates message_id, drops unknown and rotated addresses', async () => {
   const a = workspace(), b = workspace();
-  const p = { ...payload(a.token), StrippedTextReply: 'Newest reply', Headers: [{ Name: 'References', Value: '<older@example.com>' }], Attachments: [{ Name: 'photo.jpg', Content: 'NOT STORED' }] };
-  const result = inbound.receivePostmark(p);
+  const p = { ...payload(a.token), to: ['help@shop.example'], received_for: [`${a.token}@in.floorwalker.test`], headers: { date: '2026-11-03T10:00:00Z', references: '<older@example.com>' }, attachments: [{ id: 'att', filename: 'photo.jpg' }] };
+  const result = await deliver(p);
   assert.equal(a.run(() => store.tickets().length), 1); assert.equal(b.run(() => store.tickets().length), 0);
   const t = a.run(() => store.tickets()[0]);
-  assert.equal(t.body, 'Newest reply'); assert.equal(t.from_name, 'A Customer'); assert.equal(t.from_email, 'buyer@example.com');
-  assert.equal(Date.parse(t.received_at), Date.parse(p.Date)); assert.equal(t.thread_references, '<older@example.com>'); assert.match(t.attachment_note!, /1 attachment/);
-  assert.ok(!JSON.stringify(t).includes('NOT STORED'));
-  assert.equal(inbound.receivePostmark(p).duplicate, true);
+  assert.equal(t.body, 'Original email'); assert.equal(t.from_name, 'A Customer'); assert.equal(t.from_email, 'buyer@example.com');
+  assert.equal(Date.parse(t.received_at), Date.parse(p.headers.date)); assert.equal(t.thread_references, '<older@example.com>'); assert.match(t.attachment_note!, /1 attachment/);
+  assert.equal((await deliver(p)).duplicate, true);
   assert.equal(a.run(() => inbound.inboxSettings().received), true);
-  assert.deepEqual(inbound.receivePostmark(payload('unknown')), { ok: true });
-  const rotated = a.run(() => inbound.rotateAddress()); assert.notEqual(rotated.address?.split('+')[1].split('@')[0], a.token);
-  assert.deepEqual(inbound.receivePostmark(payload(a.token)), { ok: true });
+  assert.deepEqual(await deliver(payload('unknown')), { ok: true });
+  assert.deepEqual(await deliver({ ...payload(a.token), to: [`${a.token}@other.example`] }), { ok: true });
+  const rotated = a.run(() => inbound.rotateAddress()); assert.notEqual(rotated.address?.split('@')[0], a.token);
+  assert.deepEqual(await deliver(payload(a.token)), { ok: true });
   assert.equal(a.run(() => store.tickets().length), 1); assert.ok('id' in result);
 });
-test('HTML fallback is plain text, empty stripped reply falls back to TextBody', () => {
-  const h = workspace();
-  inbound.receivePostmark({ ...payload(h.token), StrippedTextReply: '', TextBody: 'Full text' });
-  inbound.receivePostmark({ ...payload(h.token), TextBody: '', HtmlBody: '<style>bad</style><p>Hello &amp; welcome</p><script>bad</script>' });
-  const bodies = h.run(() => store.tickets().map(t => t.body));
-  assert.equal(bodies[0], 'Full text'); assert.match(bodies[1], /Hello & welcome/); assert.doesNotMatch(bodies[1], /bad|<p>/);
+test('with an API key the body is fetched from Resend, never taken from the event', async () => {
+  const h = workspace(); process.env.RESEND_API_KEY = 'test-key'; const asked: string[] = [];
+  inbound.setReceivedFetcher(async id => { asked.push(id); return { ...payload(h.token), text: 'Fetched body' }; });
+  try {
+    await inbound.receiveResend({ type: 'email.received', data: { email_id: 'em_1', to: [`${h.token}@in.floorwalker.test`], text: 'Event body' } });
+    assert.deepEqual(asked, ['em_1']); assert.equal(h.run(() => store.tickets()[0].body), 'Fetched body');
+    assert.deepEqual(await inbound.receiveResend({ type: 'email.sent', data: {} }), { ok: true, ignored: true });
+  } finally { delete process.env.RESEND_API_KEY; inbound.setReceivedFetcher(); }
 });
-test('skips automatic/bulk mail without storing its content, and records skipped deduplication', () => {
+test('HTML fallback is plain text', async () => {
   const h = workspace();
-  for (const headers of [[{ Name: 'Auto-Submitted', Value: 'auto-replied' }], [{ Name: 'Precedence', Value: 'list' }]]) {
-    const p = { ...payload(h.token), Headers: headers }; assert.equal(inbound.receivePostmark(p).skipped, true); assert.equal(inbound.receivePostmark(p).duplicate, true);
+  await deliver({ ...payload(h.token), text: '', html: '<style>bad</style><p>Hello &amp; welcome</p><script>bad</script>' });
+  const body = h.run(() => store.tickets()[0].body);
+  assert.match(body, /Hello & welcome/); assert.doesNotMatch(body, /bad|<p>/);
+});
+test('skips automatic/bulk mail without storing its content, and records skipped deduplication', async () => {
+  const h = workspace();
+  for (const headers of [{ 'auto-submitted': 'auto-replied' }, { Precedence: 'list' }]) {
+    const p = { ...payload(h.token), headers }; assert.equal((await deliver(p)).skipped, true); assert.equal((await deliver(p)).duplicate, true);
   }
-  assert.equal(inbound.receivePostmark({ ...payload(h.token), FromFull: { Email: 'mailer-daemon@example.com' } }).skipped, true);
+  assert.equal((await deliver({ ...payload(h.token), from: 'mailer-daemon@example.com' })).skipped, true);
   assert.equal(h.run(() => store.tickets().length), 0);
   const data = h.run(() => inbound.inboxSettings()); assert.equal(data.received, false); assert.equal(data.skipped.length, 3); assert.ok(!JSON.stringify(data.skipped).includes('Original email'));
 });
-test('forwarding confirmations require sender and subject; link host is allowlisted', () => {
+test('forwarding confirmations require sender and subject; link host is allowlisted', async () => {
   const h = workspace();
-  inbound.receivePostmark({ ...payload(h.token), FromFull: { Email: 'forwarding-noreply@google.com' }, Subject: 'Gmail Forwarding Confirmation', TextBody: 'Confirmation code: 123456789\nhttps://evil.example/\nhttps://mail.google.com/mail/vf-abc', Headers: [{ Name: 'Auto-Submitted', Value: 'auto-generated' }] });
+  await deliver({ ...payload(h.token), from: 'Gmail Team <forwarding-noreply@google.com>', subject: 'Gmail Forwarding Confirmation', text: 'Confirmation code: 123456789\nhttps://evil.example/\nhttps://mail.google.com/mail/vf-abc', headers: { 'auto-submitted': 'auto-generated' } });
   const data = h.run(() => inbound.inboxSettings()); assert.equal(data.confirmations.length, 1); assert.equal(data.received, false);
   assert.equal(data.confirmations[0].confirmation_link, 'https://mail.google.com/mail/vf-abc'); assert.equal(data.confirmations[0].confirmation_code, '123456789');
   assert.ok(inbound.confirmation('forwarding@outlook.com', 'Confirm your email forwarding', 'https://outlook.live.com/confirm', ''));
@@ -135,24 +152,28 @@ test('automatic sending refuses held/blocked moves even when reply text claims s
   }
   assert.equal(mail.length, 0);
 });
-test('outbound Postmark payload carries custom From, Reply-To and thread headers', async t => {
+test('outbound Resend payload carries custom From, Reply-To and thread headers', async t => {
   const { sendEmail } = await import('../server/email.ts');
-  const old = process.env.POSTMARK_SERVER_TOKEN; process.env.POSTMARK_SERVER_TOKEN = 'fake'; setEmailTransport();
-  let payload: any;
-  t.mock.method(globalThis, 'fetch', async (_url: any, options: any) => { payload = JSON.parse(options.body); return Response.json({ MessageID: 'sent' }); });
+  const old = process.env.RESEND_API_KEY; process.env.RESEND_API_KEY = 'fake'; setEmailTransport();
+  let payload: any, url = '', auth = '';
+  t.mock.method(globalThis, 'fetch', async (u: any, options: any) => { url = String(u); auth = options.headers.Authorization; payload = JSON.parse(options.body); return Response.json({ id: 'sent' }); });
   try {
     await sendEmail({ to: 'buyer@example.com', subject: 'Re: Order', text: 'Reply', html: '<p>Reply</p>', tag: 'support-reply', from: '"Shop via Floorwalker" <fw@example.com>', replyTo: 'help@example.com', headers: [{ Name: 'In-Reply-To', Value: '<original>' }] });
-    assert.equal(payload.From, '"Shop via Floorwalker" <fw@example.com>'); assert.equal(payload.ReplyTo, 'help@example.com'); assert.deepEqual(payload.Headers, [{ Name: 'In-Reply-To', Value: '<original>' }]);
-  } finally { if (old === undefined) delete process.env.POSTMARK_SERVER_TOKEN; else process.env.POSTMARK_SERVER_TOKEN = old; }
+    assert.equal(url, 'https://api.resend.com/emails'); assert.equal(auth, 'Bearer fake');
+    assert.equal(payload.from, '"Shop via Floorwalker" <fw@example.com>'); assert.equal(payload.reply_to, 'help@example.com');
+    assert.deepEqual(payload.headers, { 'In-Reply-To': '<original>' }); assert.deepEqual(payload.tags, [{ name: 'category', value: 'support-reply' }]);
+  } finally { if (old === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = old; }
 });
-test('HTTP webhook authenticates before parsing and enforces the 1 MB limit', async t => {
-  const app = express(); app.use(inbound.postmark); const server = app.listen(0, '127.0.0.1');
+test('HTTP webhook verifies the signature over the raw body and enforces the 1 MB limit', async t => {
+  const app = express(); app.use(inbound.resendInbound); app.use(express.json()); const server = app.listen(0, '127.0.0.1');
   t.after(() => { server.closeAllConnections(); server.close(); }); await once(server, 'listening');
-  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const h = workspace(); const headers = { 'Content-Type': 'application/json', Authorization: `Basic ${Buffer.from('inbound-test:test-password').toString('base64')}` };
-  assert.equal((await fetch(base + '/api/inbound/postmark', { method: 'POST', body: '{', headers: { 'Content-Type': 'application/json' } })).status, 401);
-  assert.equal((await fetch(base + '/api/inbound/postmark', { method: 'POST', body: JSON.stringify(payload(h.token)), headers })).status, 200);
-  assert.equal((await fetch(base + '/api/inbound/postmark', { method: 'POST', body: JSON.stringify({ ...payload(h.token), HtmlBody: 'x'.repeat(1100000) }), headers })).status, 413);
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/inbound/resend`;
+  const h = workspace(); const body = JSON.stringify(event(payload(h.token)));
+  assert.equal((await fetch(base, { method: 'POST', body, headers: { 'Content-Type': 'application/json' } })).status, 401);
+  assert.equal((await fetch(base, { method: 'POST', body, headers: { 'Content-Type': 'application/json', ...sign(body) } })).status, 200);
+  assert.equal(h.run(() => store.tickets().length), 1);
+  const big = JSON.stringify(event({ ...payload(h.token), html: 'x'.repeat(1100000) }));
+  assert.equal((await fetch(base, { method: 'POST', body: big, headers: { 'Content-Type': 'application/json', ...sign(big) } })).status, 413);
 });
 test('POST /v1/messages uses agent authentication and persists idempotently', async t => {
   const h = workspace(); h.run(() => store.upsertAgent({ id: 'support', name: 'Support', role: 'Support', can_refund: 1, can_payout: 0 }));

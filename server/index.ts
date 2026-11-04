@@ -1,4 +1,4 @@
-import { postmark, inboxSettings, saveInboxSettings, rotateAddress, addMessage, sendReply, maybeSendReply, running, drain } from './inbound.ts';
+import { resendInbound, inboxSettings, saveInboxSettings, rotateAddress, addMessage, sendReply, maybeSendReply, running, drain } from './inbound.ts';
 import { downloadWorkspace } from "./account-export.ts";
 import { healthEndpoint } from "./health.ts";
 import { agentView, blockExplanations } from "./explanations.ts";
@@ -57,7 +57,7 @@ app.use("/email", emailActions);
 
 // better-auth reads its own request bodies, so it is mounted before the JSON parser.
 app.all("/api/auth/*splat", toNodeHandler(auth));
-app.use(postmark);
+app.use(resendInbound);
 app.use(express.json({ limit: "200kb" }));
 
 // PayPal webhooks: verified with PayPal, then matched against the ledger (see watch.ts). Demo workspaces share one app.

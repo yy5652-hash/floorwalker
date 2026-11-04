@@ -84,10 +84,10 @@ test('seven-day choice and eight-session maximum are enforced on server', async 
   assert.equal(await auth.api.getSession({ headers: new Headers({ cookie: cookies(first) }) }), null);
 });
 test('production missing mail configuration refuses clearly without logging secrets', async () => {
-  const old = config.production; const baseUrl = config.baseUrl; const token = process.env.POSTMARK_SERVER_TOKEN; const nodeEnv = process.env.NODE_ENV;
+  const old = config.production; const baseUrl = config.baseUrl; const token = process.env.RESEND_API_KEY; const nodeEnv = process.env.NODE_ENV;
   const logs: unknown[] = []; const info = console.info; const error = console.error;
   try {
-    config.production = true; process.env.NODE_ENV = 'production'; delete process.env.POSTMARK_SERVER_TOKEN; setEmailTransport();
+    config.production = true; process.env.NODE_ENV = 'production'; delete process.env.RESEND_API_KEY; setEmailTransport();
     console.info = (...values) => { logs.push(values); }; console.error = (...values) => { logs.push(values); };
     const outbox = join(dir, 'outbox.jsonl');
     const before = existsSync(outbox) ? readFileSync(outbox, 'utf8') : '';
@@ -99,15 +99,15 @@ test('production missing mail configuration refuses clearly without logging secr
     assert.equal((await send('prod@example.com')).status, 400);
     assert.equal(existsSync(outbox) ? readFileSync(outbox, 'utf8') : '', before);
     assert.ok(!JSON.stringify(logs).includes('123456')); assert.ok(!JSON.stringify(logs).includes('secret-token'));
-  } finally { config.production = old; config.baseUrl = baseUrl; if (token !== undefined) process.env.POSTMARK_SERVER_TOKEN = token; if (nodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = nodeEnv; console.info = info; console.error = error; setEmailTransport(async (email) => { mail.push(email); }); }
+  } finally { config.production = old; config.baseUrl = baseUrl; if (token !== undefined) process.env.RESEND_API_KEY = token; if (nodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = nodeEnv; console.info = info; console.error = error; setEmailTransport(async (email) => { mail.push(email); }); }
 });
 test('local production without a token appends emails beside the core DB and logs only the subject', async () => {
   const production = config.production; const baseUrl = config.baseUrl; const coreDbPath = config.coreDbPath;
-  const token = process.env.POSTMARK_SERVER_TOKEN; const nodeEnv = process.env.NODE_ENV; const info = console.info;
+  const token = process.env.RESEND_API_KEY; const nodeEnv = process.env.NODE_ENV; const info = console.info;
   const logs: string[] = []; const started = Date.now();
   const outbox = join(dir, 'local-outbox', 'outbox.jsonl');
   try {
-    config.production = true; process.env.NODE_ENV = 'production'; delete process.env.POSTMARK_SERVER_TOKEN; setEmailTransport();
+    config.production = true; process.env.NODE_ENV = 'production'; delete process.env.RESEND_API_KEY; setEmailTransport();
     config.coreDbPath = join(dir, 'local-outbox', 'core.db');
     console.info = (message) => { logs.push(message); };
     const emails: import('../server/email.ts').Email[] = [];
@@ -128,7 +128,7 @@ test('local production without a token appends emails beside the core DB and log
     assert.deepEqual(logs, emails.map((email) => `Email to ${email.to}: ${email.subject}`));
   } finally {
     config.production = production; config.baseUrl = baseUrl; config.coreDbPath = coreDbPath;
-    if (token === undefined) delete process.env.POSTMARK_SERVER_TOKEN; else process.env.POSTMARK_SERVER_TOKEN = token;
+    if (token === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = token;
     if (nodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = nodeEnv;
     console.info = info; setEmailTransport(async (email) => { mail.push(email); });
   }
@@ -197,18 +197,18 @@ test('anonymous visitor keeps the demo workspace and opens it after linking an a
   assert.ok(session); assert.equal(session.session.activeOrganizationId, org.id);
   assert.equal(core.prepare('SELECT userId FROM member WHERE organizationId = ?').get(org.id)?.userId, session.user.id);
 });
-test('Postmark sends outbound payload and production delivery never logs codes, tokens or bodies', async () => {
-  const production = config.production; const oldEnv = process.env.NODE_ENV; const oldToken = process.env.POSTMARK_SERVER_TOKEN;
+test('Resend sends outbound payload and production delivery never logs codes, tokens or bodies', async () => {
+  const production = config.production; const oldEnv = process.env.NODE_ENV; const oldToken = process.env.RESEND_API_KEY;
   const fetcher = globalThis.fetch; const info = console.info; const error = console.error; const logs: unknown[] = [];
   try {
-    config.production = true; process.env.NODE_ENV = 'production'; process.env.POSTMARK_SERVER_TOKEN = 'test-server-token'; setEmailTransport();
+    config.production = true; process.env.NODE_ENV = 'production'; process.env.RESEND_API_KEY = 'test-server-token'; setEmailTransport();
     console.info = (...args) => { logs.push(args); }; console.error = (...args) => { logs.push(args); };
     globalThis.fetch = async (url, options) => {
-      assert.equal(url, 'https://api.postmarkapp.com/email'); assert.equal(options?.method, 'POST');
-      assert.equal((options?.headers as Record<string, string>)['X-Postmark-Server-Token'], 'test-server-token');
-      const body = JSON.parse(options!.body as string); assert.equal(body.MessageStream, 'outbound'); assert.equal(body.From, config.mailFrom);
-      assert.match(body.Subject, /Your Floorwalker code: \d{6}/); assert.match(body.TextBody, /magic-link/);
-      return Response.json({ ErrorCode: 0 });
+      assert.equal(url, 'https://api.resend.com/emails'); assert.equal(options?.method, 'POST');
+      assert.equal((options?.headers as Record<string, string>).Authorization, 'Bearer test-server-token');
+      const body = JSON.parse(options!.body as string); assert.deepEqual(body.tags, [{ name: 'category', value: 'code' }]); assert.equal(body.from, config.mailFrom);
+      assert.match(body.subject, /Your Floorwalker code: \d{6}/); assert.match(body.text, /magic-link/);
+      return Response.json({ id: 'sent' });
     };
     const response = await send('delivery@example.com'); assert.equal(response.status, 200);
     assert.deepEqual(logs, []);
@@ -217,7 +217,7 @@ test('Postmark sends outbound payload and production delivery never logs codes, 
     assert.deepEqual(logs, []);
   } finally {
     config.production = production; if (oldEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = oldEnv;
-    if (oldToken === undefined) delete process.env.POSTMARK_SERVER_TOKEN; else process.env.POSTMARK_SERVER_TOKEN = oldToken;
+    if (oldToken === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = oldToken;
     globalThis.fetch = fetcher; console.info = info; console.error = error; setEmailTransport(async (email) => { mail.push(email); });
   }
 });

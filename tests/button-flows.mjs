@@ -15,9 +15,12 @@
 // PayPal is sandbox only. The script never approves a PayPal subscription.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+const INBOUND_DOMAIN = process.env.FLOW_INBOUND_DOMAIN ?? 'in.localhost.test';
+const signed = (secret, body) => { const id = `msg_${randomUUID()}`, ts = String(Math.floor(Date.now() / 1000));
+  return { 'svix-id': id, 'svix-timestamp': ts, 'svix-signature': `v1,${createHmac('sha256', Buffer.from(secret.slice(6), 'base64')).update(`${id}.${ts}.${body}`).digest('base64')}` }; };
 
 const BASE = (process.argv[2] ?? 'http://localhost:18999').replace(/\/$/, '');
 if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(BASE) && !process.env.FLOWS_ALLOW_REMOTE) { console.error('Refusing to run against a non-local server. Set FLOWS_ALLOW_REMOTE=1 only if you are sure.'); process.exit(2); }
@@ -1607,18 +1610,18 @@ flow('leave', async () => {
   }, { ok4xx: true });
 });
 
-// A real shop's mail: the forwarding address, a pasted message, and email arriving through the Postmark webhook.
+// A real shop's mail: the forwarding address, a pasted message, and email arriving through the Resend webhook.
 flow('mailroom', async () => {
   await ensureAccount();
   let address;
   await step('Settings > Inbox: the workspace has its own forwarding address', async () => {
-    await openApp('settings/inbox'); const t = await waitText('@inbound.postmarkapp.com');
-    address = (t.match(/[\w.+-]+\+[\w-]+@inbound\.postmarkapp\.com/) ?? [])[0]; expect(address, 'no forwarding address with a plus part'); return address;
+    await openApp('settings/inbox'); const t = await waitText(`@${INBOUND_DOMAIN}`);
+    address = (t.match(new RegExp(`[a-f0-9]{48}@${INBOUND_DOMAIN.replaceAll('.', '\\.')}`)) ?? [])[0]; expect(address, 'no forwarding address'); return address.replace(/^(.{6}).*@/, '$1…@');
   }, { critical: true });
   await step('Settings > Inbox: "New address" asks first and then replaces the address', async () => {
     await click({ sel: 'button', text: 'New address', exact: true }); await waitText('Create a new forwarding address?');
     await click({ sel: 'button', text: 'New address', within: '[role=dialog]' }); await waitToast(/./);
-    const t = await pageText(); const next = (t.match(/[\w.+-]+\+[\w-]+@inbound\.postmarkapp\.com/) ?? [])[0];
+    const t = await pageText(); const next = (t.match(new RegExp(`[a-f0-9]{48}@${INBOUND_DOMAIN.replaceAll('.', '\\.')}`)) ?? [])[0];
     expect(next && next !== address, 'the address did not change'); address = next;
   });
   await step('Settings > Inbox: the support address for replies is saved', async () => {
@@ -1630,21 +1633,20 @@ flow('mailroom', async () => {
     await type('Customer name', 'Rosa Diaz'); await type('Customer email', 'rosa@example.com'); await type('Subject', 'Cracked plate'); await type('Message', 'My plate arrived cracked. Could I get a refund for it?');
     await click({ sel: 'button', text: 'Add message', exact: true }); await waitText('Cracked plate');
   });
-  const user = process.env.FLOW_INBOUND_USER, pass = process.env.FLOW_INBOUND_PASSWORD;
-  const inbound = (body) => fetch(`${BASE}/api/inbound/postmark`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64') }, body: JSON.stringify(body) }).then(r => r.status);
-  const hash = () => address.split('+')[1].split('@')[0];
+  const secret = process.env.FLOW_INBOUND_SECRET;
+  const event = (data) => JSON.stringify({ type: 'email.received', created_at: new Date().toISOString(), data: { email_id: randomUUID(), to: [address], headers: {}, ...data } });
+  const inbound = (body) => fetch(`${BASE}/api/inbound/resend`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...signed(secret, body) }, body }).then(r => r.status);
   await step('Inbound: an email forwarded to the address shows up in the inbox, once', async () => {
-    if (!user || !pass) { notes.push('Inbound webhook steps need FLOW_INBOUND_USER and FLOW_INBOUND_PASSWORD (the server\'s POSTMARK_INBOUND_USER/PASSWORD).'); return 'skipped: no inbound credentials'; }
-    const mail = { MessageID: `flow-${run}-1`, MailboxHash: hash(), From: 'lee@example.com', FromName: 'Lee Park', Subject: 'Wrong size mug', TextBody: 'I ordered the large mug and got the small one.', Headers: [], Date: new Date().toUTCString() };
+    if (!secret) { notes.push('Inbound webhook steps need FLOW_INBOUND_SECRET (the server\'s RESEND_WEBHOOK_SECRET).'); return 'skipped: no webhook secret'; }
+    const mail = event({ message_id: `<flow-${run}-1@example.com>`, from: 'Lee Park <lee@example.com>', subject: 'Wrong size mug', text: 'I ordered the large mug and got the small one.', created_at: new Date().toISOString() });
     expect((await inbound(mail)) === 200, 'the webhook refused the email'); expect((await inbound(mail)) === 200, 'the repeat was refused');
     await openApp('inbox'); await waitText('Wrong size mug');
     const n = await ev(`[...document.querySelectorAll('.item')].filter(e => e.textContent.includes('Wrong size mug')).length`); expect(n === 1, `the email shows ${n} times`);
-    expect((await inbound({ ...mail, MessageID: `flow-${run}-2` }).then(() => 0)) === 0);
-    const bad = await fetch(`${BASE}/api/inbound/postmark`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mail) }).then(r => r.status); expect(bad === 401, `no auth answered ${bad}`);
+    const bad = await fetch(`${BASE}/api/inbound/resend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: mail }).then(r => r.status); expect(bad === 401, `an unsigned request answered ${bad}`);
   });
   await step('Inbound: a Gmail forwarding confirmation shows as "Confirm your forwarding"', async () => {
-    if (!user || !pass) return 'skipped: no inbound credentials';
-    await inbound({ MessageID: `flow-${run}-gmail`, MailboxHash: hash(), From: 'forwarding-noreply@google.com', FromName: 'Gmail Team', Subject: '(#123456789) Gmail Forwarding Confirmation - Receive Mail from support@juniper.example', TextBody: 'Confirmation code: 123456789\nTo allow forwarding, click https://mail.google.com/mail/vf-abc123', Headers: [] });
+    if (!secret) return 'skipped: no webhook secret';
+    await inbound(event({ message_id: `<flow-${run}-gmail@google.com>`, from: 'Gmail Team <forwarding-noreply@google.com>', subject: '(#123456789) Gmail Forwarding Confirmation - Receive Mail from support@juniper.example', text: 'Confirmation code: 123456789\nTo allow forwarding, click https://mail.google.com/mail/vf-abc123' }));
     await openApp('inbox'); await waitText('Confirm your forwarding');
   });
 });

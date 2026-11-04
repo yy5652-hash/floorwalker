@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 const target = new URL(process.argv[2] ?? 'http://localhost:18999');
 if (!['localhost', '127.0.0.1', '[::1]'].includes(target.hostname) || !['http:', 'https:'].includes(target.protocol) || target.username || target.password)
   throw new Error('Refusing a non-local target');
@@ -13,6 +13,8 @@ const outbox = process.env.FLOW_OUTBOX ?? 'notes/.next/outbox.jsonl';
 const email = `merchant-${randomUUID()}@example.com`, buyer = `buyer-${randomUUID()}@example.com`, buyer2 = `buyer-${randomUUID()}@example.com`;
 let workspace, order, order2, key, keyId, agent, held, approveUrl, heldAmount, smallAmount, inbox;
 const creds = { clientId: process.env.FLOW_PAYPAL_CLIENT_ID, clientSecret: process.env.FLOW_PAYPAL_CLIENT_SECRET };
+const signed = (secret, body) => { const id = `msg_${randomUUID()}`, ts = String(Math.floor(Date.now() / 1000));
+  return { 'svix-id': id, 'svix-timestamp': ts, 'svix-signature': `v1,${createHmac('sha256', Buffer.from(secret.slice(6), 'base64')).update(`${id}.${ts}.${body}`).digest('base64')}` }; };
 function check(condition, message) { assert.ok(condition, message); }
 function save() {
   writeFileSync(new URL('./e2e-merchant-RESULTS.md', import.meta.url), `# Fresh merchant end-to-end results\n\nTarget: ${base}\nStarted: ${began}\nUpdated: ${new Date().toISOString()}\n\nHTTP functional checks with real PayPal sandbox refunds. Shop and ledger remain for inspection.\n\n| Step | Result | Seconds | Evidence |\n|---|---|---:|---|\n${rows.map(r => `| ${r.name} | ${r.result} | ${r.seconds.toFixed(2)} | ${r.detail} |`).join('\n')}\n\n${rows.filter(r => r.result === 'PASS').length} PASS; ${rows.filter(r => r.result === 'FAIL').length} FAIL.\n`);
@@ -73,13 +75,13 @@ await step('Create a paid order on the same sandbox app', async () => {
   order2 = await inWorkspace({ id: workspace.id, name: 'Fresh Merchant Shop', paypal: creds, demo: false, db: null }, { kind: 'system', id: 'merchant-test', name: 'Merchant test' }, () => createPaidCustomerOrder({ customer: { name: 'Second Customer', email: buyer2 }, items: [{ name: 'Test item', sku: 'FLOW-2', unit: smallAmount + 10, quantity: 1 }], shipping: 0, invoiceId: `FLOW-${randomUUID()}` }));
   check(order2.captureId, 'Second paid capture missing');
 });
-await step('Customer email arrives through Postmark and appears in the inbox', async () => {
+await step('Customer email arrives through the Resend webhook and appears in the inbox', async () => {
   check(order && workspace, 'Order prerequisite'); inbox = await ok('/api/inbox/settings');
   check(inbox.address && !inbox.auto_run, 'Forwarding is not configured or auto-run is enabled');
-  const token = inbox.address.split('@')[0].split('+')[1]; check(token, 'Mailbox token missing');
-  check(process.env.POSTMARK_INBOUND_USER && process.env.POSTMARK_INBOUND_PASSWORD, 'Inbound credentials required');
-  const basic = Buffer.from(`${process.env.POSTMARK_INBOUND_USER}:${process.env.POSTMARK_INBOUND_PASSWORD}`).toString('base64');
-  const r = await post('/api/inbound/postmark', { MailboxHash: token, MessageID: randomUUID(), FromFull: { Email: buyer, Name: 'Fresh Customer' }, Subject: `Refund order ${order.orderId}`, TextBody: `Please refund $${heldAmount} on order ${order.orderId}. Capture ${order.captureId}.`, Date: new Date().toISOString() }, { basic });
+  const secret = process.env.RESEND_WEBHOOK_SECRET; check(secret?.startsWith('whsec_'), 'Webhook secret required');
+  const body = JSON.stringify({ type: 'email.received', created_at: new Date().toISOString(), data: { email_id: randomUUID(), to: [inbox.address], message_id: `<${randomUUID()}@example.com>`,
+    from: `Fresh Customer <${buyer}>`, subject: `Refund order ${order.orderId}`, text: `Please refund $${heldAmount} on order ${order.orderId}. Capture ${order.captureId}.`, headers: {}, created_at: new Date().toISOString() } });
+  const r = await fetch(base + '/api/inbound/resend', { method: 'POST', headers: { 'Content-Type': 'application/json', ...signed(secret, body) }, body }).then(res => res.json());
   check(r.id, 'No inbound ticket');
   const ticket = (await ok('/api/state')).tickets.find(t => t.id === r.id);
   check(ticket?.from_email === buyer && ticket.status === 'open' && !ticket.reply, 'Email did not wait in inbox');

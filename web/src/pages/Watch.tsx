@@ -9,22 +9,23 @@ import { useMutation } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  api, canManage, errorMessage, money, personName, post, relativeTime,
+  api, canManage, errorMessage, personName, post, relativeTime,
   type BypassResult, type Incident, type State,
 } from "../api";
+import { money } from "../lib/money";
 import { useIncidents, useRefreshIncidents } from "../hooks/use-incidents";
 import { Confirm, Resource, Toggle } from "../components/Management";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 
-const columns: ColDef<Incident>[] = [
+const columns = (currency: string): ColDef<Incident>[] => [
   { field: "created_at", headerName: "Opened", width: 170,
     valueFormatter: ({ value }) => new Date(value).toLocaleString("en-US") },
   { field: "kind", headerName: "Kind", width: 100,
     valueFormatter: ({ value }) => value === "refund" ? "Refund" : "Payout" },
   { field: "amount", headerName: "Amount", width: 115,
-    valueFormatter: ({ value }) => money(value), cellClass: "tabular-nums font-medium" },
+    valueFormatter: ({ value, data }) => money(value, (data as (Incident & { currency?: string }) | undefined)?.currency ?? currency), cellClass: "tabular-nums font-medium" },
   { field: "counterparty", headerName: "Who", minWidth: 160, flex: 1,
     valueFormatter: ({ value }) => value ? personName(value) : "—" },
   { field: "paypal_ref", headerName: "PayPal reference", width: 220, cellClass: "font-mono text-xs" },
@@ -41,6 +42,7 @@ const defaultColDef: ColDef<Incident> = {
 
 
 export function Watch({ state }: { state: State }) {
+  const currency = state.policy.policy.currency ?? "USD";
   const query = useIncidents(state);
   const { resolvedTheme } = useTheme();
   const refresh = useRefreshIncidents();
@@ -134,7 +136,7 @@ export function Watch({ state }: { state: State }) {
                 <AgGridReact<Incident>
                   theme={resolvedTheme === "dark" ? darkTheme : lightTheme}
                   animateRows={!isFilm() && !window.matchMedia("(prefers-reduced-motion: reduce)").matches}
-                  columnDefs={[{ field: "id", headerName: "#", width: 85, cellRenderer: "agGroupCellRenderer" }, ...columns]} defaultColDef={defaultColDef}
+                  columnDefs={[{ field: "id", headerName: "#", width: 85, cellRenderer: "agGroupCellRenderer" }, ...columns(currency)]} defaultColDef={defaultColDef}
                   rowData={query.data?.incidents ?? []}
                   masterDetail detailRowAutoHeight
                   detailCellRenderer={({ data }: ICellRendererParams<Incident>) => data ? <IncidentBanner key={`${state.workspace?.id ?? "film"}:${data.id}`} incident={data} state={state} /> : null}
@@ -157,7 +159,7 @@ export function Watch({ state }: { state: State }) {
             disabled={!manageable || busy || !state.configured.paypal}
             onClick={() => bypass.mutate()}>
             {bypass.isPending && <Loader2 className="animate-spin" />}
-            {bypass.isPending ? (checking ? "Checking PayPal…" : "Refunding in PayPal…") : "Refund $25 straight through PayPal"}
+            {bypass.isPending ? (checking ? "Checking PayPal…" : "Refunding in PayPal…") : `Refund ${money(25, currency)} straight through PayPal`}
           </Button>
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <Confirm
@@ -179,7 +181,7 @@ export function Watch({ state }: { state: State }) {
           {bypass.isPending && <span role="status" className="sr-only">{checking ? "Checking PayPal…" : "Refunding in PayPal…"}</span>}
           {bypass.data && (
             <p role="status" className="break-words text-sm leading-relaxed">
-              Refunded ${bypass.data.refund.amount} on order {bypass.data.refund.invoice} directly through the PayPal API (refund {bypass.data.refund.id}).{" "}
+              Refunded {money(bypass.data.refund.amount, currency)} on order {bypass.data.refund.invoice} directly through the PayPal API (refund {bypass.data.refund.id}).{" "}
               {bypass.data.incident
                 ? `Floorwalker found it and opened incident #${bypass.data.incident.id}.`
                 : "No new incident was returned. Check the incidents table or check PayPal again."}

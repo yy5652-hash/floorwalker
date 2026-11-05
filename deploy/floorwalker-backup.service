@@ -1,6 +1,7 @@
 [Unit]
 Description=Floorwalker daily database backup
 After=floorwalker.service
+OnFailure=floorwalker-alert@%n.service
 
 [Service]
 Type=oneshot

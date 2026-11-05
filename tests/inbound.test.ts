@@ -1,6 +1,7 @@
 import { after, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
@@ -16,11 +17,11 @@ process.env.FLOORWALKER_DEMO_POOL = '0';
 process.env.FLOORWALKER_INBOUND_DOMAIN = 'in.floorwalker.test';
 const SECRET = 'whsec_' + Buffer.from('inbound-test-signing-key-32-bytes').toString('base64');
 process.env.RESEND_WEBHOOK_SECRET = SECRET;
-delete process.env.RESEND_API_KEY;
+process.env.RESEND_API_KEY = ''; // set, so the real key in .env is not loaded
 const { auth } = await import('../server/auth.ts');
 const store = await import('../server/db.ts');
 const { inWorkspace } = await import('../server/context.ts');
-const { core, openWorkspace, registerWorkspace } = await import('../server/workspaces.ts');
+const { core, openWorkspace, registerWorkspace, removeWorkspace } = await import('../server/workspaces.ts');
 const inbound = await import('../server/inbound.ts');
 const { config } = await import('../server/config.ts');
 const { setEmailTransport } = await import('../server/email.ts');
@@ -46,6 +47,99 @@ const sign = (body: string, id = 'msg_test', ts = String(Math.floor(Date.now() /
   ({ 'svix-id': id, 'svix-timestamp': ts, 'svix-signature': `v1,${createHmac('sha256', Buffer.from(SECRET.slice(6), 'base64')).update(`${id}.${ts}.${body}`).digest('base64')}` });
 beforeEach(() => { mail.length = 0; setEmailTransport(async e => { mail.push(e); }); inbound.setInboundRunner(); config.mailFrom = 'floorwalker@example.com'; });
 after(() => { setEmailTransport(); core.close(); rmSync(dir, { recursive: true, force: true }); });
+
+// Re-evaluate the startup module against the existing files, with a fresh core handle.
+async function backfill() {
+  const restarted = await import(`../server/workspaces.ts?backfill=${randomUUID()}`);
+  restarted.core.close();
+}
+
+test('routing uses the token index and opens only the matching one of two workspaces', async t => {
+  const a = workspace(), b = workspace();
+  const opened: string[] = [];
+  const prepare = core.prepare.bind(core);
+  t.mock.method(core, 'prepare', (sql: string) => {
+    const statement = prepare(sql);
+    if (sql === 'SELECT * FROM workspace WHERE id = ?') {
+      const get = statement.get.bind(statement);
+      t.mock.method(statement, 'get', (id: string) => { opened.push(id); return get(id); });
+    }
+    assert.doesNotMatch(sql, /^SELECT id FROM workspace$/);
+    return statement;
+  });
+  // With no index entry there must be no fallback scan of workspace databases.
+  core.prepare('DELETE FROM inbound_tokens WHERE workspace_id = ?').run(a.ws.id);
+  assert.deepEqual(await deliver(payload(a.token)), { ok: true });
+  assert.deepEqual(opened, []);
+  core.prepare('INSERT INTO inbound_tokens (token, workspace_id) VALUES (?, ?)').run(a.token, a.ws.id);
+  assert.ok('id' in await deliver(payload(a.token)));
+  assert.deepEqual(opened, [a.ws.id]);
+  assert.equal(a.run(() => store.tickets().length), 1);
+  assert.equal(b.run(() => store.tickets().length), 0);
+});
+
+test('unknown and rotated tokens keep the drop response and log, even with a stale index', async t => {
+  const h = workspace();
+  const logs: unknown[][] = [];
+  t.mock.method(console, 'info', (...args: unknown[]) => { logs.push(args); });
+  const current = h.run(() => inbound.rotateAddress()).address!.split('@')[0];
+  assert.equal(core.prepare('SELECT 1 FROM inbound_tokens WHERE token = ?').get(h.token), undefined);
+  assert.deepEqual(await deliver(payload('unknown-token')), { ok: true });
+  assert.deepEqual(await deliver(payload(h.token)), { ok: true });
+  // The current workspace token must still be verified after an index hit.
+  core.prepare('UPDATE inbound_tokens SET token = ? WHERE workspace_id = ?').run(h.token, h.ws.id);
+  assert.deepEqual(await deliver(payload(h.token)), { ok: true });
+  assert.deepEqual(logs, Array.from({ length: 3 }, () => ['Inbound email dropped: unknown or rotated mailbox']));
+  assert.equal(h.run(() => store.tickets().length), 0);
+  core.prepare('UPDATE inbound_tokens SET token = ? WHERE workspace_id = ?').run(current, h.ws.id);
+  assert.ok('id' in await deliver(payload(current)));
+});
+
+test('startup backfills JSON-encoded tokens set before the index row existed', async () => {
+  const h = workspace();
+  h.run(() => store.setSetting('inbound.token', 'legacy-token'));
+  core.prepare('DELETE FROM inbound_tokens WHERE workspace_id = ?').run(h.ws.id);
+  await backfill();
+  assert.equal((core.prepare('SELECT workspace_id FROM inbound_tokens WHERE token = ?').get('legacy-token') as { workspace_id: string }).workspace_id, h.ws.id);
+  assert.ok('id' in await deliver(payload('legacy-token')));
+  assert.equal(h.run(() => store.tickets().length), 1);
+});
+
+test('deleted workspace tokens are dropped, including stale index entries', async t => {
+  const h = workspace();
+  removeWorkspace(h.ws.id);
+  assert.equal(core.prepare('SELECT 1 FROM inbound_tokens WHERE token = ?').get(h.token), undefined);
+  const info = t.mock.method(console, 'info', () => {});
+  assert.deepEqual(await deliver(payload(h.token)), { ok: true });
+  core.prepare('INSERT INTO inbound_tokens (token, workspace_id) VALUES (?, ?)').run(h.token, h.ws.id);
+  assert.deepEqual(await deliver(payload(h.token)), { ok: true });
+  assert.deepEqual(info.mock.calls.map(call => call.arguments), Array.from({ length: 2 }, () => ['Inbound email dropped: unknown or rotated mailbox']));
+  core.prepare('DELETE FROM inbound_tokens WHERE workspace_id = ?').run(h.ws.id);
+});
+
+test('startup skips files without settings, corrupt files and invalid JSON, and closes every opened database', async t => {
+  const badIds = ['missing-settings', 'corrupt-workspace', 'invalid-settings'];
+  for (const id of badIds) registerWorkspace(id, { demo: false });
+  const empty = new DatabaseSync(join(dir, `${badIds[0]}.db`)); empty.close();
+  writeFileSync(join(dir, `${badIds[1]}.db`), 'not a sqlite database');
+  const invalid = new DatabaseSync(join(dir, `${badIds[2]}.db`));
+  invalid.exec("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT); INSERT INTO settings VALUES ('inbound.token', 'unparsable')");
+  invalid.close();
+  const healthy = workspace();
+  core.prepare('DELETE FROM inbound_tokens WHERE workspace_id = ?').run(healthy.ws.id);
+  const opened = new Set<DatabaseSync>(), closed = new Set<DatabaseSync>();
+  const prepare = DatabaseSync.prototype.prepare, close = DatabaseSync.prototype.close;
+  t.mock.method(DatabaseSync.prototype, 'prepare', function (this: DatabaseSync, sql: string) {
+    if (sql === "SELECT value FROM settings WHERE key = 'inbound.token'") opened.add(this);
+    return prepare.call(this, sql);
+  });
+  t.mock.method(DatabaseSync.prototype, 'close', function (this: DatabaseSync) { closed.add(this); return close.call(this); });
+  await assert.doesNotReject(backfill());
+  assert.ok(opened.size >= badIds.length);
+  for (const db of opened) assert.ok(closed.has(db), 'backfill must close each database even on failure');
+  for (const id of badIds) assert.equal(core.prepare('SELECT 1 FROM inbound_tokens WHERE workspace_id = ?').get(id), undefined);
+  assert.ok(core.prepare('SELECT 1 FROM inbound_tokens WHERE token = ?').get(healthy.token));
+});
 
 test('webhook signature fails closed: wrong secret, stale timestamp, tampered body, missing headers', () => {
   const body = JSON.stringify(event(payload('x')));

@@ -202,6 +202,10 @@ All **125 automated tests pass, with none skipped**, including failure injection
 
 See the [16-week results](bench/longitudinal-RESULTS.md) and [failure-injection / live-check report](tests/experiments-REPORT.md).
 
+### Backups and operator alerts
+
+Deployment installs a daily database backup timer (03:30 UTC, 14 days retained). Failed backups and app crash loops that exhaust five starts in five minutes send operator email through Resend; the five-minute health check sends a site-down email after two consecutive failures, repeats at most every six hours, and sends a recovery email. Set `FLOORWALKER_ALERT_EMAILS` (falls back to `FLOORWALKER_ADMIN_EMAILS`), `RESEND_API_KEY` and `FLOORWALKER_MAIL_FROM`; `FLOORWALKER_HEALTH_URL` overrides the health endpoint. The health check runs on the same server, so it cannot detect a whole-server outage.
+
 ### Tests and checks
 
 ```bash

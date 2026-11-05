@@ -1,0 +1,8 @@
+[Unit]
+Description=Email the operator when Floorwalker unit %i fails
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=floorwalker
+ExecStart=/opt/floorwalker/node/bin/node /opt/floorwalker/bin/alert.mjs "unit %i failed" "Unit %i failed. Inspect logs with: journalctl -u %i -n 100"

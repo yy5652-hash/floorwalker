@@ -1,6 +1,9 @@
 [Unit]
 Description=Floorwalker: spend control for AI agents on PayPal (sandbox)
 After=network-online.target
+OnFailure=floorwalker-alert@%n.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 User=floorwalker

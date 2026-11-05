@@ -17,14 +17,27 @@ export const MessageBody = z.object({
 });
 export function inboxSettings() {
   let token = store.setting('inbound.token', '');
-  if (!token) { token = randomBytes(24).toString('hex'); store.setSetting('inbound.token', token); }
+  if (!token) {
+    token = randomBytes(24).toString('hex');
+    store.setSetting('inbound.token', token);
+    indexToken(token);
+  }
   const domain = inboundDomain();
   const address = domain ? `${token}@${domain}` : null;
   return { address, support_address: store.setting('inbound.support', ''), auto_run: store.setting('inbound.auto_run', false),
     auto_send: store.setting('inbound.auto_send', false), received: store.setting('inbound.received', false),
     confirmations: store.tickets().filter(t => t.inbound_kind === 'confirmation'), skipped: store.setting<any[]>('inbound.skipped', []) };
 }
-export function rotateAddress() { store.setSetting('inbound.token', randomBytes(24).toString('hex')); return inboxSettings(); }
+function indexToken(token: string) {
+  core.prepare('INSERT INTO inbound_tokens (token, workspace_id) VALUES (?, ?) ON CONFLICT(workspace_id) DO UPDATE SET token = excluded.token')
+    .run(token, ctx().ws.id);
+}
+export function rotateAddress() {
+  const token = randomBytes(24).toString('hex');
+  store.setSetting('inbound.token', token);
+  indexToken(token);
+  return inboxSettings();
+}
 export function saveInboxSettings(input: unknown) {
   const b = z.object({ support_address: z.union([z.email(), z.literal('')]), auto_run: z.boolean(), auto_send: z.boolean() }).parse(input);
   store.setSetting('inbound.support', b.support_address); store.setSetting('inbound.auto_run', b.auto_run); store.setSetting('inbound.auto_send', b.auto_send);
@@ -136,9 +149,9 @@ type Received = { ok: boolean; duplicate?: boolean; skipped?: boolean; ignored?:
 export function receive(m: InboundMail): Received {
   if (!m.mailbox || !m.messageId || m.messageId.length > 1000) throw new Error('Invalid inbound payload');
   const messageId = m.messageId.startsWith('<') ? m.messageId : `<${m.messageId}>`;
-  const rows = core.prepare('SELECT id FROM workspace').all() as { id: string }[];
-  for (const row of rows) {
-    const ws = openWorkspace(row.id);
+  const row = core.prepare('SELECT workspace_id FROM inbound_tokens JOIN workspace ON workspace.id = inbound_tokens.workspace_id WHERE token = ?').get(m.mailbox) as { workspace_id: string } | undefined;
+  if (row) {
+    const ws = openWorkspace(row.workspace_id);
     const result = inWorkspace(ws, { kind: 'system', id: 'inbound', name: 'Inbound email' }, () => {
       const token = store.setting('inbound.token', '');
       if (!token || !equal(token, m.mailbox)) return null;

@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { config } from "./config.ts";
@@ -30,7 +30,33 @@ CREATE TABLE IF NOT EXISTS workspace (
   created_by_ip TEXT,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS inbound_tokens (
+  token TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL UNIQUE
+);
 `);
+
+// Backfill once on process startup, before accepting mail. Do not create databases
+// for workspaces whose files do not exist yet, or depend on auth's organization table.
+for (const { id } of core.prepare("SELECT id FROM workspace").all() as { id: string }[]) {
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(id)) continue;
+  const path = join(config.dataDir, `${id}.db`);
+  if (!existsSync(path)) continue;
+  try {
+    const db = new DatabaseSync(path, { readOnly: true });
+    try {
+      const row = db.prepare("SELECT value FROM settings WHERE key = 'inbound.token'").get() as { value: string } | undefined;
+      // Settings are JSON-encoded by store.setSetting.
+      const token = row ? JSON.parse(row.value) : null;
+      if (typeof token === "string" && token) {
+        core.prepare("INSERT INTO inbound_tokens (token, workspace_id) VALUES (?, ?) ON CONFLICT(workspace_id) DO UPDATE SET token = excluded.token").run(token, id);
+      }
+    } finally { db.close(); }
+  } catch {
+    // A missing settings table, invalid value or unreadable database must not
+    // prevent other workspaces from being indexed or the server from starting.
+  }
+}
 
 export type WorkspaceRow = {
   id: string;
@@ -105,6 +131,7 @@ export function removeWorkspace(id: string) {
   handles.delete(id);
   for (const t of ["invitation", "member"]) core.prepare(`DELETE FROM ${t} WHERE organizationId = ?`).run(id);
   core.prepare("DELETE FROM organization WHERE id = ?").run(id);
+  core.prepare("DELETE FROM inbound_tokens WHERE workspace_id = ?").run(id);
   core.prepare("DELETE FROM workspace WHERE id = ?").run(id);
   for (const t of ["api_key", "webhook_endpoint", "webhook_delivery", "notify_pref"]) {
     try {

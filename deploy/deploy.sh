@@ -33,6 +33,9 @@ sudo install -m 600 -o floorwalker -g floorwalker /tmp/floorwalker.env /opt/floo
 sudo chown -R floorwalker:floorwalker /opt/floorwalker
 cd /opt/floorwalker/app && sudo -u floorwalker env PATH=/opt/floorwalker/node/bin:/usr/bin:/bin npm ci --no-audit --no-fund --loglevel=error
 sudo install -m 644 deploy/floorwalker.service /etc/systemd/system/floorwalker.service
+sudo install -d -o floorwalker -g floorwalker /opt/floorwalker/bin /opt/floorwalker/state
+sudo install -m 644 -o floorwalker -g floorwalker deploy/backup.mjs deploy/alert.mjs deploy/healthcheck.mjs /opt/floorwalker/bin/
+sudo install -m 644 deploy/floorwalker-backup.service deploy/floorwalker-backup.timer deploy/floorwalker-alert@.service deploy/floorwalker-healthcheck.service deploy/floorwalker-healthcheck.timer /etc/systemd/system/
 # The old sslip.io address redirects pages to $DOMAIN and keeps proxying /api/ and /v1/ (webhooks and agents registered there).
 if sudo test -e "/etc/letsencrypt/live/$OLD_DOMAIN/fullchain.pem"; then
   sudo install -m 644 deploy/nginx-old-address.conf /etc/nginx/sites-available/floorwalker-old-address
@@ -53,6 +56,7 @@ if ! sudo grep -q "server_name $DOMAIN;" /etc/nginx/sites-available/floorwalker 
 fi
 sudo nginx -t && sudo systemctl reload nginx
 sudo systemctl daemon-reload && sudo systemctl enable --now floorwalker && sudo systemctl restart floorwalker
+sudo systemctl enable --now floorwalker-backup.timer floorwalker-healthcheck.timer
 sleep 6 && curl -fsS -o /dev/null -w "local %{http_code}\n" http://127.0.0.1:18810/v1/openapi.json
 REMOTE
 echo "https://$DOMAIN"

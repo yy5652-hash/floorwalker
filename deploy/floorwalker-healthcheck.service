@@ -1,0 +1,8 @@
+[Unit]
+Description=Check Floorwalker site health and email the operator
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=floorwalker
+ExecStart=/opt/floorwalker/node/bin/node /opt/floorwalker/bin/healthcheck.mjs

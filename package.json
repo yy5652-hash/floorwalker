@@ -13,7 +13,7 @@
     "build": "vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "seed": "tsx server/seed.ts",
-    "test": "FLOORWALKER_AI_FALLBACK= node --import tsx --test tests/*.test.ts",
+    "test": "FLOORWALKER_AI_FALLBACK= RESEND_API_KEY= node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p web",
     "bench": "tsx bench/run.ts",
     "mcp": "tsx server/mcp.ts"

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { canManage, errorMessage, money, post, type Incident, type State } from "../api";
+import { canManage, errorMessage, post, type Incident, type State } from "../api";
+import { money } from "../lib/money";
 import { useRefreshIncidents } from "../hooks/use-incidents";
 import { Button } from "@/components/ui/button";
 
@@ -22,11 +23,12 @@ export function IncidentBanner({ state, incident }: { state: State; incident?: I
   const newest = incident ?? open[0] ?? resolved;
   if (!newest || (!incident && !open.length && resolved?.resolution === "mine")) return null;
   const current = resolved?.id === newest.id ? resolved : newest;
+  const currency = (current as Incident & { currency?: string }).currency ?? state.policy.policy.currency ?? "USD";
   const ids = frozenAgentIds(current.frozen_agents);
   return <section data-film="incident" className="incident-banner incident-timeline" aria-label={`Incident ${current.id}`}>
     <h2>{current.resolved_at ? "Resolved PayPal activity" : "Money moved outside Floorwalker"} <span>#{current.id}</span></h2>
     <ol>
-      <li><span className="timeline-step">1</span><div><h3>What happened</h3><p>{current.detail}</p><p>{money(current.amount)} · {current.kind}{current.counterparty ? ` · ${current.counterparty}` : ""}</p></div></li>
+      <li><span className="timeline-step">1</span><div><h3>What happened</h3><p>{current.detail}</p><p>{money(current.amount, currency)} · {current.kind}{current.counterparty ? ` · ${current.counterparty}` : ""}</p></div></li>
       <li><span className="timeline-step">2</span><div><h3>PayPal evidence</h3><dl>
         <div><dt>Transaction</dt><dd>{current.paypal_ref}</dd></div>
         {current.capture_id && <div><dt>Capture</dt><dd>{current.capture_id}</dd></div>}

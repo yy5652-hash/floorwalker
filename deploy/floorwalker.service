@@ -15,6 +15,8 @@ Environment=FLOORWALKER_BASE_URL=https://floorwalker.yingzhilu.cn
 Environment=PATH=/opt/floorwalker/node/bin:/usr/bin:/bin
 ExecStart=/opt/floorwalker/app/node_modules/.bin/tsx server/index.ts
 Restart=always
+# tsx exits 143 on SIGTERM; a normal stop or deploy restart is not a failure (no alert).
+SuccessExitStatus=143
 RestartSec=3
 MemoryHigh=450M
 MemoryMax=600M

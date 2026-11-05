@@ -7,6 +7,7 @@
 - Before/after comparison: `notes/compare/compare.html`. Live screens: `notes/gallery-live`.
 
 - **Launch work (merged into `main` and live since 2026-11-04):** code sign-in and sign-up in one screen, optional password, forgot password, change email, sign-in events, Resend email in and out, one currency per workspace, three-step start. Before the switch it was rehearsed locally on a copy of the live data (30 workspaces opened, e2e 38/3 with the 3 FAILs being the two demo-refused billing paths and the webhook that cannot reach localhost). Live e2e after the switch: first run 32/9 (inbox decisions differed while on the DeepSeek fallback), rerun 39 PASS / 2 FAIL, the two demo-refused billing paths.
+- **Operator alerts (live 2026-11-06):** email to `FLOORWALKER_ALERT_EMAILS` (the owner's address) through Resend when the site fails two health checks in a row (every 5 min, repeat at most every 6 h, then a "recovered" mail), when the app crash-loops (5 starts in 5 min) and when the daily backup fails (`deploy/alert.mjs`, `deploy/healthcheck.mjs`, `floorwalker-alert@.service`). A test alert reached the inbox. `SuccessExitStatus=143` keeps deploy restarts from alerting. Inbound email now finds its workspace through a token index in core.db; Watch amounts use the workspace currency.
 - Daily database backups run on the server since 2026-11-03 (`floorwalker-backup.timer`, 03:30 UTC, 14 days, `/opt/floorwalker/backups`). Not off-site yet.
 - **Email is Resend (owner's choice, 2026-11-04, replacing Postmark):** sending via `POST /emails`; customer email in through the signed `email.received` webhook at `/api/inbound/resend`, body read from the received-emails API; addresses are `TOKEN@FLOORWALKER_INBOUND_DOMAIN`. 170 unit tests, e2e-merchant 8/8, mailroom flow 6/6 locally.
 - **Domain:** `floorwalker.yingzhilu.cn` A → 43.160.214.187 added 2026-11-04 (backup `dns-backup/yingzhilu.cn-20261104.tsv`); it is now the main address (`deploy/deploy.sh`). `deploy/preview.sh` now needs `PREVIEW_DOMAIN` set to another name.
@@ -23,5 +24,4 @@
 - `VITE_AG_GRID_LICENSE_KEY` is not set, so an AG Grid watermark may show.
 - On Gemini, AI-reviewed holds take about 25 s (default thinking). Left as is: changing it could change review verdicts behind the published benchmark.
 - Repeating sandbox refunds quickly on one capture can return 409, which makes the second-bypass step flaky.
-- Inbound email looks up the workspace by opening every workspace; fine now, slow with many workspaces (keep a token index in core.db).
-- The Watch page still shows bypass refunds in USD.
+- Alerts run on the app server itself, so a whole-server outage sends no email (an outside uptime check would cover it). Backups are still not off-site.

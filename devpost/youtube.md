@@ -1,6 +1,6 @@
 # YouTube upload
 
-- File: ~/Desktop/PayPal-影片/Floorwalker_20261110_1856_v2_横屏.mp4 (v2, 153.0 s, 1920x1080). Subtitles: ~/Desktop/PayPal-影片/配套材料/Floorwalker_20261110_1856_v2_横屏.srt (English).
+- Published 2026-11-10: https://youtu.be/DY76mtW6ju0 (Public). File: ~/Desktop/PayPal-影片/Floorwalker_20261110_1856_v2_横屏.mp4 (v2, 153.0 s, 1920x1080). Subtitles: ~/Desktop/PayPal-影片/配套材料/Floorwalker_20261110_1856_v2_横屏.srt (English).
 - Visibility: **Public** (the rules require the video to be publicly visible on YouTube).
 - Audience: not made for kids.
 

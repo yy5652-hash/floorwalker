@@ -347,6 +347,7 @@ function LedgerView({
       </div>
       <div className="h-[max(520px,calc(100dvh-230px))] min-w-0 w-full">
         <AgGridReact<LedgerEntry>
+          suppressAggFuncInHeader
           ref={grid}
           initialState={savedViews.All}
           onStateUpdated={e => remember(e.api)}

@@ -19,6 +19,9 @@
     #film-key { left: 0; top: 0; font-weight: 600; font-size: 28px; color: #ffffff; background: #12233f; padding: 8px 18px; border-radius: 12px; opacity: 0; box-shadow: 0 10px 24px rgba(18,35,63,.3); letter-spacing: .02em; }
     #film-stat { left: 48px; top: 40px; font-weight: 600; font-size: 26px; color: #ffffff; background: rgba(18, 35, 63, 0.92); padding: 10px 22px 11px; border-radius: 14px; opacity: 0; box-shadow: 0 10px 26px rgba(18,35,63,.25); }
     #film-stat b { color: #8ee0ae; font-weight: 700; }
+    #film-outcome { left: 84px; top: 70px; max-width: 1740px; padding: 16px 24px; background: rgba(18,35,63,.96); color: #fff; border-left: 5px solid #8ee0ae; box-shadow: 0 10px 26px rgba(18,35,63,.2); display: none; }
+    #film-outcome strong { display: block; font-size: 34px; font-weight: 600; line-height: 1.25; }
+    #film-outcome span { display: block; font: 23px/1.4 'JetBrains Mono', monospace; margin-top: 7px; overflow-wrap: anywhere; }
     #film-photo { inset: 0; overflow: hidden; opacity: 0; background: #f5f7fa; }
     #film-photo img { position: absolute; max-width: none; display: block; }
     #film-hud { left: 84px; bottom: 11px; white-space: nowrap; display: flex; align-items: center; gap: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 16px; letter-spacing: .1em; text-transform: uppercase; color: #3b4557; background: rgba(255, 255, 255, .92); border: 1px solid #d5dce6; padding: 4px 14px; opacity: 0; }
@@ -37,6 +40,7 @@
     <div id="film-ripple"></div>
     <div id="film-cursor"><svg viewBox="0 0 46 46" width="46" height="46"><path d="M4 3 L4 31 L11.5 24 L17 36 L22.5 33.6 L17 22 L28 22 Z" fill="#fff" stroke="#0b1220" stroke-width="2.4" stroke-linejoin="round"/></svg></div>
     <div id="film-photo"><img alt=""></div><div id="film-hud"><i></i><span></span></div><div id="film-key"></div><div id="film-stat"></div>
+    <div id="film-outcome"><strong></strong><span></span></div>
     <div id="film-read"></div><div id="film-caption"></div><div id="film-fade"></div>`;
   document.documentElement.appendChild(ui);
   const $ = id => document.getElementById(id);
@@ -62,7 +66,9 @@
   const rectOf = (spec, i = 0) => {
     const t = typeof spec === 'string' ? { sel: spec, i } : spec;
     // {sel, has}: the first match whose text contains `has` (e.g. one inbox item among many).
-    const el = t.has ? [...document.querySelectorAll(t.sel)].find(e => e.textContent.includes(t.has)) : document.querySelectorAll(t.sel)[t.i || 0];
+    const matches = [...document.querySelectorAll(t.sel)].filter(e => (!t.has || e.textContent.includes(t.has)) && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden');
+    const match = t.last ? matches.at(-1) : matches[t.i || 0];
+    const el = t.closest ? match?.closest(t.closest) : match;
     if (!el) return null;
     let r;
     if (t.text) {
@@ -133,6 +139,8 @@
       return true;
     },
     stat(html, a) { const e = $('film-stat'); if (e.innerHTML !== html) e.innerHTML = html; e.style.opacity = html ? a : 0; return true; },
+    // Film caption of a recorded outcome, never inserted into the product's DOM or computed results.
+    outcome(title, detail = '') { const e = $('film-outcome'); e.querySelector('strong').textContent = title; e.querySelector('span').textContent = detail; e.style.display = title ? 'block' : 'none'; return true; },
     cursor(x, y, show) { cur = { x, y, show }; layout(); return true; },
     cursorShow(show) { cur.show = show; layout(); return true; },
     getCursor() { return cur; },

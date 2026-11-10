@@ -3,7 +3,7 @@
 //
 // Nothing in the UI is mocked. The app's API calls are answered from one recorded live run against the PayPal sandbox
 // (film/data/run.json, see record.mjs and shim.js), released on the film clock. The film adds only a camera, a drawn
-// cursor, captions and highlight rings (ui.js).
+// cursor, captions, recorded-outcome annotations and highlight rings (ui.js).
 import { spawn } from 'node:child_process';
 import { createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -25,7 +25,17 @@ const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const lerp = (a, b, p) => a + (b - a) * p;
 const ease = p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
 
-const timeline = JSON.parse(readFileSync(join(HERE, 'work/timeline.json'), 'utf8'));
+const script = JSON.parse(readFileSync(join(HERE, 'script.json'), 'utf8'));
+const sourceTimeline = JSON.parse(readFileSync(join(HERE, 'work/timeline.json'), 'utf8'));
+const scripted = new Map(script.scenes.map(sc => [sc.id, sc]));
+// Retired scenes have no handlers or dependencies. Never silently omit a new narrated scene.
+const timeline = { ...sourceTimeline, scenes: sourceTimeline.scenes.filter(sc => scripted.has(sc.id)) };
+for (const sc of script.scenes) {
+  const timed = timeline.scenes.find(t => t.id === sc.id);
+  if (!timed || sc.lines.some(l => !timed.lines.some(t => t.id === l.id && t.text === l.text))) {
+    throw new Error(`Narration timeline is stale for ${sc.id}; regenerate film/work/timeline.json from film/script.json before filming.`);
+  }
+}
 const run = JSON.parse(readFileSync(join(HERE, 'data/run.json'), 'utf8'));
 const stepOf = id => run.steps.find(s => s.id === id) ?? (() => { throw new Error(`no recorded step ${id}`); })();
 const framesDir = join(HERE, NOCAP ? 'work/frames-nocap' : ONLY && !PATCH ? 'work/preview' : 'work/frames');
@@ -73,7 +83,7 @@ await send('Emulation.setTimezoneOverride', { timezoneId: 'America/Los_Angeles' 
 await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 await send('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.setItem('floorwalker-theme', 'light'); } catch {}\nif (!location.pathname.startsWith('/film/')) { ${readFileSync(join(HERE, 'shim.js'), 'utf8')} }` });
 const UI = readFileSync(join(HERE, 'ui.js'), 'utf8');
-const LABELS = { hook: 'Threat brief', title: 'Floorwalker', mug: 'Claim 01', maya: 'Claim 01 / Auto', daniel: 'Claim 02 / Hold', phone: 'Claim 02 / Owner', jordan: 'Claim 05 / Injection', hijack: 'Hijack sim', freeze: 'Agent frozen', learn: 'Learning', watch: 'PayPal watch', api: 'Any agent', ask: 'Assistant', bench: 'Benchmark', end: '' };
+const LABELS = { hook: 'Threat brief', maya: 'Claim 01 / Auto', daniel: 'Claim 02 / Hold', phone: 'Claim 02 / Owner', jordan: 'Claim 05 / Injection', hijack: 'Hijack sim', learn: 'Learning', watch: 'PayPal watch', ledger: 'AG Grid Enterprise', api: 'Any agent', bench: 'Benchmark', end: '' };
 
 // ---------------------------------------------------------------- capture
 let frameNo = 0, mode = null;
@@ -173,7 +183,7 @@ function click(B, at, spec, sceneStart) {
   B.span(at, 0.35, async p => { await js(`film.press(${p})`); });
   B.do(at, async () => {
     const r = await rect(spec);
-    if (!r) { console.error(`click target not found at ${at}s: ${JSON.stringify(spec)}`); return; }
+    if (!r) throw new Error(`click target not found at ${at}s: ${JSON.stringify(spec)}`);
     const x = r.x + r.w / 2, y = r.y + r.h / 2;
     for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
     events.push({ t: sceneStart + at, kind: 'click' });
@@ -203,7 +213,7 @@ function replay(B, at, dur, key, speed, onGuard) {
   });
   B.do(at + dur, async () => { await js(`__film.push(${JSON.stringify(key)}, 1e9)`); if (!fired && onGuard) await onGuard(); });
 }
-const setState = s => js(`window.__film.state = ${JSON.stringify(s)}; true`);
+const setState = s => js(`window.__film.state = ${JSON.stringify({ ...s, appUrl: LIVE })}; true`);
 
 const scrollTo = (B, at, dur, target) => {
   let from, to;
@@ -261,7 +271,7 @@ async function appScene(sc, script) {
 
 // Each app scene loads the app fresh, with that scene's recorded state, streams and responses.
 let initScript = null, takes = 0;
-const LIVE = 'https://floorwalker.43-160-214-187.sslip.io';
+const LIVE = 'https://floorwalker.yingzhilu.cn';
 const setInit = async (state, streams = {}, responses = {}) => {
   // The run was recorded against a local server; the pages show the hosted app's address instead.
   if (state) state = { ...state, appUrl: LIVE };
@@ -286,28 +296,49 @@ const item = name => ({ sel: '.item', has: name });
 const film = id => `[data-film="${id}"]`;
 const S = {};
 
-S.hook = async (B, sc) => {
-  await prime(stepOf('T1').before);
-  cam = { ...WIDE };
-  click(B, 1.5, item('Jordan Blake'), sc.start);
-  scrollTo(B, 1.9, 0.6, 0);
-  camTo(B, lineAt(sc, 'h2') - 0.3, 1.4, async () => fit(await rect('.message'), { pad: 30, minW: 820 }));
-  ring(B, lineAt(sc, 'h2') + 0.8, lineAt(sc, 'h3', true) - lineAt(sc, 'h2') + 0.2, 'hidden', '.hidden-part', '#dc2626');
-};
+const duration = sc => sc.end - sc.start;
+const resultCard = '.inbox-agent-result .verdict';
+const paymentStatus = { sel: '.inbox-agent-result h3', has: 'Payment status', closest: 'div' };
+// Navigate with a genuine click, keeping the per-take query string and injected film UI alive.
+function route(B, at, page, sc) {
+  const spec = `[data-slot="sidebar"] a[href="/app#${page}"]`;
+  B.do(at - 0.05, () => js(`document.querySelector(${JSON.stringify(spec)})?.addEventListener('click', e => { e.preventDefault(); location.hash = ${JSON.stringify(page)}; window.scrollTo(0, 0); }, { once: true }); true`));
+  click(B, at, spec, sc.start);
+}
+// These are film annotations, derived only from recorded outcomes; product cards stay untouched.
+function outcome(B, at, sc, entry, title) {
+  if (!entry) throw new Error(`Missing recorded outcome for ${sc.id}`);
+  const detail = entry.paypal_ref ? `PayPal sandbox reference: ${entry.paypal_ref}` : 'Recorded outcome · PayPal sandbox';
+  B.do(at, () => js(`film.outcome(${JSON.stringify(title)}, ${JSON.stringify(detail)}); true`));
+  B.do(at, () => { cursor.show = false; });
+}
+function requireHold(sc, settled, seconds = 2) {
+  if (duration(sc) - settled + 1 / FPS < seconds) throw new Error(`${sc.id}: narration leaves less than ${seconds}s for the outcome`);
+}
 S.maya = async (B, sc) => {
-  const st = stepOf('T1');
-  await prime(st.before, { T1: st.events });
+  const st = stepOf('T1'), m2 = lineAt(sc, 'm2'), m3 = lineAt(sc, 'm3');
+  await prime(st.before, { T1: st.events }, {}, 'overview');
   cam = { ...WIDE };
-  click(B, 0.5, item('Maya Chen'), sc.start);
-  click(B, 1.6, film('run'), sc.start);
-  const end = lineAt(sc, 'm2') + 0.5, speed = st.events.at(-1).t / Math.max(1, end - 1.8);
-  camTo(B, 1.9, 0.9, ZOOM);
-  replay(B, 1.8, end - 1.8, 'T1', speed, () => setState(st.after));
-  follow(B, 1.8, end - 1.8 + 1.0);
-  follow(B, end + 0.8, 1.2, { sel: '.verdict' });
-  camTo(B, lineAt(sc, 'm3') - 0.2, 1.2, async () => fit(await rect('.verdict'), { pad: 24, minW: 900 }));
-  ring(B, lineAt(sc, 'm3') + 0.6, 2.6, 'rule', '.verdict .cited-rule', '#059669');
-  ring(B, lineAt(sc, 'm3') + 3.4, lineAt(sc, 'm3', true) - lineAt(sc, 'm3') - 3.0, 'ref', '.verdict .paypal-ref', '#059669');
+  ring(B, 0.2, 1.1, 'three', { sel: 'h2', has: 'Try these three requests' });
+  route(B, 1.4, 'inbox', sc);
+  click(B, 1.9, item('Maya Chen'), sc.start);
+  click(B, 2.6, film('run'), sc.start);
+  const start = 2.7, end = Math.max(start + 1.0, m3 - 1.7);
+  camTo(B, start, 0.65, ZOOM);
+  replay(B, start, end - start, 'T1', st.events.at(-1).t / (end - start), () => setState(st.after));
+  follow(B, start, end - start);
+  // The new run button becomes View result; it jumps to the separate result section, never sends a reply.
+  click(B, end + 0.15, { sel: '[data-film="run"]', has: 'View result' }, sc.start);
+  scrollTo(B, end + 0.35, 0.5, scrollToShow(resultCard));
+  camTo(B, end + 0.9, 0.55, async () => fit(await rect(resultCard), { pad: 20, minW: 960 }));
+  ring(B, Math.max(m2, end + 0.9), 1.2, 'rule', `${resultCard} .cited-rule`, '#059669');
+  const finish = Math.max(m3 + 0.4, end + 1.7);
+  scrollTo(B, finish - 0.7, 0.5, scrollToShow(paymentStatus));
+  camTo(B, finish - 0.2, 0.6, async () => fit(await rect(paymentStatus), { pad: 28, minW: 960, ay: 0.57 }));
+  const entry = st.after.ledger.find(r => r.ticket_id === 'T1' && r.status === 'executed' && r.paypal_ref);
+  if (!entry) throw new Error('Maya must have a recorded executed refund and sandbox reference');
+  outcome(B, finish + 0.4, sc, entry, `$${entry.amount} executed · Maya's refund`);
+  requireHold(sc, finish + 0.4);
 };
 S.daniel = async (B, sc) => {
   const st = stepOf('T2');
@@ -315,10 +346,17 @@ S.daniel = async (B, sc) => {
   cam = { ...WIDE };
   click(B, 0.5, item('Daniel Okafor'), sc.start);
   click(B, 1.4, film('run'), sc.start);
-  const end = sc.end - sc.start - 1.0;
-  camTo(B, 1.7, 0.9, ZOOM);
-  replay(B, 1.6, end - 1.6, 'T2', st.events.at(-1).t / Math.max(1, end - 1.6), () => setState(st.after));
-  follow(B, 1.6, end - 1.6 + 0.8);
+  const start = 1.5, end = duration(sc) - 3.3;
+  if (end <= start) throw new Error('Daniel narration is too short for the held result');
+  camTo(B, start, 0.6, ZOOM);
+  replay(B, start, end - start, 'T2', st.events.at(-1).t / (end - start), () => setState(st.after));
+  follow(B, start, end - start);
+  click(B, end + 0.15, { sel: '[data-film="run"]', has: 'View result' }, sc.start);
+  scrollTo(B, end + 0.3, 0.4, scrollToShow(resultCard));
+  camTo(B, end + 0.7, 0.5, async () => fit(await rect(resultCard), { pad: 20, minW: 960 }));
+  const entry = st.after.ledger.find(r => r.ticket_id === 'T2' && r.status === 'awaiting_approval');
+  outcome(B, end + 1.2, sc, entry, '$86 waiting for Elena · above the $40 automatic limit');
+  requireHold(sc, end + 1.2);
 };
 // The phone: the real /approve page inside a phone frame (film/art/phone.html), tapped for real.
 async function phoneScene(sc) {
@@ -328,40 +366,44 @@ async function phoneScene(sc) {
   await setInit(st.after, {}, { approve: ap.response });
   await open(`http://127.0.0.1:${PORT}/film/${sc.page}`, `window.ready === true && !!document.getElementById('app').contentDocument?.querySelector('[data-film="approve"]')`);
   await js('document.getElementById("app").contentDocument.fonts.ready.then(() => true)');
+  // Select Daniel by the recorded request id: Tessa is also waiting in this same run.
+  await js(`(() => { const w = document.getElementById('app').contentWindow; w.location.hash = ${JSON.stringify(String(ap.ledgerId))}; return true; })()`);
+  await until(() => js(`document.getElementById('app').contentDocument.querySelector('.approval-card')?.id === ${JSON.stringify(String(ap.ledgerId))}`), 'Daniel phone approval');
+  // Selection stays in Approvals; clear the deep link so refresh cannot mount a second, completed card above its receipt.
+  await js(`document.getElementById('app').contentWindow.location.hash = ''; true`);
+  await js(`document.getElementById('app').contentDocument.querySelector('.approval-card').scrollIntoView({ block: 'start' }); true`);
   const rel = Object.fromEntries(sc.lines.map(l => [l.id, [l.start - sc.start, l.end - sc.start]]));
-  await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); film.label(${JSON.stringify(LABELS[sc.id] ?? '')}); true`);
-  // The phone fills the right of the frame, so the caption sits under the words on the left instead of across it.
+  await js(`window.LINES = ${JSON.stringify(rel)}; film.setCam(0, 0, 1920); film.label(${JSON.stringify(LABELS[sc.id])}); true`);
   await js(`Object.assign(document.getElementById('film-caption').style, { left: '100px', bottom: '90px', transform: 'none', width: '860px', maxWidth: '860px', textAlign: 'left', background: 'transparent', boxShadow: 'none', padding: '0', border: '0', borderImage: 'none', textShadow: '0 0 14px #fff, 0 0 14px #fff' }); true`);
   const inner = sel => js(`(() => { const f = document.getElementById('app'), r = f.getBoundingClientRect(), e = f.contentDocument.querySelector(${JSON.stringify(sel)}); if (!e) return null; const b = e.getBoundingClientRect(), k = r.width / f.offsetWidth; return { x: r.left + (b.left + b.width / 2) * k, y: r.top + (b.top + b.height / 2) * k }; })()`);
-  // The push notification shows the same text the server sends (server/notify.ts), for the recorded request.
-  const row = st.after.ledger.find(r => r.id === ap.ledgerId);
-  const note = { title: `Approve a $${row.amount.toFixed(2)} ${row.kind}?`, body: `Support agent → ${row.counterparty} · AI review: ${row.review?.verdict ?? 'unavailable'}` };
-  const noteTap = lineAt(sc, 'p1', true) - 0.3;
-  await js(`window.NOTE = ${JSON.stringify(note)}; window.NOTE_OUT = ${noteTap + 0.15}; render(1.2); true`);
-  const noteAt = await js(`(() => { const b = document.getElementById('note').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height * 0.42 }; })()`);
-  const tapAt = lineAt(sc, 'p2') + 0.3;
-  let from = { x: 1700, y: 900 }, to = null, tapped = false;
-  const n = Math.round((sc.end - sc.start) * FPS);
+  const tapAt = Math.min(lineAt(sc, 'p2') + 0.2, duration(sc) - 3.0);
+  requireHold(sc, tapAt + 0.6);
+  let to = null, tapped = false, receiptShown = false;
+  const n = Math.round(duration(sc) * FPS);
   for (let f = 0; f < n; f++) {
     const t = f / FPS;
-    if (t >= noteTap - 1.0 && t < noteTap) {
-      const p = ease(clamp((t - (noteTap - 1.0)) / 0.9));
-      await js(`film.cursor(${lerp(from.x, noteAt.x, p)}, ${lerp(from.y, noteAt.y, p)}, true); true`);
-    }
-    if (t >= noteTap && t < noteTap + 0.35) await js(`film.press(${(t - noteTap) / 0.35}); true`);
-    if (t >= tapAt - 1.2 && t < tapAt) {
-      to ??= await inner('[data-film="approve"]');
-      const p = ease(clamp((t - (tapAt - 1.2)) / 1.1));
-      if (to) await js(`film.cursor(${lerp(noteAt.x, to.x, p)}, ${lerp(noteAt.y, to.y, p)}, true); true`);
+    if (t >= tapAt - 1.1 && t < tapAt) {
+      to ??= await inner('.approval-card [data-film="approve"]');
+      if (!to) throw new Error('Phone approval button missing');
+      const p = ease(clamp((t - tapAt + 1.1) / 1.0));
+      await js(`film.cursor(${lerp(1700, to.x, p)}, ${lerp(900, to.y, p)}, true); true`);
     }
     if (t >= tapAt && t < tapAt + 0.35) await js(`film.press(${(t - tapAt) / 0.35}); true`);
     if (!tapped && t >= tapAt) {
       tapped = true;
-      const p = await inner('[data-film="approve"]');
+      const p = await inner('.approval-card [data-film="approve"]');
+      if (!p) throw new Error('Phone approval button disappeared');
       for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x: p.x, y: p.y, button: 'left', clickCount: 1 });
       events.push({ t: sc.start + t, kind: 'click' });
-      await js(`(() => { const w = document.getElementById('app').contentWindow; w.__film.state = ${JSON.stringify(ap.after)}; setTimeout(() => w.__film.release('approve'), 250); return true; })()`);
+      await js(`document.getElementById('app').contentWindow.__film.state = ${JSON.stringify({ ...ap.after, appUrl: LIVE })}; true`);
+      await until(() => js(`!!document.getElementById('app').contentWindow.__film.waiting.approve`), 'phone approval request');
+      await js(`document.getElementById('app').contentWindow.__film.release('approve'); true`);
       events.push({ t: sc.start + t + 0.3, kind: 'verdict', label: 'allow' });
+    }
+    if (!receiptShown && t >= tapAt + 0.5) {
+      await until(() => js(`!!document.getElementById('app').contentDocument.querySelector('[aria-label="Decision receipt"]')`), 'phone receipt');
+      await js(`(() => { const d = document.getElementById('app').contentDocument; const r = d.querySelector('[aria-label="Decision receipt"]'); if (!r.textContent.includes('$86.00 refunded after your approval') || !r.textContent.includes('PayPal sandbox reference:')) throw new Error('Daniel receipt does not confirm the recorded $86 refund'); r.scrollIntoView({ block: 'center' }); film.cursorShow(false); return true; })()`);
+      receiptShown = true;
     }
     if (f % EVERY) continue;
     const c = captionAt(sc, t);
@@ -369,68 +411,61 @@ async function phoneScene(sc) {
     await capture();
   }
 }
-S.sam = async (B, sc) => {
-  const t3 = stepOf('T3'), t4 = stepOf('T4');
-  await prime(t3.before, { T3: t3.events, T4: t4.events });
-  cam = { ...WIDE };
-  click(B, 0.5, item('Pay Sam for the windows'), sc.start);
-  click(B, 1.4, film('run'), sc.start);
-  const end1 = lineAt(sc, 's1', true) + 0.2;
-  replay(B, 1.6, end1 - 1.6, 'T3', t3.events.at(-1).t / Math.max(1, end1 - 1.6), () => setState(t3.after));
-  follow(B, 1.6, end1 - 1.6 + 0.4);
-  scrollTo(B, lineAt(sc, 's2') - 0.2, 0.5, 0);
-  click(B, lineAt(sc, 's2') + 0.6, item('New PayPal for my payments'), sc.start);
-  click(B, lineAt(sc, 's2') + 1.6, film('run'), sc.start);
-  const end2 = lineAt(sc, 's2', true) - 0.2;
-  replay(B, lineAt(sc, 's2') + 1.8, end2 - lineAt(sc, 's2') - 1.8, 'T4', t4.events.at(-1).t / Math.max(1, end2 - lineAt(sc, 's2') - 1.8), () => setState(t4.after));
-  follow(B, lineAt(sc, 's2') + 1.8, end2 - lineAt(sc, 's2') - 1.8 + 1.0);
-};
 S.jordan = async (B, sc) => {
   const st = stepOf('T5');
   await prime(st.before, { T5: st.events });
   cam = { ...WIDE };
-  // Jordan's email is below the fold of the message list, which scrolls on its own.
-  B.span(0.1, 0.5, async p => { await js(`(() => { const e = [...document.querySelectorAll('.item')].find(x => x.textContent.includes('Jordan Blake')), l = e.parentElement; l.scrollTop = ${ease(p)} * (e.offsetTop - l.offsetTop); return true; })()`); });
-  click(B, 2.0, item('Jordan Blake'), sc.start);
-  camTo(B, 2.4, 0.7, async () => fit(await rect('.message'), { pad: 30, minW: 960, ay: 0.45 }));
-  ring(B, 2.9, 0.9, 'hidden', '.hidden-part', '#dc2626');
-  click(B, 5.2, film('run'), sc.start);
-  const end = Math.max(lineAt(sc, 'j2') + 1.6, 7.2);
-  camTo(B, 5.3, 0.6, ZOOM);
-  replay(B, 5.4, end - 5.4, 'T5', st.events.at(-1).t / Math.max(1, end - 5.4), () => setState(st.after));
-  follow(B, 5.4, end - 5.4 + 0.2);
-  follow(B, end + 0.1, 0.5, { sel: '.verdict .injection' }, 0.4);
-  camTo(B, end + 0.3, 0.7, async () => fit(await rect('.verdict .injection'), { pad: 40, minW: 960, ay: 0.4 }));
-  hit(B, end + 0.5);
-  ring(B, end + 0.8, Math.max(0.6, sc.end - sc.start - end - 1.0), 'inj', '.verdict .injection', '#dc2626');
+  let listFrom, listTo;
+  B.span(0.1, 0.5, async p => {
+    // Scroll the message list (its own scroll box, or the page) so Jordan's message sits near the top.
+    if (listFrom === undefined) [listFrom, listTo] = await js(`(() => { const e = [...document.querySelectorAll('.item')].find(x => x.textContent.includes('Jordan Blake')); if (!e) throw new Error('Jordan message missing'); let l = e.parentElement; while (l && !(l.scrollHeight > l.clientHeight + 2 && /(auto|scroll)/.test(getComputedStyle(l).overflowY))) l = l.parentElement; if (l) l.setAttribute('data-film-list', ''); const top = l ? l.getBoundingClientRect().top : 0; const from = l ? l.scrollTop : 0; return [from, Math.max(0, from + e.getBoundingClientRect().top - top - 8)]; })()`);
+    await js(`(() => { const l = document.querySelector('[data-film-list]'); if (l) l.scrollTop = ${lerp(listFrom, listTo, ease(p))}; return true; })()`);
+  });
+  click(B, 0.9, item('Jordan Blake'), sc.start);
+  // Make sure the selection lands on Jordan's message even if the list was still settling under the pointer.
+  B.do(0.95, () => js(`(() => { const e = [...document.querySelectorAll('.item')].find(x => x.textContent.includes('Jordan Blake')); if (!e) throw new Error('Jordan message missing'); if (e.getAttribute('aria-pressed') !== 'true') e.click(); return true; })()`));
+  camTo(B, 1.2, 0.65, async () => fit(await rect('.inbox-message .hidden-part'), { pad: 28, minW: 960, ay: 0.55 }));
+  ring(B, 1.8, 1.1, 'hidden', '.inbox-message .hidden-part', '#dc2626');
+  const start = Math.max(2.9, lineAt(sc, 'j1', true) + 0.2);
+  const end = Math.min(Math.max(start + 0.8, lineAt(sc, 'j2') + 0.3), duration(sc) - 3.8);
+  if (end <= start) throw new Error('Jordan narration is too short for the quoted outcome');
+  click(B, start - 0.1, film('run'), sc.start);
+  replay(B, start, end - start, 'T5', st.events.at(-1).t / (end - start), () => setState(st.after));
+  follow(B, start, end - start);
+  click(B, end + 0.1, { sel: '[data-film="run"]', has: 'View result' }, sc.start);
+  const quote = `${resultCard} .injection`;
+  scrollTo(B, end + 0.3, 0.45, scrollToShow(quote));
+  camTo(B, end + 0.8, 0.6, async () => fit(await rect(quote), { pad: 40, minW: 960, ay: 0.56 }));
+  const entry = st.after.ledger.find(r => r.ticket_id === 'T5' && r.status === 'blocked');
+  if (!entry?.review?.injection_detected || !entry.review.concerns[0]?.evidence || entry.paypal_ref) throw new Error('Jordan recording needs a blocked outcome and quoted hidden instruction, with no PayPal submission');
+  outcome(B, end + 1.4, sc, entry, 'Blocked — nothing was sent to PayPal');
+  ring(B, end + 1.4, duration(sc) - end - 1.5, 'inj', quote, '#dc2626');
+  hit(B, end + 1.4);
+  requireHold(sc, end + 1.4);
 };
 S.hijack = async (B, sc) => {
   const st = stepOf('attack');
   await prime(st.before, { ATTACK: st.events });
   cam = { ...WIDE };
-  scrollTo(B, 0.1, 0.5, scrollToShow(film('hijack')));
-  click(B, 1.3, film('hijack'), sc.start);
-  const end = lineAt(sc, 'x1', true) - 0.2;
-  camTo(B, 1.6, 0.8, ZOOM);
-  replay(B, 1.5, end - 1.5, 'ATTACK', st.events.at(-1).t / Math.max(1, end - 1.5), () => setState(st.after));
-  follow(B, 1.6, end - 1.6 + 0.4);
-};
-S.freeze = async (B, sc) => {
-  const st = stepOf('freeze');
-  await prime(st.before, {}, {}, 'agents');
-  cam = { ...WIDE };
-  ring(B, 0.5, 1.5, 'agent', film('agent-support'), '#2563eb');
-  // The recorded frozen state is in place before the click, so the page's refresh after the click shows it.
-  B.do(lineAt(sc, 'f1', true) - 0.65, () => setState(st.after));
-  click(B, lineAt(sc, 'f1', true) - 0.6, film('freeze-support'), sc.start);
-  hit(B, lineAt(sc, 'f1', true) - 0.4);
-  ring(B, lineAt(sc, 'f1', true) + 0.3, sc.end - sc.start - lineAt(sc, 'f1', true) - 0.4, 'frozen', '.freeze-explanation', '#dc2626');
+  scrollTo(B, 0.05, 0.4, scrollToShow(film('hijack')));
+  click(B, 0.8, film('hijack'), sc.start);
+  const start = 0.9, end = duration(sc) - 2.4;
+  if (end <= start) throw new Error('Hijack narration is too short');
+  const guards = st.events.filter(e => e.event.type === 'guard');
+  if (guards.length !== 6 || guards.some(e => e.event.decision !== 'block')) throw new Error('Hijack recording must show six stopped money moves');
+  camTo(B, start, 0.65, ZOOM);
+  replay(B, start, end - start, 'ATTACK', st.events.at(-1).t / (end - start), () => setState(st.after));
+  follow(B, start, end - start);
+  camTo(B, end, 0.3, async () => fit(await rect({ sel: '.inbox-simulation .verdict', last: true }), { pad: 24, minW: 960 }));
+  B.do(end + 0.3, () => js(`film.outcome('6 money moves · all stopped', 'Hijacked-agent simulation · recorded guard decisions'); true`));
+  requireHold(sc, end + 0.3);
 };
 // An outside agent: its key on the Developers page, then the quickstart (REST and MCP).
 S.api = async (B, sc) => {
   const st = stepOf('agent');
   await prime(st.after, {}, { keys: st.response.keys }, 'developers/keys');
   cam = { ...WIDE };
+  B.do(0, () => js(`film.outcome('agent → Floorwalker → PayPal', 'REST or MCP · https://floorwalker.yingzhilu.cn'); true`));
   // A generic MCP config is shown; the one-line command for a named client stays out of the frame (no third-party marks).
   B.do(2.7, async () => { await js(`(() => { const p = [...document.querySelectorAll('pre')].find(e => e.textContent.includes('mcp add')); (p?.parentElement ?? p)?.style.setProperty('display', 'none'); for (const e of document.querySelectorAll('main h2, main h3, main h4, main p')) if (/Claude/.test(e.textContent)) e.style.visibility = 'hidden'; return true; })()`); });
   ring(B, 0.5, 1.5, 'key', { sel: 'tr', has: 'Help desk' }, '#2563eb');
@@ -446,119 +481,156 @@ S.api = async (B, sc) => {
   camTo(B, 6.5, 0.9, async () => fit(await rect({ sel: 'pre', has: 'mcpServers' }), { pad: 60, minW: 960, ay: 0.4 }));
   ring(B, 6.7, sc.end - sc.start - 6.9, 'mcp', { sel: 'pre', has: 'mcpServers' }, '#2563eb');
 };
-// The bot's API request, held by its own cap, waiting in Approvals next to the inbox's requests.
-S.apiheld = async (B, sc) => {
-  const st = stepOf('api');
-  await prime(st.after, {}, {}, 'approvals');
-  cam = { ...WIDE };
-  const card = { sel: '[data-film="approval"]', has: 'Help-desk bot' };
-  scrollTo(B, 0.1, 0.6, scrollToShow(card));
-  ring(B, 0.8, 2.0, 'card', card, '#b45309');
-  camTo(B, 2.2, 1.1, async () => fit(await rect(card), { pad: 30, minW: 820, ay: 0.5 }));
-  ring(B, 2.9, sc.end - sc.start - 3.1, 'cap', { ...card, text: 'limit per action' }, '#b45309');
+// Scroll the comparison's own viewport; scrolling the document cannot reveal its lower sections.
+function scrollInside(B, at, dur, container, spec) {
+  let from, to;
+  B.span(at, dur, async p => {
+    if (from === undefined) {
+      const r = await rect(spec);
+      if (!r) throw new Error(`Missing scroll target ${JSON.stringify(spec)}`);
+      ({ from, to } = await js(`(() => { const e = document.querySelector(${JSON.stringify(container)}); if (!e) throw new Error('Missing scroll container'); const b = e.getBoundingClientRect(); return { from: e.scrollTop, to: Math.max(0, Math.min(e.scrollHeight - e.clientHeight, e.scrollTop + ${r.y + r.h / 2} - b.top - b.height / 2)) }; })()`));
+    }
+    await js(`document.querySelector(${JSON.stringify(container)}).scrollTop = ${lerp(from, to, ease(p))}; true`);
+  });
+}
+const releaseRecorded = async key => {
+  await until(() => js(`!!__film.waiting[${JSON.stringify(key)}]`), `${key} replay request`);
+  await js(`__film.release(${JSON.stringify(key)}); true`);
 };
-S.rules = async (B, sc) => {
-  const st = stepOf('compile'), sim = stepOf('simulate');
-  await prime(st.before, {}, { compile: st.response }, 'rules');
-  cam = { ...WIDE };
-  click(B, 0.6, { sel: '.preset', has: 'Cautious' }, sc.start);
-  click(B, 1.8, film('compile'), sc.start);
-  B.do(2.9, () => js(`__film.release('compile')`));
-  ring(B, 3.4, lineAt(sc, 'r2') - 3.4, 'changed', '.limit.changed', '#2563eb');
-  B.do(lineAt(sc, 'r2') - 0.9, () => js(`window.__film.responses.simulate = ${JSON.stringify(sim.response)}; true`));
-  click(B, lineAt(sc, 'r2') - 0.3, film('simulate'), sc.start);
-  B.do(lineAt(sc, 'r2') + 0.4, () => js(`__film.release('simulate')`));
-  scrollTo(B, lineAt(sc, 'r2') + 0.8, 1.2, scrollToShow('.simulation-table'));
-};
-S.audit = async (B, sc) => {
-  const st = stepOf('audit');
-  await prime(st.after, {}, { audit: st.response.log, auditVerify: st.response.verify }, 'audit');
-  cam = { ...WIDE };
-  camTo(B, 0.2, 0.01, async () => fit(await rect('main'), { pad: 0, minW: 1100, ay: 0.3 }));
-  ring(B, 0.3, 1.9, 'agent', { sel: 'tr', has: 'On behalf of' }, '#2563eb');
-  click(B, 2.5, { sel: 'button', has: 'Verify integrity' }, sc.start);
-  ring(B, 3.0, sc.end - sc.start - 3.2, 'chain', { sel: 'main', text: 'Chain intact' }, '#059669');
-};
-S.overview = async (B, sc) => {
-  const st = stepOf('simulate');
-  await prime(st.after, {}, {}, 'overview');
-  cam = { ...WIDE };
-  ring(B, 0.6, 2.2, 'moved', film('metric-moved'), '#059669');
-  ring(B, 2.4, 2.0, 'waiting', film('metric-waiting'), '#b45309');
-  ring(B, 4.0, sc.end - sc.start - 4.2, 'stopped', film('metric-stopped'), '#dc2626');
-};
-
-// What Floorwalker learned from the owner's decisions: the taps on the Overview, then Tessa's refund in Approvals,
-// where the tested change is offered next to the decision. The dialog's numbers are the recorded replay.
 S.learn = async (B, sc) => {
   const seen = stepOf('learned'), st = stepOf('learnApply');
-  // The recorded replay is of the limit change, the suggestion that covers Tessa's refund: the page asks about it first here.
+  if (seen.before.agents.find(a => a.id === 'support')?.status !== 'active') throw new Error('Learning recording must start after Support agent was unfrozen');
   const offered = { ...seen.response, changes: [...seen.response.changes].sort((a, b) => Number(b.id === st.change) - Number(a.id === st.change)) };
-  await prime(seen.before, {}, { learned: offered, coverage: st.coverage, approve: st.approve, learnApply: st.response }, 'overview');
+  await prime(seen.before, {}, { learned: offered, coverage: st.coverage, approve: st.approve, learnApply: st.response }, 'agents');
   cam = { ...WIDE };
-  const taps = { sel: 'h2', has: 'How often agents need you' };
-  camTo(B, 0.6, 0.9, async () => fit(await rect(taps), { pad: 30, minW: 960, ay: 0.14 }));
-  const l2 = lineAt(sc, 'l2'), l3 = lineAt(sc, 'l3'), l3b = lineAt(sc, 'l3b'), l4 = lineAt(sc, 'l4');
-  B.do(l2 - 0.4, async () => { cam = { ...WIDE }; await js(`location.hash = 'approvals'; window.scrollTo(0, 0); true`); });
+  ring(B, 0.3, 1.1, 'active', `${film('agent-support')} [aria-label="Freeze Support agent"]`, '#059669');
+  B.do(0.3, () => js(`film.outcome('Support agent active', 'Recorded state · restored before learning'); true`));
+  route(B, 1.8, 'approvals', sc);
+  B.do(1.8, () => js(`film.outcome(''); true`));
   const row = { sel: '.approval-queue button', has: 'Tessa' };
-  click(B, l2 + 0.5, row, sc.start);
-  const limits = { sel: '.approval-evidence > div', has: 'Limits' };
-  camTo(B, l2 + 1.0, 0.9, async () => fit(await rect('.approval-detail'), { pad: 16, minW: 1080, ay: 0.46 }));
-  ring(B, l2 + 1.6, l3 - l2 - 2.2, 'limit', limits, '#b45309');
-  camTo(B, l3 - 0.7, 0.5, { ...WIDE });
-  click(B, l3 + 0.5, '.learn-approve', sc.start);
-  camTo(B, l3 + 1.0, 0.8, async () => fit(await rect('[role="dialog"]'), { pad: 20, minW: 1240, ay: 0.46 }));
-  ring(B, l3b + 0.1, 1.5, 'taps', { sel: '.learning-backtest > div', has: 'Taps per 100' }, '#059669');
-  ring(B, l3b + 1.8, 2.0, 'declined', { sel: '.learning-backtest > div', has: 'Declined requests' }, '#059669');
-  ring(B, l3b + 4.0, Math.max(1.0, l4 - l3b - 4.2), 'bench', { sel: '.learning-backtest > div', has: 'Benchmark attacks' }, '#059669');
-  // The recorded state after both actions goes in with the click, so the page's refresh shows the new rules.
-  click(B, l4 + 0.6, { sel: '[role="dialog"] button', has: 'Confirm approval' }, sc.start);
-  B.do(l4 + 0.7, () => js(`window.__film.responses.learned = ${JSON.stringify(st.learned)}; window.__film.state = ${JSON.stringify({ ...st.after, appUrl: LIVE })}; true`));
-  B.do(l4 + 0.9, () => js(`__film.release('approve')`));
-  B.do(l4 + 1.2, () => js(`__film.release('learnApply')`));
-  hit(B, l4 + 0.8);
-  B.do(l4 + 1.9, async () => { cam = { ...WIDE }; await js(`location.hash = 'rules'; window.scrollTo(0, 0); true`); });
-  camTo(B, l4 + 2.2, 0.7, async () => fit(await rect('textarea'), { pad: 40, minW: 960, ay: 0.45 }));
-  ring(B, l4 + 2.5, sc.end - sc.start - l4 - 2.7, 'new', 'textarea', '#059669');
+  click(B, 2.4, row, sc.start);
+  camTo(B, 2.7, 0.7, async () => fit(await rect('.approval-detail .approval-card'), { pad: 20, minW: 960 }));
+  ring(B, 3.5, 1.2, 'tessa', '.approval-detail .approval-heading', '#b45309');
+  const l2 = lineAt(sc, 'l2'), l3 = lineAt(sc, 'l3'), l3b = lineAt(sc, 'l3b'), l4 = lineAt(sc, 'l4');
+  const openAt = Math.max(4.8, l2 + 0.1);
+  click(B, openAt, { sel: '.learn-approve', has: 'Approve and stop asking about these' }, sc.start);
+  const section = title => ({ sel: '[role="dialog"] h4', has: title, closest: 'section' });
+  const changes = section('What changes'), why = section('Why'), replayed = section('What would have changed'), stays = section('What stays in force');
+  camTo(B, openAt + 0.4, 0.6, async () => fit(await rect(changes), { pad: 40, minW: 900, ay: 0.5 }));
+  ring(B, openAt + 0.55, 0.6, 'change', changes, '#059669');
+  scrollInside(B, openAt + 0.85, 0.3, '[role="dialog"]', why);
+  camTo(B, openAt + 1.2, 0.35, async () => fit(await rect(why), { pad: 30, minW: 900, ay: 0.5 }));
+  scrollInside(B, l3 - 0.6, 0.5, '[role="dialog"]', replayed);
+  camTo(B, l3 - 0.1, 0.6, async () => fit(await rect(replayed), { pad: 30, minW: 900, ay: 0.5 }));
+  ring(B, l3 + 0.6, Math.max(1.0, l3b - l3 - 0.8), 'taps', { sel: '[role="dialog"] .learning-backtest > div', has: 'Taps per 100 money moves' }, '#059669');
+  B.do(l3 + 0.6, () => js(`film.outcome('Demo history replay', 'Replay using recorded facts and AI reviews'); true`));
+  ring(B, l3b + 0.1, 1.3, 'declined', { sel: '[role="dialog"] .learning-backtest > div', has: 'Declined requests that would pass' }, '#059669');
+  scrollInside(B, l3b + 1.0, 0.5, '[role="dialog"]', stays);
+  camTo(B, l3b + 1.5, 0.5, async () => fit(await rect(stays), { pad: 40, minW: 900, ay: 0.5 }));
+  B.do(l3b + 1.0, () => js(`film.outcome(''); true`));
+  const confirm = { sel: '[role="dialog"] button', has: 'Confirm approval and rule change' };
+  scrollInside(B, l4 - 0.7, 0.5, '[role="dialog"]', confirm);
+  camTo(B, l4 - 0.2, 0.5, async () => fit(await rect(confirm), { pad: 55, minW: 960, ay: 0.6 }));
+  click(B, l4 + 0.4, confirm, sc.start);
+  B.do(l4 + 0.5, () => releaseRecorded('approve'));
+  B.do(l4 + 0.8, async () => {
+    await js(`__film.responses.learned = ${JSON.stringify(st.learned)}; true`);
+    await setState(st.after);
+    await releaseRecorded('learnApply');
+  });
+  hit(B, l4 + 0.9);
+  B.do(l4 + 1.2, async () => {
+    await until(() => js(`!document.querySelector('[role="dialog"]') && !!document.querySelector('[aria-label="Decision receipt"]')`), 'Tessa receipt and rule change');
+    cam = { ...WIDE }; await js(`location.hash = 'rules'; window.scrollTo(0, 0); true`);
+  });
+  camTo(B, l4 + 1.5, 0.65, async () => fit(await rect('textarea'), { pad: 40, minW: 960, ay: 0.5 }));
+  ring(B, l4 + 2.2, Math.max(0.1, duration(sc) - l4 - 2.3), 'new', 'textarea', '#059669');
 };
-// A refund straight through the PayPal API: the Watch page, the incident, and the owner saying it was her.
+// Keep recorded coverage and webhook state intact. No invented successful webhook registration or sweep.
 S.watch = async (B, sc) => {
   const st = stepOf('bypass'), rs = stepOf('resolve');
-  // The run was recorded on a local server, which PayPal's webhooks can't reach; the hosted app has them connected.
-  const hosted = (r) => ({ ...r, watch: { ...r.watch, webhook: true, webhook_error: null } });
-  const quiet = hosted({ ...st.incidents, incidents: [], watch: { ...st.incidents.watch, last_event: null } });
-  st.incidents = hosted(st.incidents); rs.incidents = hosted(rs.incidents);
+  if (Number(st.response.refund.amount) !== 25 || !st.after.agents.every(a => a.status === 'frozen')) throw new Error('Watch recording must show the outside $25 refund and paused agents');
+  const quiet = { ...st.incidents, incidents: st.before.incidents ?? [], watch: { ...st.incidents.watch, last_sweep: null, last_event: null } };
   await prime(st.before, {}, { incidents: quiet, bypass: st.response, resolve: rs.response, learned: stepOf('learnApply').learned }, 'watch');
   cam = { ...WIDE };
-  ring(B, 0.6, lineAt(sc, 'w2') - 0.9, 'status', { sel: '[data-slot="card"]', has: 'PayPal webhooks' }, '#2563eb');
-  scrollTo(B, lineAt(sc, 'w2') - 0.4, 0.6, scrollToShow('[data-film="bypass"]'));
-  click(B, lineAt(sc, 'w2') + 1.2, '[data-film="bypass"]', sc.start);
-  B.do(lineAt(sc, 'w3') - 0.4, () => js(`window.__film.responses.incidents = ${JSON.stringify(st.incidents)}; window.__film.state = ${JSON.stringify({ ...st.after, appUrl: LIVE })}; true`));
-  B.do(lineAt(sc, 'w3') - 0.2, () => js(`__film.release('bypass')`));
-  hit(B, lineAt(sc, 'w3'));
-  scrollTo(B, lineAt(sc, 'w3') + 0.3, 0.6, scrollToShow('[data-film="incident"]'));
-  camTo(B, lineAt(sc, 'w3') + 0.9, 0.8, async () => fit(await rect('[data-film="incident"]'), { pad: 20, minW: 1040, ay: 0.46 }));
-  ring(B, lineAt(sc, 'w3') + 1.2, lineAt(sc, 'w3', true) - lineAt(sc, 'w3') - 1.2, 'incident', '[data-film="incident"]', '#dc2626');
-  // The recorded outcome goes in only after the click: the timeline (and its button) leaves with the open incident.
-  click(B, lineAt(sc, 'w3', true) + 0.2, '[data-film="incident-mine"]', sc.start);
-  B.do(lineAt(sc, 'w3', true) + 0.3, () => js(`window.__film.responses.incidents = ${JSON.stringify(rs.incidents)}; window.__film.state = ${JSON.stringify({ ...rs.after, appUrl: LIVE })}; true`));
-  B.do(lineAt(sc, 'w3', true) + 0.5, () => js(`__film.release('resolve')`));
+  const w2 = lineAt(sc, 'w2'), w3 = lineAt(sc, 'w3'), resolveAt = duration(sc) - 3.5;
+  const detectAt = Math.min(w3 - 0.35, resolveAt - 3.2);
+  ring(B, 0.6, Math.max(0.3, w2 - 0.9), 'status', { sel: '.watch-page [data-slot="card"]', has: 'Watch status' });
+  scrollTo(B, w2 - 0.6, 0.5, scrollToShow(film('bypass')));
+  click(B, Math.min(w2 + 0.7, detectAt - 0.8), film('bypass'), sc.start);
+  B.do(detectAt, async () => {
+    await js(`__film.responses.incidents = ${JSON.stringify(st.incidents)}; true`);
+    await setState(st.after);
+    await releaseRecorded('bypass');
+  });
+  hit(B, detectAt + 0.2);
+  const incident = '.watch-incidents [data-film="incident"]';
+  const happened = `${incident} li:nth-child(1)`, paused = `${incident} li:nth-child(3)`;
+  scrollTo(B, detectAt + 0.2, 0.45, scrollToShow(happened));
+  camTo(B, detectAt + 0.65, 0.5, async () => fit(await rect(happened), { pad: 35, minW: 1040, ay: 0.52 }));
+  B.do(detectAt + 0.65, () => js(`film.outcome('$25 already refunded outside Floorwalker', 'Agents paused · the refund has already happened'); true`));
+  scrollTo(B, detectAt + 1.15, 0.4, scrollToShow(paused));
+  camTo(B, detectAt + 1.55, 0.45, async () => fit(await rect(paused), { pad: 30, minW: 1040, ay: 0.55 }));
+  ring(B, detectAt + 1.9, Math.max(0.4, resolveAt - detectAt - 2), 'pause', paused, '#dc2626');
+  click(B, resolveAt, `${incident} [data-film="incident-mine"]`, sc.start);
+  B.do(resolveAt + 0.15, async () => {
+    await js(`__film.responses.incidents = ${JSON.stringify(rs.incidents)}; true`);
+    await setState(rs.after);
+    await releaseRecorded('resolve');
+  });
+  B.do(resolveAt + 0.5, async () => {
+    await until(() => js(`!document.querySelector('.watch-incidents [data-film="incident-mine"]')`), 'resolved incident');
+    if (rs.after.agents.some(a => st.after.agents.find(b => b.id === a.id)?.status === 'frozen' && a.status !== 'active')) throw new Error('Recorded owner resolution did not restore paused agents');
+    cam = { ...WIDE }; await js(`film.outcome('Agents restored after Elena confirmed', 'Pausing agents did not reverse the $25 refund'); location.hash = 'agents'; window.scrollTo(0, 0); true`);
+  });
+  camTo(B, resolveAt + 0.8, 0.5, async () => fit(await rect(film('agent-support')), { pad: 30, minW: 1100, ay: 0.54 }));
 };
-
-// The assistant answers a real question; the words are its real answer, recorded from the live run.
-S.ask = async (B, sc) => {
-  const seen = stepOf('learned'), st = stepOf('assistant');
-  await prime(seen.before, {}, { learned: seen.response, assistant: st.response.answer }, 'overview');
+S.ledger = async (B, sc) => {
+  const st = stepOf('resolve');
+  await prime(st.after, {}, { learned: stepOf('learnApply').learned }, 'overview');
   cam = { ...WIDE };
-  await js(`Object.assign(document.getElementById('film-caption').style, { left: '60px', transform: 'none', width: 'auto', maxWidth: '1180px', textAlign: 'left' }); true`);
-  B.do(0, () => { hud = ''; });
-  // The provider's name in the panel's small print stays out of the frame: the rules ask for no third-party marks.
-  await js(`(() => { const st = document.createElement('style'); st.textContent = '.assistant-disclosure { visibility: hidden; }'; document.head.appendChild(st); return true; })()`);
-  click(B, 1.0, '.assistant-toolbar-trigger', sc.start);
-  // The panel grows as the answer arrives, so the camera is set for its full height, and the caption stays clear of it.
-  camTo(B, 1.4, 1.0, { x: VW - 1384, y: VH - 778, w: 1384 });
-  click(B, 2.6, '.assistant-suggestions button', sc.start);
-  cursorTo(B, 3.5, 0.65, '.assistant-panel textarea');
+  route(B, 0.6, 'ledger', sc);
+  const investigate = Math.max(1.7, lineAt(sc, 'lg2') - 0.3);
+  const chartAt = duration(sc) - 5.5, closeAt = duration(sc) - 2.2, exportAt = duration(sc) - 1.0;
+  if (chartAt - investigate < 5.5) throw new Error('Ledger narration needs room for groups, Jordan trace, chart and export');
+  click(B, investigate, { sel: '.ledger-views button', has: 'Investigate stopped requests' }, sc.start);
+  let gridScroll;
+  B.span(investigate + 0.15, 0.4, async p => {
+    if (gridScroll === undefined) { await js(`(() => { document.querySelectorAll('[data-film-scroller]').forEach(e => e.removeAttribute('data-film-scroller')); const root = document.querySelector('.ledger-surface .ag-root-wrapper'); const inner = root && [...root.querySelectorAll('*')].find(e => /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 2); (inner || document.scrollingElement).setAttribute('data-film-scroller', ''); return true; })()`); gridScroll = await js(`document.querySelector('[data-film-scroller]').scrollTop`); }
+    await js(`document.querySelector('[data-film-scroller]').scrollTop = ${lerp(gridScroll, 0, ease(p))}; true`);
+  });
+  // AG Grid 36.2.0 master/detail + grouping: real group renderer, range-chart and export buttons.
+  // Official reference: https://www.ag-grid.com/react-data-grid/master-detail-other/
+  camTo(B, investigate + 0.4, 0.6, async () => fit(await rect('.ledger-surface .ag-root-wrapper'), { pad: 10, minW: 1220, ay: 0.5 }));
+  ring(B, investigate + 0.8, 1.5, 'totals', '.ledger-surface [row-id^="row-group-"] [col-id="amount"]', '#059669');
+  // Narrow the grouped view with its real search box; this also brings the virtualized Jordan row into view.
+  const search = '.ledger-toolbar input[aria-label="Search ledger"]';
+  click(B, investigate + 2.0, search, sc.start);
+  B.do(investigate + 2.1, () => send('Input.insertText', { text: 'Jordan' }));
+  const jordan = st.after.ledger.find(r => r.ticket_id === 'T5' && r.status === 'blocked');
+  if (!jordan) throw new Error('Ledger recording is missing Jordan’s blocked request');
+  const master = `.ledger-surface .ag-row[row-id="${jordan.id}"]`;
+  const toggle = `${master} [col-id="ag-Grid-AutoColumn"] .ag-group-contracted:not(.ag-hidden)`;
+  click(B, investigate + 2.9, toggle, sc.start);
+  const trace = `section[aria-label="Decision trace for request ${jordan.id}"]`;
+  B.do(investigate + 3.05, () => js(`(() => { document.querySelectorAll('[data-film-scroller]').forEach(e => e.removeAttribute('data-film-scroller')); const root = document.querySelector('.ledger-surface .ag-root-wrapper'); const inner = root && [...root.querySelectorAll('*')].find(e => /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 2); (inner || document.scrollingElement).setAttribute('data-film-scroller', ''); return true; })()`));
+  scrollInside(B, investigate + 3.1, 0.45, '[data-film-scroller]', `${trace} .injection`);
+  scrollTo(B, investigate + 3.55, 0.3, scrollToShow(`${trace} .injection`));
+  camTo(B, investigate + 3.9, 0.5, async () => fit(await rect(`${trace} .injection`), { pad: 40, minW: 1000, ay: 0.54 }));
+  ring(B, investigate + 4.4, Math.max(0.7, chartAt - investigate - 5.2), 'evidence', `${trace} .injection`, '#dc2626');
+  // Return to all stopped requests so the chart and exported record retain the investigation's scope.
+  click(B, chartAt - 0.9, search, sc.start);
+  B.do(chartAt - 0.8, async () => {
+    await js(`document.querySelector(${JSON.stringify(search)}).select(); true`);
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+  });
+  camTo(B, chartAt - 0.6, 0.5, { ...WIDE });
+  click(B, chartAt, { sel: '.ledger-toolbar button', has: 'Chart' }, sc.start);
+  camTo(B, chartAt + 0.4, 0.6, async () => fit(await rect('.ag-dialog:has(.ag-chart)'), { pad: 24, minW: 1180, ay: 0.5 }));
+  click(B, closeAt, '.ag-dialog:has(.ag-chart) .ag-panel-title-bar-button:has(.ag-panel-title-bar-button-icon)', sc.start);
+  camTo(B, closeAt + 0.2, 0.5, async () => fit(await rect('.ledger-toolbar'), { pad: 30, minW: 1200, ay: 0.5 }));
+  click(B, exportAt, { sel: '.ledger-toolbar button', has: 'Excel' }, sc.start);
 };
 
 // ---------------------------------------------------------------- run

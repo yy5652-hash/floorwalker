@@ -51,6 +51,7 @@
     if (method === 'GET') {
       const reads = {
         '/api/keys': () => F.responses.keys ?? [],
+        '/api/inbox/settings': () => F.responses.inbox ?? { confirmations: [], skipped: [] },
         '/api/policy/status': () => F.responses.status ?? {},
         '/api/policy/shadow': () => F.responses.shadow ?? { draft: null, report: null },
         '/api/rules/learned': () => F.responses.learned ?? { changes: [], note: null, weeks: [] },

@@ -18,20 +18,19 @@ import assemble as A  # noqa: E402
 M, SR, FPS = A.M, A.SR, A.FPS
 W, H = 1080, 1920
 BOX_Y, BOX = 300, 1080            # the picture sits in a 1080x1080 window
-NOCAP_SCENES = ["hook", "title", "maya", "jordan", "phone", "learn", "bench", "end"]
+NOCAP_SCENES = ["hook", "maya", "phone", "jordan", "ledger", "bench", "end"]
 
 # (scene, first line, last line, how to frame it). "fit" shows the whole 16:9 frame; a number is the left edge of a
 # 1080-wide crop of the 1920-wide frame, where that scene's action is.
 CUT = [
     ("hook", "h3", "h3", "fit"),
-    ("title", "t2", "t2", "fit"),
+    ("hook", "h1", "h1", "fit"),
     ("maya", "m1", "m1", 840),
     ("maya", "m3", "m3", "fit"),
+    ("phone", "p2", "p2", 735),
     ("jordan", "j1", "j1", 420),
     ("jordan", "j2", "j2", "fit"),
-    ("phone", "p2", "p2", 735),
-    ("learn", "l1", "l1", 420),
-    ("learn", "l4", "l4", "fit"),
+    ("ledger", "lg2", "lg2", "fit"),
     ("bench", "b1", "b1", "fit"),
     ("bench", "b3", "b3", "fit"),
     ("end", "e1", "e1", "fit"),
@@ -97,6 +96,7 @@ def main():
     for old in work.glob("*.jpg"):
         old.unlink()
     title_f, cap_f, small_f = font(40, 500), font(60, 650), font(30, 500)
+    small_cap_f = font(50, 650)
     voice = []
     k = 0
     for scene, t0, t1, frame, lines in pieces:
@@ -118,9 +118,13 @@ def main():
                 d.line([(300 + j * 120, 220), (300 + (j + 1) * 120, 220)], fill=c, width=3)
             line = next((x for x in lines if x[1] - 0.12 <= t <= x[2] + 0.4), None)
             if line:
-                rows = wrap(d, line[0], cap_f, 960)
+                f, step = cap_f, 76
+                rows = wrap(d, line[0], f, 960)
+                if len(rows) > 4:  # long lines step down so the caption stays clear of the footer
+                    f, step = small_cap_f, 62
+                    rows = wrap(d, line[0], f, 980)
                 for r, row in enumerate(rows):
-                    d.text((W // 2, BOX_Y + BOX + 110 + r * 76), row, font=cap_f, fill=(11, 18, 32), anchor="mm")
+                    d.text((W // 2, BOX_Y + BOX + 100 + r * step), row, font=f, fill=(11, 18, 32), anchor="mm")
             d.text((W // 2, H - 120), "Recorded live run · PayPal sandbox", font=small_f, fill=(100, 112, 130), anchor="mm")
             page.save(work / f"{k:05d}.jpg", quality=90)
             k += 1

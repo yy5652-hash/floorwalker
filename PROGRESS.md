@@ -17,7 +17,7 @@
 ## Next
 1. Film v2 is done and public (2026-11-10): https://youtu.be/DY76mtW6ju0 (Public, not made for kids, English subtitles from the v2 srt, title and description from `devpost/youtube.md`). Files: `~/Desktop/PayPal-影片/Floorwalker_20261110_1856_v2_横屏.mp4` (153 s) and `_竖屏.mp4` (58 s). Links in the YouTube description are not clickable until the channel completes YouTube's one-time verification (owner's phone).
 2. Devpost draft (2026-11-10): video field set; project story replaced with the current `devpost/STORY.md` (links made absolute, 209 tests, live e2e 39 of 41); demo URL and testing instructions moved to floorwalker.yingzhilu.cn. Repo is public (MIT).
-3. Owner: fill the personal and attestation fields on Devpost (answers to paste in `devpost/ADDITIONAL_INFO.md`), then press Submit before 2026-11-12 12:00 PT (20:00 London).
+3. **Submitted on Devpost 2026-11-10** (owner's word 「你来做完」; attestations confirmed by the owner: US residence, 18+, no sponsor/judge ties; PayPal rating 8, open to contact). Project page: https://devpost.com/software/allowance-spend-controls-between-ai-agents-and-paypal. Still editable until 2026-11-12 12:00 PT; keep the site and video up through judging (Dec 15).
 
 ## Known issues
 - Not verified with real devices: passkeys, web push. Not verified without a real webhook: Slack success path.

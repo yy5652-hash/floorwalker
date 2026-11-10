@@ -2,7 +2,7 @@
 
 Fields marked OWNER are personal or attestations: the owner fills them.
 
-**Submitter type / country / Canada province / organization:** OWNER (province "N/A", organization "N/A" unless representing one).
+**Submitter type / country / Canada province / organization:** Individual / United States / N/A / N/A (filled 2026-11-10).
 
 **Is your project new, or did it exist before Oct 1, 2026?**
 New (first commit 2026-10-23, then called Allowance; renamed Floorwalker on 2026-10-29).

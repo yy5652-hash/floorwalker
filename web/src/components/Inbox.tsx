@@ -3,12 +3,11 @@ import { Modal, Field, useResource } from './Management';
 import { type InboxData } from '../pages/InboxSettings';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { MessageBody } from "./MessageEvidence";
+import { MessageBody, TicketResult, type ReplyTicket } from "./MessageEvidence";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Bot,
   CircleAlert,
   FileText,
   Loader2,
@@ -173,18 +172,7 @@ function Trace({
             );
           }
           case "reply":
-            return (
-              <div
-                className="reply rounded-xl border bg-muted/50 p-4 text-sm leading-relaxed whitespace-pre-wrap"
-                key={index}
-              >
-                <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                  <Bot size={16} />
-                  Agent's reply
-                </div>
-                {event.text}
-              </div>
-            );
+            return null;
           case "error":
             return (
               <div
@@ -216,7 +204,7 @@ export function Inbox({
   const inbox = useResource<InboxData>('/api/inbox/settings');
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [sending, setSending] = useState(false);
+  const result = useRef<HTMLElement>(null);
   const controls = <div className="space-y-4 mb-4">
     <div className="flex flex-wrap gap-3"><Button onClick={() => setAddOpen(true)}>Add a message</Button><Button asChild variant="outline"><a href="/app#settings/inbox">Email settings</a></Button></div>
     {inbox.data?.confirmations.map(c => <Card className="p-4" key={c.id}><h2>Confirm your forwarding</h2><p className="text-sm whitespace-pre-wrap">{c.body}</p>{c.confirmation_code && <p>Code: <code>{c.confirmation_code}</code></p>}{c.confirmation_link && <a className="underline" href={c.confirmation_link} target="_blank" rel="noreferrer">Confirm forwarding</a>}</Card>)}
@@ -239,8 +227,10 @@ export function Inbox({
       void run("/api/attack", "ATTACK");
     }
   }, [attackRequest]);
-  const ticket =
-    state.tickets.find((t) => t.id === selected && (t as Ticket & { inbound_kind?: string }).inbound_kind !== "confirmation") ?? state.tickets.find(t => (t as Ticket & { inbound_kind?: string }).inbound_kind !== "confirmation");
+  const ticket = (
+    state.tickets.find((t) => t.id === selected && (t as Ticket & { inbound_kind?: string }).inbound_kind !== "confirmation") ?? state.tickets.find(t => (t as Ticket & { inbound_kind?: string }).inbound_kind !== "confirmation")
+  ) as ReplyTicket | undefined;
+  const completed = ticket?.status === "handled";
   const reviews: Review[] = ticket ? [
     ...state.ledger.filter(e => e.ticket_id === ticket.id).flatMap(e => e.review ? [e.review] : []),
     ...(events[ticket.id] ?? []).flatMap(e => e.type === "guard" && e.review ? [e.review] : []),
@@ -294,15 +284,6 @@ export function Inbox({
           .map((e) => (
             <DecisionCard key={e.id} entry={e} />
           ))}
-        {t.reply && (
-          <div className="reply rounded-xl border bg-muted/50 p-4 text-sm leading-relaxed whitespace-pre-wrap">
-            <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-              <Bot size={16} />
-              Agent's reply
-            </div>
-            {t.reply}
-          </div>
-        )}
       </div>
     );
   }
@@ -366,7 +347,9 @@ export function Inbox({
                     : "Back-office agent"}
                 </span>
                 <span className="flex">
-                  {last ? (
+                  {(t as ReplyTicket).needs_follow_up ? (
+                    <Badge variant="secondary">Needs your follow-up</Badge>
+                  ) : last ? (
                     <StatusPill status={last.status} />
                   ) : (
                     <Badge
@@ -456,14 +439,17 @@ export function Inbox({
                 <div className="flex flex-wrap items-center gap-3 border-y py-4 [&>button]:h-auto [&>button]:min-h-10 [&>button]:whitespace-normal">
                   <Button
                     data-film="run"
-                    disabled={!!running || !ready || agent?.status === "frozen"}
-                    title={disabled ? "Only owners and admins can run agents." : !ready ? "Connect PayPal and an AI provider first." : agent?.status === "frozen" ? "This agent is frozen." : undefined}
-                    onClick={() =>
-                      void run(
+                    disabled={!completed && (!!running || !ready || agent?.status === "frozen")}
+                    title={completed ? undefined : disabled ? "Only owners and admins can run agents." : !ready ? "Connect PayPal and an AI provider first." : agent?.status === "frozen" ? "This agent is frozen." : undefined}
+                    onClick={() => {
+                      if (completed) {
+                        result.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        result.current?.focus({ preventScroll: true });
+                      } else void run(
                         `/api/tickets/${encodeURIComponent(ticket.id)}/run`,
                         ticket.id,
-                      )
-                    }
+                      );
+                    }}
                     variant="default"
                     type="button"
                   >
@@ -472,10 +458,13 @@ export function Inbox({
                     ) : (
                       <Sparkles size={16} />
                     )}
-                    {running === ticket.id
+                    {completed ? "View result" : running === ticket.id
                       ? `${name} is working…`
                       : `Let the ${name} handle it`}
                   </Button>
+                  {completed && <Button variant="outline" disabled={!!running || !ready || agent?.status === "frozen"} onClick={() => {
+                    if (window.confirm("Run this agent again? It may request another refund or payout.")) void run(`/api/tickets/${encodeURIComponent(ticket.id)}/run`, ticket.id);
+                  }}>Run again</Button>}
                   {agent?.status === "frozen" && (
                     <a
                       className="inline-flex items-center gap-1.5 text-xs font-medium underline-offset-4 hover:underline"
@@ -496,13 +485,8 @@ export function Inbox({
 
               </CardContent>
               </section>
-              <section className="inbox-agent-result" aria-label="What the agent did">
+              <section ref={result} tabIndex={-1} className="inbox-agent-result" aria-label="What the agent did">
                 <h2>What the agent did</h2>
-                {ticket.channel === 'email' && ticket.reply && <div className="flex flex-wrap gap-3 my-3">
-                  <Button disabled={sending} onClick={() => { const sent = (ticket as Ticket & { reply_sent_at?: string }).reply_sent_at; if (sent && !window.confirm('This reply was already sent. Send it again?')) return; setSending(true); void api(`/api/inbox/${ticket.id}/reply`, 'POST', { confirm: !!sent }).then(async () => { await refresh(); notify('Reply sent'); }).catch(e => notify(errorMessage(e))).finally(() => setSending(false)); }}>Send reply</Button>
-                  <Button variant="outline" onClick={() => void navigator.clipboard.writeText(ticket.reply!).then(() => notify('Copied')).catch(e => notify(errorMessage(e)))}>Copy</Button>
-                  {(ticket as Ticket & { reply_sent_at?: string }).reply_sent_at && <p>Reply sent · {new Date((ticket as Ticket & { reply_sent_at: string }).reply_sent_at).toLocaleString("en-US")}</p>}
-                </div>}
                 {events[ticket.id]?.length ? (
                   <Trace
                     state={state}
@@ -512,7 +496,8 @@ export function Inbox({
                 ) : (
                   past(ticket)
                 )}
-                {!events[ticket.id]?.length && !ticket.reply && !state.ledger.some(e => e.ticket_id === ticket.id) && <p className="text-sm text-muted-foreground">No action yet. Let the agent handle this request to see its checks and reply here.</p>}
+                <TicketResult key={ticket.id} ticket={ticket} ledger={state.ledger} owner={state.me?.role === "owner" || state.me?.role === "admin"} disabled={disabled || !!running} refresh={refresh} notify={notify} />
+                {!events[ticket.id]?.length && !completed && !ticket.reply && !state.ledger.some(e => e.ticket_id === ticket.id) && <p className="text-sm text-muted-foreground">No action yet. Let the agent handle this request to see its checks and reply here.</p>}
               </section>
             </>
           )

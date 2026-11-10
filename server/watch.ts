@@ -91,18 +91,22 @@ export function resolveIncident(id: number, by: string, resolution: "mine" | "no
 }
 
 /** Reads every order Floorwalker knows about from PayPal and checks each refund on it against the ledger. */
-export async function sweepOrders(): Promise<{ orders: number; refunds: number; incidents: Incident[] }> {
+export async function sweepOrders(): Promise<{ attempted: number; checked: number; failed: number; orders: number; refunds: number; at: string; incidents: Incident[] }> {
   const since = Date.now() - 180 * 86_400_000;
   const orders = store.allOrders().filter((o) => Date.parse(o.created_at) >= since);
   const found: Incident[] = [];
+  let checked = 0;
+  let failed = 0;
   let refunds = 0;
   for (const o of orders) {
     let order: any;
     try {
       order = await getOrder(o.order_id);
     } catch {
+      failed++;
       continue;
     }
+    checked++;
     for (const r of order.purchase_units?.flatMap((u: any) => u.payments?.refunds ?? []) ?? []) {
       refunds++;
       if (r.status === "CANCELLED" || r.status === "FAILED" || accountedFor(r.id, o.capture_id)) continue;
@@ -114,8 +118,9 @@ export async function sweepOrders(): Promise<{ orders: number; refunds: number; 
       if (inc) found.push(inc);
     }
   }
-  store.setSetting("watch.last_sweep", { at: new Date().toISOString(), orders: orders.length, refunds });
-  return { orders: orders.length, refunds, incidents: found };
+  const sweep = { attempted: orders.length, checked, failed, orders: checked, refunds, at: new Date().toISOString() };
+  store.setSetting("watch.last_sweep", sweep);
+  return { ...sweep, incidents: found };
 }
 
 /** Handles one verified PayPal webhook event inside its workspace. */

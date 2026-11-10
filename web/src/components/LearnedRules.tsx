@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Minus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,12 +15,15 @@ import {
   amountOf,
   canManage,
   errorMessage,
+  entryCurrency,
   money,
   personName,
   post,
   STATUS_LABEL,
   type PageProps,
   type State,
+  type LearnedRules,
+  type LedgerEntry,
 } from "../api";
 import { emptyLearnedRules, useLearnedRules } from "../hooks/use-learned-rules";
 
@@ -29,7 +31,7 @@ function Requests({ ids, state }: { ids: number[]; state: State }) {
   const rows = new Map(state.ledger.map((row) => [row.id, row]));
   return (
     <details className="text-xs text-muted-foreground">
-      <summary className="cursor-pointer">
+      <summary className="min-h-11 cursor-pointer py-3">
         Show the {ids.length} requests
       </summary>
       <Table className="mt-3 text-xs">
@@ -51,9 +53,9 @@ function Requests({ ids, state }: { ids: number[]; state: State }) {
                     {new Date(row.created_at).toLocaleDateString("en-US")}
                   </time>
                 </TableCell>
-                <TableCell>{personName(row.counterparty)}</TableCell>
+                <TableCell><a className="inline-flex min-h-11 items-center underline" href={`/app#ledger/${id}`}>#{id} · {personName(row.counterparty)}</a></TableCell>
                 <TableCell className="tabular-nums">
-                  {money(amountOf(row))}
+                  {money(amountOf(row), entryCurrency(row))}
                 </TableCell>
                 <TableCell>
                   {STATUS_LABEL[row.status]}
@@ -82,6 +84,73 @@ function Requests({ ids, state }: { ids: number[]; state: State }) {
 }
 
 type Action = { kind: "apply" | "dismiss"; id: string } | { kind: "note" };
+
+type LearnedChange = LearnedRules["changes"][number];
+export function LearningComparison({ change, state, compact = false, entry }: {
+  change: LearnedChange; state: State; compact?: boolean; entry?: LedgerEntry;
+}) {
+  const active = state.policy.policy;
+  const draft = change.draft;
+  const currency = draft.currency ?? active.currency ?? "USD";
+  const changes: { label: string; before: string; after: string }[] = [];
+  for (const kind of ["refunds", "payouts"] as const) {
+    const label = kind === "refunds" ? "Refund" : "Payout";
+    if (active[kind].auto_approve_up_to !== draft[kind].auto_approve_up_to) changes.push({ label: `${label} automatic limit`, before: money(active[kind].auto_approve_up_to, currency), after: money(draft[kind].auto_approve_up_to, currency) });
+    if (active[kind].budget.amount !== draft[kind].budget.amount || active[kind].budget.period !== draft[kind].budget.period) changes.push({ label: `${label} budget`, before: `${money(active[kind].budget.amount, currency)} / ${active[kind].budget.period}`, after: `${money(draft[kind].budget.amount, currency)} / ${draft[kind].budget.period}` });
+  }
+  for (const payee of draft.payouts.payees) {
+    const before = active.payouts.payees.find(p => p.email === payee.email);
+    if (before && before.monthly_limit !== payee.monthly_limit) changes.push({ label: `${payee.name} monthly limit`, before: money(before.monthly_limit, currency), after: money(payee.monthly_limit, currency) });
+  }
+  // The API provides boundary wording, not an id. Link only matching recorded declines.
+  const boundaryAmount = change.boundary?.match(/\$([\d,.]+)/)?.[1];
+  const boundaryRows = boundaryAmount ? state.ledger.filter(row => row.status === "declined" && row.amount === Number(boundaryAmount.replaceAll(",", "")) && ((row.kind === "refund" && active.refunds.auto_approve_up_to !== draft.refunds.auto_approve_up_to) || (row.kind === "payout" && active.payouts.auto_approve_up_to !== draft.payouts.auto_approve_up_to))) : [];
+  const remainingHolds = entry?.checks.filter(c => {
+    if (c.outcome === "pass" || ["auto_limit", "ai_review"].includes(c.id)) return false;
+    if (c.id === "budget" && (entry.kind === "refund" || entry.kind === "payout")) {
+      const kind = entry.kind === "refund" ? "refunds" : "payouts";
+      return active[kind].budget.amount === draft[kind].budget.amount && active[kind].budget.period === draft[kind].budget.period;
+    }
+    if (c.id === "payee_limit") return active.payouts.payees.find(p => p.email === entry.counterparty)?.monthly_limit === draft.payouts.payees.find(p => p.email === entry.counterparty)?.monthly_limit;
+    return true;
+  }) ?? [];
+  return <div className={`space-y-4 ${compact ? "text-sm" : ""}`}>
+    <section className="space-y-1">
+      <h4 className="font-semibold">What changes</h4>
+      {changes.length ? changes.map(row => <p key={row.label}>{row.label}: <strong>{row.before} → {row.after}</strong></p>) : <p>{change.title}</p>}
+    </section>
+    <section className="space-y-2">
+      <h4 className="font-semibold">Why</h4>
+      <p>{change.evidence}</p>
+      <div className="flex flex-wrap gap-x-3">
+        {change.rows.slice(0, compact ? 3 : 5).map(id => <a key={id} className="inline-flex min-h-11 items-center underline" href={`/app#ledger/${id}`}>Supporting approval #{id}{state.ledger.find(row => row.id === id)?.source === "history" ? " · Demo history" : ""}</a>)}
+      </div>
+      {change.boundary && <p>{change.boundary} {boundaryRows.map(row => <a key={row.id} className="inline-flex min-h-11 items-center underline mr-3" href={`/app#ledger/${row.id}`}>Declined boundary #{row.id}{row.source === "history" ? " · Demo history" : ""}</a>)}{!boundaryRows.length && <span className="text-muted-foreground">The boundary request is not in the current ledger.</span>}</p>}
+      <Requests ids={change.rows} state={state} />
+    </section>
+    <section className="space-y-2">
+      <h4 className="font-semibold">What would have changed</h4>
+      <p className="text-xs text-muted-foreground">Replay using recorded facts and AI reviews</p>
+      <dl className="learning-backtest">
+        <div><dt>Taps per 100 money moves</dt><dd>{change.impact.tapsPer100.before} → {change.impact.tapsPer100.after}</dd></div>
+        <div><dt>Approvals avoided in replay</dt><dd>{change.impact.tapsSaved}</dd></div>
+        {!compact && <div><dt>More automatic in replay</dt><dd>{money(change.impact.moreAutoUsd, currency)}</dd></div>}
+        <div><dt>Declined requests that would pass</dt><dd>{change.impact.declinedLetThrough}</dd></div>
+      </dl>
+      {change.impact.bench && <p className="text-xs">Recorded benchmark replay: {change.impact.bench.stopped} / {change.impact.bench.attacks} attacks stopped.{change.impact.bench.rulesBefore !== undefined && change.impact.bench.rulesAfter !== undefined && ` Rules alone: ${change.impact.bench.rulesBefore} → ${change.impact.bench.rulesAfter}.`}</p>}
+      <p className="text-xs text-muted-foreground">This replay does not rerun the {change.impact.bench?.attacks ?? 80} attacks live. It reuses recorded AI reviews; future outcomes can differ.</p>
+    </section>
+    <section className="space-y-1">
+      <h4 className="font-semibold">What stays in force</h4>
+      <p>Budgets still apply: refunds {money(draft.refunds.budget.amount, currency)} / {draft.refunds.budget.period}; payouts {money(draft.payouts.budget.amount, currency)} / {draft.payouts.budget.period}. Other limits, buyer and payee checks, and AI review still apply.</p>
+      {remainingHolds.length > 0 && <p className="text-hold">Other recorded holds stay in force: {remainingHolds.map(c => c.label).join(", ")}. This change does not clear them.</p>}
+    </section>
+    <section className="space-y-1">
+      <h4 className="font-semibold">Who applies it</h4>
+      <p>You apply this as a new policy version. You can roll back in Versions.</p>
+    </section>
+  </div>;
+}
 
 export function LearnedRulesPanel({ state, notify }: PageProps) {
   const query = useLearnedRules(state);
@@ -179,30 +248,10 @@ export function LearnedRulesPanel({ state, notify }: PageProps) {
         <>
           {changes.map((change) => (
             <Card key={change.id} data-film={`learned-${change.id.split("=")[0]}`} className="learned-card c1-learned-item">
-              <div className="space-y-2">
-                <h3 className="font-semibold">{change.title}</h3>
-                <p className="text-sm">{change.evidence}</p>
-                {change.boundary && (
-                  <p className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <Minus size={14} className="shrink-0" aria-hidden="true" />
-                    {change.boundary}
-                  </p>
-                )}
-              </div>
-              <div className="learned-story">
-                <p>Taps per 100 money moves</p>
-                <div className="learned-number">{change.impact.tapsPer100.before} <span>→</span> {change.impact.tapsPer100.after}</div>
-                <p>Saves {change.impact.tapsSaved} taps</p>
-                <p className="mt-3">{money(change.impact.moreAutoUsd)} more done without you</p>
-              </div>
-              <div className="learned-evidence">
-                <p className={change.impact.declinedLetThrough > 0 ? "text-block" : undefined}>{change.impact.declinedLetThrough} requests you declined would go through</p>
-                {change.impact.bench && <p>Benchmark attacks still stopped: {change.impact.bench.stopped}/{change.impact.bench.attacks}</p>}
-                {change.impact.bench?.rulesBefore !== undefined && change.impact.bench.rulesAfter !== undefined && <p title="Benchmark attacks caught without AI review">Caught by rules alone: {change.impact.bench.rulesBefore} → {change.impact.bench.rulesAfter}</p>}
-              </div>
+              <h3 className="font-semibold">{change.title}</h3>
+              <LearningComparison change={change} state={state} />
               {!change.impact.bench && <p className="text-xs text-muted-foreground">No benchmark result available for this suggestion.</p>}
-              <Requests ids={change.rows} state={state} />
-              {actions({ kind: "apply", id: change.id }, change.id, "Apply")}
+              {actions({ kind: "apply", id: change.id }, change.id, "Apply as new version")}
             </Card>
           ))}
           {note && (

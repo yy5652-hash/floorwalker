@@ -1,293 +1,247 @@
 {
- "note": "Floorwalker demo film. `text` is the caption (and the .srt line), `spoken` is what the voice says. `at` = earliest start in seconds from the scene start.",
- "voice": "kokoro:af_heart",
- "rate": 172,
- "scenes": [
-  {
-   "id": "hook",
-   "kind": "art",
-   "page": "art/hook.html",
-   "lead": 0.15,
-   "tail": 1.0,
-   "lines": [
+  "note": "Floorwalker demo film. `text` is the caption (and the .srt line), `spoken` is what the voice says. `at` = earliest start in seconds from the scene start.",
+  "voice": "kokoro:af_heart",
+  "rate": 172,
+  "scenes": [
     {
-     "id": "h3",
-     "gap": 0.0,
-     "text": "One hidden sentence in an email can send $150 to a stranger.",
-     "spoken": "One hidden sentence in an email can send a hundred and fifty dollars to a stranger."
+      "id": "hook",
+      "kind": "art",
+      "page": "art/hook.html",
+      "lead": 0.15,
+      "tail": 1.0,
+      "lines": [
+        {
+          "id": "h3",
+          "text": "One hidden sentence in an email can send $150 to a stranger.",
+          "gap": 0.0,
+          "spoken": "One hidden sentence in an email can send a hundred and fifty dollars to a stranger."
+        },
+        {
+          "id": "h1",
+          "text": "Floorwalker checks every refund and payout an AI agent makes through PayPal.",
+          "gap": 0.35
+        }
+      ]
     },
     {
-     "id": "h1",
-     "gap": 0.5,
-     "text": "AI agents can now refund customers and pay people through PayPal."
+      "id": "maya",
+      "kind": "app",
+      "lead": 0.6,
+      "tail": 1.0,
+      "lines": [
+        {
+          "id": "m1",
+          "text": "Maya's mug arrived chipped. The support agent refunds $24.",
+          "gap": 0.0,
+          "spoken": "Maya's mug arrived chipped. The support agent refunds twenty-four dollars."
+        },
+        {
+          "id": "m2",
+          "text": "Floorwalker checks PayPal's own records and the owner's rules,",
+          "gap": 0.3
+        },
+        {
+          "id": "m3",
+          "text": "an AI review agrees, and the refund goes through in the PayPal sandbox.",
+          "gap": 0.3
+        }
+      ]
     },
     {
-     "id": "h2",
-     "gap": 0.35,
-     "text": "Make the agent ask about everything, and the owner starts approving without reading."
-    }
-   ]
-  },
-  {
-   "id": "title",
-   "kind": "art",
-   "page": "art/title.html",
-   "lead": 0.6,
-   "tail": 0.8,
-   "lines": [
-    {
-     "id": "t1",
-     "text": "Floorwalker is the manager on the shop floor for those agents.",
-     "gap": 0.0
+      "id": "daniel",
+      "kind": "app",
+      "lead": 0.5,
+      "tail": 0.6,
+      "lines": [
+        {
+          "id": "d1",
+          "text": "Daniel's bowl came in the wrong colour: $86, above the agent's limit.",
+          "gap": 0.0,
+          "spoken": "Daniel's bowl came in the wrong colour: eighty-six dollars, above the agent's limit."
+        }
+      ]
     },
     {
-     "id": "t2",
-     "text": "It checks every refund and payout, and learns when it no longer needs to ask.",
-     "gap": 0.35
-    }
-   ]
-  },
-  {
-   "id": "mug",
-   "kind": "art",
-   "page": "art/mug.html",
-   "lead": 0.5,
-   "tail": 0.5,
-   "lines": [
-    {
-     "id": "g1",
-     "text": "Maya's mug arrived chipped.",
-     "gap": 0.0
-    }
-   ]
-  },
-  {
-   "id": "maya",
-   "kind": "app",
-   "lead": 0.6,
-   "tail": 1.0,
-   "lines": [
-    {
-     "id": "m1",
-     "text": "The Support agent refunds the one mug: $24.",
-     "gap": 0.0,
-     "spoken": "The Support agent refunds the one mug: twenty-four dollars."
+      "id": "phone",
+      "kind": "phone",
+      "page": "art/phone.html",
+      "lead": 0.6,
+      "tail": 1.2,
+      "lines": [
+        {
+          "id": "p1",
+          "text": "So it waits for Elena. Her phone shows the request, the facts and the reason.",
+          "gap": 0.0
+        },
+        {
+          "id": "p2",
+          "text": "One tap runs exactly that refund, once.",
+          "gap": 0.35
+        }
+      ]
     },
     {
-     "id": "m2",
-     "text": "Floorwalker checks PayPal's own records and the owner's rules.",
-     "gap": 0.3
+      "id": "jordan",
+      "kind": "app",
+      "lead": 0.6,
+      "tail": 2.0,
+      "lines": [
+        {
+          "id": "j1",
+          "text": "This email hides instructions for the agent.",
+          "gap": 0.0
+        },
+        {
+          "id": "j2",
+          "text": "The AI review quotes them, and nothing reaches PayPal.",
+          "gap": 1.6
+        }
+      ]
     },
     {
-     "id": "m3",
-     "text": "An AI review agrees and cites the rule, and the refund goes through in the PayPal sandbox.",
-     "gap": 0.3
-    }
-   ]
-  },
-  {
-   "id": "daniel",
-   "kind": "app",
-   "lead": 0.5,
-   "tail": 0.6,
-   "lines": [
-    {
-     "id": "d1",
-     "text": "Daniel's bowl came in the wrong colour: $86, above the agent's limit.",
-     "gap": 0.0,
-     "spoken": "Daniel's bowl came in the wrong colour: eighty-six dollars, above the agent's limit."
-    }
-   ]
-  },
-  {
-   "id": "phone",
-   "kind": "phone",
-   "page": "art/phone.html",
-   "lead": 0.6,
-   "tail": 1.2,
-   "lines": [
-    {
-     "id": "p1",
-     "text": "So it waits. Elena's phone shows the request and the AI's reasoning, with every check one tap away.",
-     "gap": 0.0
+      "id": "hijack",
+      "kind": "app",
+      "lead": 0.6,
+      "tail": 1.6,
+      "lines": [
+        {
+          "id": "x1",
+          "text": "A hijacked agent tries six money moves. Every one is stopped.",
+          "gap": 0.0
+        }
+      ]
     },
     {
-     "id": "p2",
-     "text": "One tap runs exactly that refund, once.",
-     "gap": 0.35
-    }
-   ]
-  },
-  {
-   "id": "jordan",
-   "kind": "app",
-   "lead": 0.6,
-   "tail": 2.0,
-   "lines": [
-    {
-     "id": "j1",
-     "text": "This email hides instructions for the agent.",
-     "gap": 0.0
+      "id": "learn",
+      "kind": "app",
+      "lead": 0.6,
+      "tail": 1.2,
+      "lines": [
+        {
+          "id": "l1",
+          "text": "Elena approves every refund between $40 and $60, and declined one at $72.",
+          "gap": 0.0,
+          "spoken": "Elena approves every refund between forty and sixty dollars, and declined one at seventy-two."
+        },
+        {
+          "id": "l2",
+          "text": "So Floorwalker offers to stop asking.",
+          "gap": 0.35
+        },
+        {
+          "id": "l3",
+          "text": "Demo history replay: her taps drop from 55 to 41 per 100.",
+          "gap": 0.3,
+          "spoken": "Demo history replay: her taps drop from fifty-five to forty-one per hundred."
+        },
+        {
+          "id": "l3b",
+          "text": "Nothing she declined would pass, and the budget and checks stay in force.",
+          "gap": 0.1
+        },
+        {
+          "id": "l4",
+          "text": "One click approves Tessa and updates the rule.",
+          "gap": 0.3
+        }
+      ]
     },
     {
-     "id": "j2",
-     "text": "The AI review flags the injection and quotes it. Nothing reaches PayPal.",
-     "gap": 1.6
-    }
-   ]
-  },
-  {
-   "id": "hijack",
-   "kind": "app",
-   "lead": 0.6,
-   "tail": 1.6,
-   "lines": [
-    {
-     "id": "x1",
-     "text": "A hijacked agent tries six money moves. Every one is stopped.",
-     "gap": 0.0
-    }
-   ]
-  },
-  {
-   "id": "freeze",
-   "kind": "app",
-   "lead": 1.4,
-   "tail": 1.8,
-   "lines": [
-    {
-     "id": "f1",
-     "text": "And one click freezes it.",
-     "gap": 0.0
-    }
-   ]
-  },
-  {
-   "id": "learn",
-   "kind": "app",
-   "lead": 0.6,
-   "tail": 1.2,
-   "lines": [
-    {
-     "id": "l1",
-     "gap": 0.0,
-     "text": "Safe, but Elena still had to tap on 55 of every 100 money moves.",
-     "spoken": "Safe, but Elena still had to tap on fifty-five of every hundred money moves."
+      "id": "watch",
+      "kind": "app",
+      "lead": 0.6,
+      "tail": 1.2,
+      "lines": [
+        {
+          "id": "w1",
+          "text": "Floorwalker can only stop money that goes through it, so it also watches PayPal.",
+          "gap": 0.0
+        },
+        {
+          "id": "w2",
+          "text": "A $25 refund made straight through the PayPal API",
+          "gap": 0.3,
+          "spoken": "A twenty-five dollar refund made straight through the PayPal API"
+        },
+        {
+          "id": "w3",
+          "text": "is caught within seconds, and the agents are paused until Elena says whether it was her.",
+          "gap": 0.3
+        }
+      ]
     },
     {
-     "id": "l2",
-     "gap": 0.35,
-     "text": "Tessa's teapot: $52, above the limit. Elena has approved every refund between $40 and $60, and declined one at $72.",
-     "spoken": "Tessa's teapot: fifty-two dollars, above the limit. Elena has approved every refund between forty and sixty dollars, and declined one at seventy-two."
+      "id": "ledger",
+      "kind": "app",
+      "lead": 0.6,
+      "tail": 8.1,
+      "lines": [
+        {
+          "id": "lg1",
+          "text": "Every decision lands in the ledger.",
+          "gap": 0.0
+        },
+        {
+          "id": "lg2",
+          "text": "Elena groups what was stopped by agent, opens the evidence behind any decision, charts it and exports the record.",
+          "gap": 0.3
+        }
+      ]
     },
     {
-     "id": "l3",
-     "gap": 0.3,
-     "text": "So Floorwalker offers to stop asking, tested on her history first:"
+      "id": "api",
+      "kind": "app",
+      "lead": 0.6,
+      "tail": 1.0,
+      "lines": [
+        {
+          "id": "a1",
+          "text": "Bring your own agent: give it a key and its own limits, and it calls Floorwalker over REST or MCP instead of PayPal.",
+          "gap": 0.0
+        }
+      ]
     },
     {
-     "id": "l3b",
-     "gap": 0.1,
-     "text": "55 taps drop to 41, nothing she declined would pass, and every benchmark attack is still stopped.",
-     "spoken": "fifty-five taps drop to forty-one, nothing she declined would pass, and every benchmark attack is still stopped."
+      "id": "bench",
+      "kind": "art",
+      "page": "art/bench.html",
+      "lead": 0.6,
+      "tail": 3.4,
+      "lines": [
+        {
+          "id": "b1",
+          "text": "On 198 labelled cases with 80 attacks, an agent with no guard let $3,796 of attacks through.",
+          "gap": 0.0,
+          "spoken": "On a hundred and ninety-eight labelled cases with eighty attacks, an agent with no guard let three thousand, seven hundred and ninety-six dollars of attacks through."
+        },
+        {
+          "id": "b2",
+          "text": "Giving the model the rules let $52 through and asked the owner 49 times per 100 money moves.",
+          "gap": 0.3,
+          "spoken": "Giving the model the rules let fifty-two dollars through and asked the owner forty-nine times per hundred money moves."
+        },
+        {
+          "id": "b3",
+          "text": "Floorwalker let nothing through, and asked 30 times.",
+          "gap": 0.3,
+          "spoken": "Floorwalker let nothing through, and asked thirty times."
+        }
+      ]
     },
     {
-     "id": "l4",
-     "gap": 0.3,
-     "text": "One click approves Tessa and rewrites the rule in Elena's own words."
+      "id": "end",
+      "kind": "art",
+      "page": "art/end.html",
+      "lead": 0.6,
+      "tail": 1.8,
+      "lines": [
+        {
+          "id": "e1",
+          "text": "Floorwalker. Every refund checked. Fewer taps as it learns. Try it live at floorwalker.yingzhilu.cn.",
+          "gap": 0.0,
+          "spoken": "Floorwalker. Every refund checked. Fewer taps as it learns. Try it live at floorwalker dot yingzhilu dot C N."
+        }
+      ]
     }
-   ]
-  },
-  {
-   "id": "watch",
-   "kind": "app",
-   "lead": 0.6,
-   "tail": 1.2,
-   "lines": [
-    {
-     "id": "w1",
-     "text": "Floorwalker can only stop money that goes through it, so it also watches PayPal.",
-     "gap": 0.0
-    },
-    {
-     "id": "w2",
-     "text": "Here, a refund of $25 is made straight through the PayPal API, skipping Floorwalker.",
-     "gap": 0.3,
-     "spoken": "Here, a refund of twenty-five dollars is made straight through the PayPal API, skipping Floorwalker."
-    },
-    {
-     "id": "w3",
-     "text": "Seconds later it is caught, and every agent is frozen until Elena says whether it was her.",
-     "gap": 0.3
-    }
-   ]
-  },
-  {
-   "id": "api",
-   "kind": "app",
-   "lead": 0.6,
-   "tail": 1.0,
-   "lines": [
-    {
-     "id": "a1",
-     "text": "Bring your own agent: give it a key and its own limits, and it calls Floorwalker over a REST API or MCP, instead of PayPal.",
-     "gap": 0.0
-    }
-   ]
-  },
-  {
-   "id": "ask",
-   "kind": "app",
-   "lead": 0.6,
-   "tail": 1.4,
-   "lines": [
-    {
-     "id": "k1",
-     "text": "And a small assistant answers live. It can explain any decision, but can't move money.",
-     "gap": 0.0
-    }
-   ]
-  },
-  {
-   "id": "bench",
-   "kind": "art",
-   "page": "art/bench.html",
-   "lead": 0.6,
-   "tail": 3.4,
-   "lines": [
-    {
-     "id": "b1",
-     "text": "On 198 labelled cases with 80 attacks, an agent with no guard would have lost $3,796.",
-     "gap": 0.0,
-     "spoken": "On a hundred and ninety-eight labelled cases with eighty attacks, an agent with no guard would have lost three thousand, seven hundred and ninety-six dollars."
-    },
-    {
-     "id": "b2",
-     "text": "Giving the model the rules lost $52 on average, and asked the owner 49 times per 100 money moves.",
-     "gap": 0.3,
-     "spoken": "Giving the model the rules lost fifty-two dollars on average, and asked the owner forty-nine times per hundred money moves."
-    },
-    {
-     "id": "b3",
-     "text": "Floorwalker lost nothing, and asked 30 times.",
-     "gap": 0.3,
-     "spoken": "Floorwalker lost nothing, and asked thirty times."
-    }
-   ]
-  },
-  {
-   "id": "end",
-   "kind": "art",
-   "page": "art/end.html",
-   "lead": 0.6,
-   "tail": 1.8,
-   "lines": [
-    {
-     "id": "e1",
-     "text": "Floorwalker. Every refund checked. Fewer taps as it learns. Try it live at the link below.",
-     "gap": 0.0
-    }
-   ]
-  }
- ]
+  ]
 }

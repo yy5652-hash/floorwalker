@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { isFilm } from "../auth";
 import "./assistant.css";
@@ -6,7 +6,20 @@ import "./assistant.css";
 type Turn = { role: "user" | "assistant"; content: string };
 type Props = { workspaceId?: string; shared?: boolean; demo?: boolean; toolbar?: boolean };
 const publicQuestions = ["How does it stop a bad refund?", "What does it cost?", "How do I connect my own agent?"];
-const workspaceQuestions = ["Why was the last request blocked?", "What needs me today?", "How can I get fewer approvals?"];
+
+export function AssistantText({ content, onNavigate }: { content: string; onNavigate?: () => void }) {
+  const parts: ReactNode[] = [];
+  const references = /\[([^\]\n]+)\]\((?:\/app)?#ledger\/(\d+)\)|(?:\/app)?#ledger\/(\d+)\b|(?:\brequest\s+#?|#)(\d+)\b|\bact_(\d+)\b/gi;
+  let from = 0;
+  for (const match of content.matchAll(references)) {
+    const at = match.index!, id = match[2] ?? match[3] ?? match[4] ?? match[5];
+    parts.push(content.slice(from, at));
+    parts.push(<a key={at} href={`/app#ledger/${id}`} onClick={onNavigate}>{match[1] ?? match[0]}</a>);
+    from = at + match[0].length;
+  }
+  parts.push(content.slice(from));
+  return <>{parts}</>;
+}
 
 export default function Assistant({ workspaceId, shared = false, demo = false, toolbar = false }: Props) {
   const [enabled, setEnabled] = useState(false);
@@ -16,6 +29,7 @@ export default function Assistant({ workspaceId, shared = false, demo = false, t
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [contextShared, setContextShared] = useState(shared);
+  const [questions, setQuestions] = useState(publicQuestions);
   const [viewport, setViewport] = useState<CSSProperties>({});
   const pending = useRef<AbortController | null>(null);
   const launcher = useRef<HTMLButtonElement>(null);
@@ -41,6 +55,16 @@ export default function Assistant({ workspaceId, shared = false, demo = false, t
     return () => { vv?.removeEventListener("resize", update); vv?.removeEventListener("scroll", update); };
   }, []);
   useEffect(() => { if (open) input.current?.focus({ preventScroll: true }); }, [open]);
+  useEffect(() => {
+    if (!open || publicMode) return;
+    const controller = new AbortController();
+    setQuestions(publicQuestions);
+    void fetch("/api/assistant/suggestions", { signal: controller.signal, headers: workspaceId && workspaceId !== "film" ? { "x-workspace": workspaceId } : {} })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => { if (Array.isArray(data?.questions) && data.questions.every((q: unknown) => typeof q === "string" && q.length <= 100)) setQuestions(data.questions); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [open, publicMode, workspaceId, shared]);
   useEffect(() => { const box = transcript.current; if (box) box.scrollTop = box.scrollHeight; }, [messages, notice]);
 
   function close() { pending.current?.abort(); setOpen(false); launcher.current?.focus(); }
@@ -90,11 +114,11 @@ export default function Assistant({ workspaceId, shared = false, demo = false, t
     <aside className={`assistant-shell ${toolbar ? "assistant-workspace" : ""}`} style={viewport} aria-label="Ask Floorwalker">
       {open && <section className="assistant-panel" id="assistant-panel" role="dialog" aria-label="Ask Floorwalker" onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); close(); } }}>
         <header className="assistant-header"><h2>Ask Floorwalker</h2><button type="button" onClick={close} aria-label="Close assistant">Close</button></header>
-        <p className="assistant-disclosure">Answers from DeepSeek. {publicMode || !contextShared ? "Sends chat + product facts." : `Sends chat + ${demo ? "demo" : "workspace"} activity.`}<span className="assistant-disclosure-detail"> {publicMode || !contextShared ? "No workspace activity is sent." : "Includes rules, agents, recent checks, incidents and learning summaries."} Read-only; cannot move money or approve requests.</span></p>
+        <p className="assistant-disclosure">Answers from DeepSeek. {publicMode || !contextShared ? "Sends chat + product facts." : `Sends chat + ${demo ? "demo" : "workspace"} activity.`}<span className="assistant-disclosure-detail"> {publicMode || !contextShared ? "No workspace activity is sent." : "Includes workspace counts, sources, recent checks, latest blocks and declines, rules, agents, incidents and learning summaries."} Read-only; cannot move money or approve requests.</span></p>
         {!publicMode && <a className="assistant-privacy" href="/app#settings/general" onClick={close}>Privacy settings</a>}
         <div className="assistant-transcript" ref={transcript} role="log" aria-label="Conversation" aria-live="polite" aria-busy={busy}>
-          {!messages.length && <div className="assistant-suggestions"><p>What would you like to know?</p>{(publicMode ? publicQuestions : workspaceQuestions).map(q => <button type="button" key={q} onClick={() => void ask(q)}>{q}</button>)}</div>}
-          {messages.map((message, index) => <div className={`assistant-message ${message.role}`} key={index}><strong>{message.role === "user" ? "You" : "Floorwalker"}</strong><p>{message.content || (busy ? "Thinking…" : "No reply yet.")}</p></div>)}
+          {!messages.length && <div className="assistant-suggestions"><p>What would you like to know?</p>{questions.map(q => <button type="button" key={q} onClick={() => void ask(q)}>{q}</button>)}</div>}
+          {messages.map((message, index) => <div className={`assistant-message ${message.role}`} key={index}><strong>{message.role === "user" ? "You" : "Floorwalker"}</strong><p><AssistantText content={message.content || (busy ? "Thinking…" : "No reply yet.")} onNavigate={close} /></p></div>)}
         </div>
         {notice && <p className="assistant-notice" role="status">{notice}</p>}
         <form className="assistant-compose" onSubmit={e => { e.preventDefault(); void ask(draft); }}>

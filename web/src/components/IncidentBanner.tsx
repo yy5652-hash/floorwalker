@@ -23,22 +23,24 @@ export function IncidentBanner({ state, incident }: { state: State; incident?: I
   const newest = incident ?? open[0] ?? resolved;
   if (!newest || (!incident && !open.length && resolved?.resolution === "mine")) return null;
   const current = resolved?.id === newest.id ? resolved : newest;
-  const currency = (current as Incident & { currency?: string }).currency ?? state.policy.policy.currency ?? "USD";
+  const currency = current.currency ?? state.policy.policy.currency ?? "USD";
   const ids = frozenAgentIds(current.frozen_agents);
+  const paused = ids.filter(id => state.agents.find(agent => agent.id === id)?.status === "frozen").length;
   return <section data-film="incident" className="incident-banner incident-timeline" aria-label={`Incident ${current.id}`}>
     <h2>{current.resolved_at ? "Resolved PayPal activity" : "Money moved outside Floorwalker"} <span>#{current.id}</span></h2>
     <ol>
-      <li><span className="timeline-step">1</span><div><h3>What happened</h3><p>{current.detail}</p><p>{money(current.amount, currency)} · {current.kind}{current.counterparty ? ` · ${current.counterparty}` : ""}</p></div></li>
+      <li><span className="timeline-step">1</span><div><h3>What happened</h3><p>{money(current.amount, currency)} {current.kind === "refund" ? "already refunded" : "payout reported"} outside Floorwalker{current.counterparty ? ` · ${current.counterparty}` : ""}</p><p>{current.detail}</p></div></li>
       <li><span className="timeline-step">2</span><div><h3>PayPal evidence</h3><dl>
         <div><dt>Transaction</dt><dd>{current.paypal_ref}</dd></div>
         {current.capture_id && <div><dt>Capture</dt><dd>{current.capture_id}</dd></div>}
         <div><dt>Seen at</dt><dd><time dateTime={current.created_at}>{new Date(current.created_at).toLocaleString("en-US")}</time> · {current.detected_by === "webhook" ? "PayPal webhook" : "Order check"}</dd></div>
       </dl></div></li>
-      <li><span className="timeline-step">3</span><div><h3>Who was frozen</h3><p>{ids.length ? ids.map(id => (state.agents.find(agent => agent.id === id)?.name ?? id)).join(", ") : "No agents were recorded as frozen by this incident."}</p>
+      <li><span className="timeline-step">3</span><div><h3>{paused} Floorwalker {paused === 1 ? "agent" : "agents"} paused</h3><p>{ids.length ? `Paused by this incident: ${ids.map(id => (state.agents.find(agent => agent.id === id)?.name ?? id)).join(", ")}` : "No agents were recorded as paused by this incident."}</p>
         {ids.length > 0 && <p className="text-muted-foreground">Current status: {ids.map(id => `${(state.agents.find(agent => agent.id === id)?.name ?? id)} (${state.agents.find(agent => agent.id === id)?.status ?? "no longer connected"})`).join(", ")}</p>}
+        <p>Pausing Floorwalker agents does not revoke other PayPal credentials or reverse this {current.kind === "refund" ? "refund" : "payout"}.</p>
       </div></li>
       <li><span className="timeline-step">4</span><div><h3>What you do next</h3>
-        {current.resolved_at ? <p>{current.resolution === "mine" ? "Marked as your transaction. Review current agent status before continuing." : "Rotate your PayPal app's secret in the PayPal Developer Dashboard, then reconnect it in Settings. Review the incident before unfreezing agents."}</p>
+        {current.resolved_at ? <p>{current.resolution === "mine" ? "Marked as your transaction. Review current agent status before continuing." : <>Review your PayPal API credentials in the <a className="underline" href="https://developer.paypal.com/dashboard/applications/sandbox" target="_blank" rel="noreferrer">PayPal Developer Dashboard</a>. Rotate the app secret, then reconnect it in Settings. Review the incident before unfreezing agents.</>}</p>
           : <><p>Recognize this transaction? Confirm it was yours, or keep agents frozen while you investigate.</p>
           <div className="incident-actions">
             <Button variant="outline" data-film="incident-mine" disabled={!canManage(state) || resolve.isPending} onClick={() => resolve.mutate({ id: current.id, resolution: "mine" })}>That was me</Button>

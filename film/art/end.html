@@ -1,34 +1,31 @@
-<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><link rel="stylesheet" href="cine.css"><link rel="stylesheet" href="sf.css">
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Floorwalker · Try it live</title>
+<link rel="stylesheet" href="base.css"><link rel="stylesheet" href="cine.css"><link rel="stylesheet" href="sf.css">
 <style>
-  .col { position: absolute; left: 110px; top: 300px; width: 1000px; }
-  #a { font-size: 70px; letter-spacing: .14em; }
-  #b { font-size: 24px; letter-spacing: .08em; color: var(--soft); margin-top: 22px; }
-  #d { font-family: 'JetBrains Mono', monospace; font-size: 34px; font-weight: 500; margin-top: 58px; color: var(--violet); }
-  #e { font-family: 'JetBrains Mono', monospace; font-size: 28px; margin-top: 14px; color: var(--soft); }
+  body { background: radial-gradient(ellipse at 85% 12%, #00b8d90d, transparent 55%), radial-gradient(ellipse at 12% 85%, #6d3df509, transparent 55%), #fff; }
+  #lockup { position: absolute; left: 100px; right: 100px; top: 250px; text-align: center; }
+  #a { font-size: 108px; letter-spacing: .16em; }
+  #b { font-size: 46px; color: var(--soft); margin-top: 34px; }
+  #rule { height: 3px; width: 900px; margin: 46px auto 0; background: var(--prism); }
+  #d { display: block; font-size: 90px; font-weight: 500; letter-spacing: -.03em; margin-top: 52px; color: var(--violet); text-decoration: none; }
+  #e { display: block; font-family: 'JetBrains Mono', monospace; font-size: 34px; margin-top: 28px; color: var(--soft); text-decoration: none; }
 </style></head><body>
-<div class="shot" id="s"><img src="img/w-vault.jpg" alt=""></div>
-<canvas class="gl" id="f"></canvas><canvas class="gl" id="c"></canvas>
-<div class="col">
-  <div class="wordmark quiet" id="a">Floorwalker</div>
-  <div class="mono quiet" id="b">Every refund checked. Fewer taps as it learns.</div>
-  <div class="quiet" id="d">floorwalker.43-160-214-187.sslip.io</div>
-  <div class="quiet" id="e">github.com/yy5652-hash/floorwalker</div>
-</div>
+<main id="lockup">
+  <div class="wordmark" id="a">Floorwalker</div>
+  <div id="b">Every refund checked. Fewer taps as it learns.</div>
+  <div id="rule"></div>
+  <a id="d" href="https://floorwalker.yingzhilu.cn">floorwalker.yingzhilu.cn</a>
+  <a id="e" href="https://github.com/yy5652-hash/floorwalker">github.com/yy5652-hash/floorwalker</a>
+</main>
 <script src="cine.js"></script>
-<script type="module">
-  import { stage, streams, dust } from './gate.js';
-  import { flow } from './flow.js';
-  const f = flow(document.getElementById('f'), 0.4);
-  const s = stage(document.getElementById('c'), { alpha: true });
-  const st = streams({ count: 700, attackShare: 0, gate: false, R: 13, near: 30, far: 150, speed: 0.5 }), du = dust({ count: 200 });
-  [st, du].forEach(o => s.scene.add(o.object));
-  s.camera.position.set(0, 0, 40); s.camera.lookAt(0, 0, 0);
-  s.camera.setViewOffset(1920, 1080, -450, 0, 1920, 1080);
+<script>
   window.render = t => {
-    shot('s', t, -0.4, 60);
-    document.querySelector('#s img').style.transform = `scale(${1.05 - 0.05 * smooth(clamp(t / 10))})`;
-    f(t); st.set(t, 1); du.set(t); s.draw();
-    rise('a', t, 0.4, 0, 0.9); rise('b', t, 0.9, 0, 0.7); rise('d', t, 1.7, 0, 0.7); rise('e', t, 2.1, 0, 0.7);
+    // Settle early, then hold on the light card through the final cadence and tail.
+    rise('a', t, -0.4, 10, 0.8);
+    rise('b', t, 0.1, 10, 0.7);
+    rise('rule', t, 0.2, 0, 0.7);
+    rise('d', t, 0.3, 10, 0.7);
+    rise('e', t, 0.5, 10, 0.7);
   };
   window.ready = true;
 </script></body></html>

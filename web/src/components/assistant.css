@@ -16,6 +16,7 @@
 .assistant-message + .assistant-message { border-top: 1px solid var(--border); }
 .assistant-message strong { display: block; font-size: 14px; margin-bottom: 6px; }
 .assistant-message p { white-space: pre-wrap; line-height: 1.65; margin: 0; font-size: 15px; }
+.assistant-message a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
 .assistant-message.user { color: var(--muted-foreground); }
 .assistant-compose { padding: 12px 16px; border-top: 1px solid var(--border); display: grid; gap: 8px; }
 .assistant-compose label, .assistant-compose span { font-size: 14px; font-weight: 500; }

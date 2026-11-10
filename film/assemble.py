@@ -211,8 +211,11 @@ def arranged(timeline, holds):
         rise = B.noise_sweep(1.6, rising=True)
         j = int((h - 1.75) * SR)
         bed[j:j + len(rise)] += rise[: len(bed) - j] * 0.14
-    # a bell when the wordmark appears (title), and when the name lands at the end
-    for when in (next(s["start"] for s in scenes if s["id"] == "title") + 0.5, next(l["start"] for sc in scenes for l in sc["lines"] if l["id"] == "e1")):
+    # A bell at the wordmark: v2 merges the title into hook's h1, after the light sweep.
+    # Keep the old title cue usable for existing timelines; the end-card cue is unchanged.
+    title = next((s for s in scenes if s["id"] == "title"), None)
+    wordmark_at = title["start"] + 0.5 if title else next(l["start"] for sc in scenes if sc["id"] == "hook" for l in sc["lines"] if l["id"] == "h1") + 0.65
+    for when in (wordmark_at, next(l["start"] for sc in scenes for l in sc["lines"] if l["id"] == "e1")):
         bell = B.Stem(8)
         for k, m in enumerate([72, 76, 79, 84]):
             bell.add(k * 0.09, B.pan(felt(m, 5.0), -0.3 + 0.2 * k), 0.3)

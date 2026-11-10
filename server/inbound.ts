@@ -4,7 +4,7 @@ import { z } from 'zod/v4';
 import { ctx, inWorkspace } from './context.ts';
 import * as store from './db.ts';
 import { core, openWorkspace } from './workspaces.ts';
-import { handleTicket } from './agent/run.ts';
+import { handleTicket, updateTicketReply } from './agent/run.ts';
 import { config, paypalConfigured } from './config.ts';
 import { assertActionQuota } from './billing.ts';
 import { localOutbox, sendEmail } from './email.ts';
@@ -46,7 +46,7 @@ export function saveInboxSettings(input: unknown) {
 export function addMessage(input: unknown, extra: Partial<store.Ticket> = {}) {
   const b = MessageBody.parse(input);
   const existing = b.external_id ? store.db().prepare('SELECT * FROM tickets WHERE external_id = ?').get(b.external_id) as store.Ticket | undefined : undefined;
-  if (existing) return { ticket: existing, duplicate: true };
+  if (existing) return { ticket: store.ticket(existing.id)!, duplicate: true };
   const id = randomUUID();
   store.upsertTicket({ id, channel: 'email', from_name: b.from_name || b.from_email, from_email: b.from_email,
     subject: b.subject, body: b.body, received_at: b.received_at ?? new Date().toISOString() });
@@ -85,9 +85,19 @@ export async function drain() {
   } finally { running.delete(ws.id); pending.delete(ws.id); }
 }
 const sending = new Set<string>();
-export async function sendReply(id: string, confirm = false) {
-  const t = store.ticket(id);
+export async function sendReply(id: string, confirm = false, input: unknown = {}) {
+  const b = z.object({ action: z.enum(['send', 'save', 'update']).optional(), reply: z.string().trim().min(1).max(200_000).optional(),
+    confirm_stale: z.boolean().optional(), payment_snapshot: z.string().optional() }).parse(input);
+  let t = store.ticket(id);
   if (!t || t.channel !== 'email' || !t.reply || t.inbound_kind === 'confirmation') throw new Error('No email reply to send');
+  if (b.reply !== undefined) {
+    if (!store.splitTicketReply(b.reply).reply) throw new Error('No customer reply to send');
+    t = store.saveTicketReply(id, b.reply);
+  }
+  if (b.action === 'update') return updateTicketReply(id);
+  if (b.action === 'save') return t;
+  if (b.payment_snapshot !== undefined && b.payment_snapshot !== t.current_payment_snapshot) throw new Error('Payment status changed. Review the draft before sending');
+  if (t.reply_stale && (!b.confirm_stale || b.payment_snapshot !== t.current_payment_snapshot)) throw new Error('Written before your decision — review and confirm before sending');
   const support = store.setting('inbound.support', '');
   if (!z.email().safeParse(support).success) throw new Error('Set your support address in Settings before sending');
   if (t.reply_sent_at && !confirm) throw new Error('Confirm before sending this reply again');
@@ -99,7 +109,7 @@ export async function sendReply(id: string, confirm = false) {
     const clean = (v: string) => v.replace(/[\r\n]/g, ' ');
     const refs = [t.thread_references, t.message_id].filter(Boolean).join(' ');
     await sendEmail({ to: t.from_email, subject: /^re:/i.test(t.subject) ? clean(t.subject) : `Re: ${clean(t.subject)}`,
-      text: t.reply, html: `<pre>${t.reply.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</pre>`, tag: 'support-reply',
+      text: t.reply!, html: `<pre>${t.reply!.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</pre>`, tag: 'support-reply',
       from: `"${clean(ctx().ws.name).replaceAll('"', '')} via Floorwalker" <${config.mailFrom.match(/<([^>]+)>/)?.[1] ?? config.mailFrom}>`,
       replyTo: support, headers: [...(t.message_id ? [{ Name: 'In-Reply-To', Value: clean(t.message_id) }] : []), ...(refs ? [{ Name: 'References', Value: clean(refs) }] : [])] });
     store.db().prepare('UPDATE tickets SET reply_sent_at=? WHERE id=?').run(new Date().toISOString(), id);
@@ -108,7 +118,7 @@ export async function sendReply(id: string, confirm = false) {
 }
 export async function maybeSendReply(id: string) {
   const t = store.ticket(id);
-  if (!store.setting('inbound.auto_send', false) || !t?.reply || t.reply_sent_at) return;
+  if (!store.setting('inbound.auto_send', false) || !t?.reply || t.reply_sent_at || t.reply_stale || t.needs_follow_up) return;
   // A hold/block remains a reason for owner review even after a later approval.
   if (store.ledger().some(r => r.ticket_id === id && ['hold', 'block'].includes(r.decision)) || /\b(held|blocked|review|approval|unverified|cannot|can’t)\b/i.test(t.reply)) return;
   await sendReply(id);

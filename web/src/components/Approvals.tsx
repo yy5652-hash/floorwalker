@@ -3,7 +3,8 @@ import { account, isFilm } from "../auth";
 import { useLearnedRules } from "../hooks/use-learned-rules";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ApprovalEvidence } from "./ApprovalEvidence";
+import { ApprovalEvidence, ApprovalSummary } from "./ApprovalEvidence";
+import { LearningComparison } from "./LearnedRules";
 import type { LearnedRules, Simulation } from "../api";
 type LearnedChange = LearnedRules["changes"][number];
 export type ApprovalCommand = { id: number; action: "approve" | "decline"; serial: number };
@@ -93,6 +94,30 @@ export function PhoneApproval({ workspaceId }: { workspaceId?: string }) {
     </Modal>
   </>;
 }
+export function ApprovalReceipt({ entry, note, onDismiss }: { entry: LedgerEntry; note?: string; onDismiss: () => void }) {
+  const amount = money(amountOf(entry), entryCurrency(entry));
+  const completed = ["approved", "executed"].includes(entry.status) && !!entry.paypal_ref;
+  const paypalStatus = entry.paypal_result && typeof entry.paypal_result === "object" && "status" in entry.paypal_result ? entry.paypal_result.status : undefined;
+  const approval = entry.status === "approved" || !!entry.decided_by;
+  const title = entry.status === "declined" ? "Declined — nothing was sent to PayPal"
+    : entry.source === "history" ? "Recorded demo outcome — not sent to PayPal"
+    : entry.status === "failed" ? "PayPal did not complete this request"
+    : entry.status === "blocked" ? "Blocked — nothing was sent to PayPal"
+    : completed ? entry.kind === "refund" ? `${amount} ${paypalStatus === "COMPLETED" ? "refunded" : "refund submitted"} after ${approval ? "your approval" : "automatic checks"}` : `${amount} payout submitted after ${approval ? "your approval" : "automatic checks"}`
+    : "Approval recorded — PayPal outcome not yet confirmed";
+  return <section className="space-y-3 rounded-lg border bg-card p-4" aria-label="Decision receipt" role="status">
+    <p className="text-xs text-muted-foreground">Current outcome · Request #{entry.id}</p>
+    <h3 className="text-lg font-semibold">{title}</h3>
+    <p className="text-sm">{personName(entry.counterparty)} · {amount}</p>
+    {entry.paypal_ref && entry.source !== "history" && <p className="text-sm break-all">PayPal sandbox reference: <code>{entry.paypal_ref}</code></p>}
+    {entry.error && <p className="text-sm text-block break-words">{entry.error}</p>}
+    {note && <p className="text-sm">{note}</p>}
+    <div className="flex flex-wrap gap-2">
+      <Button asChild variant="outline" className="min-h-11"><a href={`/app#ledger/${entry.id}`}>Open ledger <ArrowRight size={14} /></a></Button>
+      <Button variant="outline" className="min-h-11" onClick={onDismiss}>Dismiss receipt</Button>
+    </div>
+  </section>;
+}
 export function ApprovalCard({
   entry,
   state,
@@ -121,6 +146,7 @@ export function ApprovalCard({
   const [result, setResult] = useState<LedgerEntry | null>(
     entry.status === "awaiting_approval" ? null : entry,
   );
+  const [receiptDismissed, setReceiptDismissed] = useState(false);
   const [declining, setDeclining] = useState(false);
   const [reason, setReason] = useState("");
   const [allowPayee, setAllowPayee] = useState(false);
@@ -152,6 +178,10 @@ export function ApprovalCard({
   const expired = remaining === 0;
   const permitted = canApprove(state);
   const agent = state.agents.find((a) => a.id === entry.agent_id);
+  const ticket = state.tickets?.find(t => t.id === entry.ticket_id);
+  const budgetKind = entry.kind === "refund" ? "refunds" : "payouts";
+  const budgetStillHolds = suggestion && entry.checks.some(c => c.id === "budget" && c.outcome === "hold") && state.policy.policy[budgetKind].budget.amount === suggestion.draft[budgetKind].budget.amount && state.policy.policy[budgetKind].budget.period === suggestion.draft[budgetKind].budget.period;
+  const receiptEntry = result && (entry.status === result.status || (result.status === "executing" && entry.status !== "awaiting_approval")) ? entry : result;
   const frozen = entry.status === "awaiting_approval" && (agent?.status === "frozen" || freezeRefusal);
   useEffect(() => { setFreezeRefusal(false); }, [agent?.status, state]);
   const conclusion = frozen
@@ -276,7 +306,7 @@ export function ApprovalCard({
   }, [command]);
   return (
     <Card
-      className={`approval-card ${compact ? "compact" : ""}`}
+      className={`approval-card [&_button]:min-h-11! [&_summary]:min-h-11 [&_summary]:py-3 [&_summary]:text-sm! ${compact ? "compact" : ""}`}
       id={String(entry.id)}
       tabIndex={-1}
       style={{ scrollMarginTop: 90 }}
@@ -297,14 +327,17 @@ export function ApprovalCard({
         </span>
       </div>
       <div className="approval-heading">
-        <div><span className="text-xs text-muted-foreground">{entry.kind === "refund" ? "Refund request" : "Payout request"}</span><div className="approval-amount"><Money value={money(entry.amount, entryCurrency(entry))} /></div></div>
+        <div><span className="text-sm text-muted-foreground">{entry.kind === "refund" ? "Refund" : "Payout"}</span><div className="approval-amount"><Money value={money(entry.amount, entryCurrency(entry))} /></div></div>
         <div className="approval-payee"><strong>{personName(entry.counterparty)}</strong><span className="check-status status-hold">{entry.status === "awaiting_approval" ? frozen ? "Blocked by freeze" : "Needs you" : "Decision recorded"}</span></div>
       </div>
-      <p className="approval-reason">{conclusion.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() || conclusion}</p>
-      <ApprovalEvidence entry={entry} />
+      {(ticket?.subject || entry.justification) && <p className="text-sm font-medium leading-relaxed">{ticket?.subject ?? entry.justification}</p>}
+      <ApprovalSummary entry={entry} />
+      {(frozen || expired || (!entry.checks.length && !!entry.review)) && <p className="approval-reason">{conclusion}</p>}
+      {entry.kind === "payout" && <p className="text-sm leading-relaxed text-muted-foreground">Before sending, PayPal cannot verify that this payee is owed the money or will fulfil the work.</p>}
       <details className="approval-checks">
-        <summary>Review checks &amp; rule</summary>
+        <summary>Show all checks</summary>
         <div>
+          <ApprovalEvidence entry={entry} />
       {!isFilm() && (
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline">
@@ -329,6 +362,7 @@ export function ApprovalCard({
           {entry.counterparty && <p className="text-xs break-all">Recipient: {entry.counterparty}</p>}
           {entry.justification && <blockquote className="mb-4">“{entry.justification}”</blockquote>}
           <p className="text-xs">Recorded rule outcome: {entry.checks.some(c => !["ai_review", "injection"].includes(c.id) && c.outcome === "block") ? "Blocked" : entry.checks.some(c => !["ai_review", "injection"].includes(c.id) && c.outcome === "hold") ? "Needs you" : entry.checks.some(c => !["ai_review", "injection"].includes(c.id)) ? "Passed" : "Not recorded"}{entry.policy_id != null ? ` · policy v${entry.policy_id}` : ""}</p>
+          <p className="text-sm font-medium">Initial AI review</p>
           <ReviewNote review={entry.review} policyId={entry.policy_id} />
           <Checks checks={entry.checks} review={entry.review} />
         </div>
@@ -390,16 +424,7 @@ export function ApprovalCard({
             </div></details>
           )}
       </div>
-      {result ? (
-        <div className="space-y-3 rounded-lg border p-3">
-          <StatusPill status={result.status} />
-          {result.error && (
-            <p className="mt-3 text-sm text-block break-words">
-              {result.error}
-            </p>
-          )}
-        </div>
-      ) : (
+      {receiptEntry ? (!receiptDismissed && <ApprovalReceipt entry={receiptEntry} onDismiss={() => setReceiptDismissed(true)} />) : (
         <div className="approval-actionbar">
           {!permitted && (
             <p className="text-xs text-muted-foreground">
@@ -451,7 +476,10 @@ export function ApprovalCard({
             {compact ? "Different amount" : "Approve a different amount"}
           </Button>
           </div>
-          {suggestion && canManage(state) && <Button variant="link" className="learn-approve" disabled={!!busy || expired || frozen || !!stepUp || invalidDays} onClick={() => setLearning(true)}>Approve and stop asking about these</Button>}
+          {suggestion && canManage(state) && <>
+            <Button variant="link" className="learn-approve whitespace-normal" disabled={!!busy || expired || frozen || !!stepUp || invalidDays} onClick={() => setLearning(true)}>Approve and stop asking about these</Button>
+            {budgetStillHolds && <p className="text-sm text-hold">The budget also holds this request. Raising the automatic limit alone will not clear it.</p>}
+          </>}
           {other && (
             <form
               className="space-y-3 rounded-lg border bg-muted/40 p-3 [&_label]:text-xs"
@@ -505,16 +533,7 @@ export function ApprovalCard({
       )}
       <Modal title="Approve and update your rules?" description="Approve this request first, then apply this tested suggestion. These are two separate actions." open={learning} onClose={() => !busy && setLearning(false)}>
         {suggestion && <div className="space-y-4 text-sm">
-          <h3>{suggestion.title}</h3><p>{suggestion.evidence}</p>
-          {suggestion.boundary && <p>{suggestion.boundary}</p>}
-          <dl className="learning-backtest">
-            <div><dt>Taps per 100 moves</dt><dd>{suggestion.impact.tapsPer100.before} → {suggestion.impact.tapsPer100.after}</dd></div>
-            <div><dt>Taps saved in replay</dt><dd>{suggestion.impact.tapsSaved}</dd></div>
-            <div><dt>Declined requests that would pass</dt><dd>{suggestion.impact.declinedLetThrough}</dd></div>
-            <div><dt>Benchmark attacks stopped</dt><dd>{suggestion.impact.bench ? `${suggestion.impact.bench.stopped} / ${suggestion.impact.bench.attacks}` : "Not available"}</dd></div>
-          </dl>
-          {entry.checks.some(c => c.id === "budget" && c.outcome === "hold") && <p>This request is also over this period's budget. This change doesn't raise the budget, so busy weeks can still come to you.</p>}
-          <p>Future requests still go through PayPal checks, limits and AI review. This replay uses recorded evidence, not a guarantee.</p>
+          <LearningComparison change={suggestion} state={state} compact entry={entry} />
           {error && <p role="alert">{error}</p>}
           <Button disabled={!!busy || !!stepUp || frozen || expired || invalidDays} onClick={() => void decide("approve", undefined, false, suggestion)}>{busy ? "Approving…" : "Confirm approval and rule change"}</Button>
         </div>}
@@ -608,14 +627,16 @@ export function Approvals(props: PageProps & {
   const [decided, setDecided] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
-  const [message, setMessage] = useState("");
+  // Keep the receipt outside the queue so ledger refreshes cannot dismiss it.
+  const [receipt, setReceipt] = useState<{ entry: LedgerEntry; note?: string } | null>(null);
   const [keyboardCommand, setKeyboardCommand] = useState<ApprovalCommand | null>(null);
   const serial = useRef(0);
   const handledCommand = useRef(0);
   useEffect(() => () => { props.onCommandHandled?.(); props.onSelection?.(null); }, []);
   const pendingCommand = [props.command, keyboardCommand].filter((c): c is ApprovalCommand => !!c && c.serial > handledCommand.current).sort((a, b) => b.serial - a.serial)[0] ?? null;
   const list = waiting.filter(e => !decided.includes(e.id));
-  const selected = list.find(e => e.id === selectedId) ?? list[0];
+  const selected = receipt ? undefined : list.find(e => e.id === selectedId) ?? list[0];
+  const latestReceipt = receipt && props.state.ledger.find(e => e.id === receipt.entry.id && (e.status === receipt.entry.status || (receipt.entry.status === "executing" && e.status !== "awaiting_approval")));
   const reduced = useReducedMotion();
   const still = isFilm() || reduced;
   const learned = useLearnedRules(props.state);
@@ -659,9 +680,17 @@ export function Approvals(props: PageProps & {
   const recent = props.state.ledger.filter(e => e.status === "approved" || e.status === "declined")
     .sort((a, b) => Date.parse(b.decided_at ?? b.created_at) - Date.parse(a.decided_at ?? a.created_at)).slice(0, 5);
   return <div className="approvals-page">
-    {message && <p className="decision-feedback" role="status">{message}</p>}
+    <style>{`
+      .phone-workspace > header { padding-block: 8px; }
+      .phone-workspace .brand-mark { font-size: 18px; }
+      .phone-workspace .brand-mark img { width: 24px; height: 24px; }
+      .phone-workspace > header button, .phone-workspace .brand-mark { min-height: 44px; min-width: 44px; }
+      .phone-workspace main > div:first-child { margin-bottom: 8px; }
+      .phone-workspace h1 { font-size: 20px; }
+      .approval-mobile-nav > button { min-height: 44px; }
+    `}</style>
     <div className="approval-queue-heading"><h2>Waiting for your approval <span>{list.length}</span></h2><Button variant="ghost" size="sm" onClick={() => setShortcuts(true)}>Keyboard shortcuts <kbd>?</kbd></Button></div>
-    {list.length ? <div className="approval-workspace">
+    {receipt ? <ApprovalReceipt entry={latestReceipt || receipt.entry} note={receipt.note} onDismiss={() => setReceipt(null)} /> : list.length ? <div className="approval-workspace">
       <nav className="approval-queue" aria-label="Approval queue">
         {list.map((entry, index) => <button key={entry.id} type="button" disabled={busy} aria-current={selected?.id === entry.id ? "true" : undefined} onClick={() => setSelectedId(entry.id)}>
           <span>{agentName(props.state, entry.agent_id)} <time dateTime={entry.created_at}>{relativeTime(entry.created_at)}</time></span>
@@ -669,14 +698,14 @@ export function Approvals(props: PageProps & {
         </button>)}
       </nav>
       <div className="approval-detail">
-        <div className="approval-mobile-nav"><Button variant="outline" size="sm" disabled={busy || selected?.id === list[0]?.id} onClick={() => setSelectedId(list[Math.max(0, list.findIndex(e => e.id === selected?.id) - 1)].id)}>Previous request</Button><span>{list.findIndex(e => e.id === selected?.id) + 1} / {list.length}</span><Button variant="outline" size="sm" disabled={busy || selected?.id === list.at(-1)?.id} onClick={() => setSelectedId(list[Math.min(list.length - 1, list.findIndex(e => e.id === selected?.id) + 1)].id)}>Next request</Button></div>
+        {list.length > 1 && <div className="approval-mobile-nav"><Button variant="outline" size="sm" disabled={busy || selected?.id === list[0]?.id} onClick={() => setSelectedId(list[Math.max(0, list.findIndex(e => e.id === selected?.id) - 1)].id)}>Previous request</Button><span>{list.findIndex(e => e.id === selected?.id) + 1} / {list.length}</span><Button variant="outline" size="sm" disabled={busy || selected?.id === list.at(-1)?.id} onClick={() => setSelectedId(list[Math.min(list.length - 1, list.findIndex(e => e.id === selected?.id) + 1)].id)}>Next request</Button></div>}
         <AnimatePresence initial={false} mode="wait">
           {selected && <motion.div key={selected.id} initial={false} animate={{ opacity: 1, x: 0 }} exit={still ? {} : { opacity: 0, x: -20 }} transition={{ duration: still ? 0 : .18 }}>
             <ApprovalCard {...props} entry={selected} suggestion={coverage.data ?? undefined} command={pendingCommand} onCommandHandled={serial => { handledCommand.current = serial; setKeyboardCommand(null); props.onCommandHandled?.(); }} onBusyChange={setBusy} onDecided={(entry, note) => {
               const index = list.findIndex(e => e.id === entry.id);
               setSelectedId(list[index + 1]?.id ?? list[index - 1]?.id ?? null);
               setDecided(ids => [...ids, entry.id]);
-              setMessage(note ?? `Request #${entry.id}: ${entry.status === "approved" ? "Approved" : entry.status === "declined" ? "Declined" : entry.status}. ${entry.error ?? ""}`);
+              setReceipt({ entry, note });
             }} />
           </motion.div>}
         </AnimatePresence>

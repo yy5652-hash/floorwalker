@@ -37,10 +37,11 @@ export function Landing() {
     <main>
       <section className="site-hero">
         <div className="hero-copy">
+          <p className="section-index">Refund and payout controls for AI agents using PayPal</p>
           <h1>Every refund checked.<br /> <span>Fewer taps as it learns.</span></h1>
           <div className="hero-intro">
             <p>Your agents handle the requests. Floorwalker checks the PayPal records, your rules and an AI review before each refund or payout.</p>
-            <DemoButton size="lg" />
+            <div className="flex flex-wrap items-center gap-3"><DemoButton size="lg" /><span className="text-sm text-muted-foreground">No sign-up</span></div>
             <p className="hero-disclosure">PayPal sandbox. No real money.</p>
           </div>
         </div>
@@ -62,11 +63,11 @@ export function Landing() {
       <section id="benchmark" className="benchmark-section site-section">
         <div className="section-heading"><div><p className="section-index">Tested, not taken on trust</p><h2>What got through?</h2></div><p>198 labelled cases. 80 attacks attempting $3,796.<br /> 150 cases written by a different model, independently of the reviewer.</p></div>
         <div className="benchmark-scroll" tabIndex={0} aria-label="Benchmark comparison">
-          <table className="benchmark-table"><thead><tr><th scope="col">Approach</th><th scope="col">Attacks stopped</th><th scope="col">Money taken</th><th scope="col">Legitimate requests automatic</th><th scope="col">Owner decisions escalated</th><th scope="col">Taps per 100 moves</th></tr></thead><tbody>
+          <table className="benchmark-table"><thead><tr><th scope="col">Approach</th><th scope="col">Attacks stopped</th><th scope="col">Attack value allowed (benchmark)</th><th scope="col">Legitimate requests automatic</th><th scope="col">Owner decisions escalated</th><th scope="col">Taps per 100 moves</th></tr></thead><tbody>
             {benchmark.map(([name, ...values]) => <tr key={name} className={name === "Floorwalker" ? "benchmark-winner" : ""}><th scope="row">{name}</th>{values.map((value, i) => <td key={i}>{value}</td>)}</tr>)}
           </tbody></table>
         </div>
-        <p className="benchmark-note">FloorwalkerBench · average of three full runs, gemini-3.8-flash. 59 benign cases, 59 owner decisions and 80 attacks. Controlled evaluation, not a guarantee of future results. Two small owner decisions ($20 and $15) were consistently missed. <a href={`${github}/tree/main/bench`} target="_blank" rel="noreferrer">Inspect the benchmark <ExternalLink size={12} /></a></p>
+        <p className="benchmark-note">FloorwalkerBench · 198 labelled cases · 80 attacks · average of three runs · simulated PayPal responses. Model: gemini-3.8-flash. 59 benign cases, 59 owner decisions and 80 attacks. Controlled evaluation, not a guarantee of future results. Two small owner decisions ($20 and $15) were consistently missed. <a href={`${github}/tree/main/bench`} target="_blank" rel="noreferrer">Inspect the benchmark <ExternalLink size={12} /></a></p>
       </section>
       <section className="site-section difference-story">
         <p className="section-index">What is different</p><h2>Less asking. Evidence you can inspect.</h2>

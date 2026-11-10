@@ -7,7 +7,7 @@ import type { AddressInfo } from "node:net";
 process.env.FLOORWALKER_DB = ":memory:";
 process.env.FLOORWALKER_CORE_DB = ":memory:";
 process.env.BETTER_AUTH_SECRET = "assistant-test-auth-secret";
-const { createAssistant, readDeepSeek, workspaceContext } = await import("../server/assistant.ts");
+const { createAssistant, readDeepSeek, workspaceContext, assistantQuestions } = await import("../server/assistant.ts");
 const store = await import("../server/db.ts");
 const { inWorkspace, setDefaultWorkspace } = await import("../server/context.ts");
 const { DEFAULT_POLICY, DEFAULT_POLICY_TEXT } = await import("../server/guard/policy.ts");
@@ -179,8 +179,84 @@ test("context is read-only even for an uninitialized demo workspace", () => {
   try {
     inWorkspace(ws, { kind: "user", id: "owner", name: "Owner" }, () => {
       const before = ws.db.prepare("SELECT total_changes() AS n").get();
-      assert.equal(workspaceContext()!.ledger.length, 0);
+      const context = workspaceContext()!;
+      assert.equal(context.ledger.length, 0);
+      assert.equal(context.counts.whole_workspace.blocked, 0);
+      assert.equal(context.counts.whole_workspace.declined, 0);
+      assert.equal(context.latest_blocked_request, null);
+      assert.equal(context.latest_owner_declined_request, null);
+      assert.equal(context.coverage.ledger.from_at, null);
+      assert.equal(context.coverage.ledger.to_at, null);
       assert.deepEqual(ws.db.prepare("SELECT total_changes() AS n").get(), before);
     });
   } finally { ws.db.close(); }
+});
+
+test("workspace counts cover all outcomes and sources, with latest blocks and declines beyond the excerpt", () => {
+  const ws = workspace();
+  try {
+    inWorkspace(ws, { kind: "user", id: "owner", name: "Owner" }, () => {
+      store.db().prepare("UPDATE ledger SET status = 'executed', source = 'inbox', created_at = '2026-11-10T10:00:00.000Z'").run();
+      store.db().prepare("UPDATE ledger SET status = 'blocked', source = 'api', created_at = '2026-11-09T10:00:00.000Z' WHERE id = 1").run();
+      store.db().prepare("UPDATE ledger SET status = 'declined', source = 'history', created_at = '2026-10-10T10:00:00.000Z', decided_at = '2026-10-10T10:05:00.000Z', decline_reason = 'Too much' WHERE id = 2").run();
+      store.db().prepare("UPDATE ledger SET source = 'history' WHERE id BETWEEN 3 AND 5").run();
+      const context = workspaceContext()!;
+      assert.equal(context.counts.whole_workspace.executed, 33);
+      assert.equal(context.counts.whole_workspace.blocked, 1);
+      assert.equal(context.counts.whole_workspace.declined, 1);
+      assert.equal(context.counts.this_session.blocked, 1);
+      assert.equal(context.counts.this_session.declined, 0);
+      assert.equal(context.counts.this_session.executed, 30);
+      assert.equal(context.counts.example_history.blocked, 0);
+      assert.equal(context.counts.example_history.declined, 1);
+      assert.equal(context.counts.example_history.executed, 3);
+      assert.ok(!context.ledger.some(row => row.id === 1 || row.id === 2));
+      assert.equal(context.latest_blocked_request?.id, 1);
+      assert.equal(context.latest_blocked_request?.amount, 24);
+      assert.equal(context.latest_blocked_request?.at, "2026-11-09T10:00:00.000Z");
+      assert.equal(context.latest_blocked_request?.source_label, "REST API");
+      assert.equal(context.latest_blocked_request?.scope, "This session");
+      assert.equal(context.latest_blocked_request?.failing_checks[0].label, "Delivery");
+      assert.equal(context.latest_owner_declined_request?.id, 2);
+      assert.equal(context.latest_owner_declined_request?.decision_at, "2026-10-10T10:05:00.000Z");
+      assert.equal(context.latest_owner_declined_request?.decline_reason, "Too much");
+      assert.match(context.latest_owner_declined_request!.source_label, /Example history.*simulated.*not sent to PayPal/);
+      assert.ok(context.ledger.every(row => row.source_label === "Inbox" && row.scope === "This session"));
+      assert.equal(context.coverage.ledger.included_rows, 30);
+      assert.equal(context.coverage.ledger.from_at, "2026-11-10T10:00:00.000Z");
+      assert.equal(context.coverage.ledger.to_at, "2026-11-10T10:00:00.000Z");
+      assert.deepEqual({ ...context.coverage.workspace }, { total_rows: 35, from_at: "2026-10-10T10:00:00.000Z", to_at: "2026-11-10T10:00:00.000Z" });
+      assert.ok(Number.isFinite(Date.parse(context.generated_at)));
+      // An older request can have the latest owner decision.
+      store.db().prepare("UPDATE ledger SET status = 'declined', source = 'mcp', decided_at = '2026-11-10T11:00:00.000Z' WHERE id = 3").run();
+      assert.equal(workspaceContext()!.latest_owner_declined_request?.source_label, "MCP");
+      store.db().prepare("UPDATE ledger SET source = NULL WHERE id = 35").run();
+      assert.equal(workspaceContext()!.ledger[0].source_label, "Source not recorded");
+    });
+  } finally { ws.db.close(); }
+});
+
+test("suggested questions do not invent a blocked request or a previous refund", () => {
+  assert.match(assistantQuestions(true, true)[0], /last request blocked/);
+  assert.equal(assistantQuestions(false, true)[0], "What did Floorwalker check on the last refund?");
+  assert.equal(assistantQuestions(false, false)[0], "How does Floorwalker check a refund?");
+});
+
+test("suggestions use the whole workspace and respect activity privacy", async t => {
+  const h = await harness(t, {}, workspace(false));
+  const owner = { "x-test-user": "owner" };
+  assert.equal((await h.send("/assistant/suggestions", null, {}, "GET")).status, 401);
+  let data = await (await h.send("/assistant/suggestions", null, owner, "GET")).json();
+  assert.ok(!data.questions.some((q: string) => /last request blocked/.test(q)));
+  inWorkspace(h.ws, { kind: "user", id: "owner", name: "Owner" }, () => store.setSetting("assistant_activity", true));
+  data = await (await h.send("/assistant/suggestions", null, owner, "GET")).json();
+  assert.match(data.questions[0], /last request blocked/);
+  inWorkspace(h.ws, { kind: "user", id: "owner", name: "Owner" }, () => store.db().prepare("UPDATE ledger SET status = 'declined', source = 'history'").run());
+  data = await (await h.send("/assistant/suggestions", null, owner, "GET")).json();
+  assert.equal(data.questions[0], "What did Floorwalker check on the last refund?");
+  await (await h.send("/assistant", { message: "Was anything blocked?" }, owner)).text();
+  const prompt = h.calls.at(-1)!.body.messages[0].content;
+  assert.match(prompt, /use counts.whole_workspace/);
+  assert.match(prompt, /Owner declines.*different/);
+  assert.match(prompt, /"blocked":0,"declined":35/);
 });

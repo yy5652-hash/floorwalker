@@ -28,6 +28,8 @@ import {
   type GridState,
   type GridApi,
   type ICellRendererParams,
+  type ProcessCellForExportParams,
+  type IAggFuncParams,
 } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 import { Download, Search } from "lucide-react";
@@ -37,17 +39,17 @@ import {
   amountOf,
   money,
   entryCurrency,
-  STATUS_LABEL,
   statusTone,
   why,
   type LedgerEntry,
   type State,
   personName,
 } from "../api";
-import { DecisionCard } from "./Verdict";
+import { aggregateCurrency, decisionAttribution, exportCell, exportColumns, formatAggregate, largestBlocked, outcomeLabels as STATUS_LABEL } from "./ledger/helpers";
 
 // Load the integrated chart bundle with this lazy-loaded screen.
 ModuleRegistry.registerModules([IntegratedChartsModule.with(AgChartsEnterpriseModule)]);
+const ledgerAggFuncs = { ledgerCurrency: (p: IAggFuncParams) => aggregateCurrency(p.values) };
 
 function Detail({ entry, close }: { entry: LedgerEntry; close: () => void }) {
   return (
@@ -67,9 +69,13 @@ function Detail({ entry, close }: { entry: LedgerEntry; close: () => void }) {
         </SheetHeader>
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-5 p-4 sm:p-6">
-            <DecisionCard entry={entry} />
-            <p className="text-xs text-muted-foreground">Source: {entry.source?.toUpperCase() ?? "Inbox"}</p>
-            {entry.decline_reason && <p className="rounded-lg border p-3 text-sm">Decline reason: {entry.decline_reason}</p>}
+            <div className="space-y-2 rounded-lg border p-4">
+              <Badge variant="secondary" className={`tone-${statusTone(entry.status)}`}>{STATUS_LABEL[entry.status]}</Badge>
+              <p className="font-medium">{money(amountOf(entry), entryCurrency(entry))} · {personName(entry.counterparty)}</p>
+              {entry.justification && <p className="text-sm text-muted-foreground">{entry.justification}</p>}
+            </div>
+            <p className="text-xs text-muted-foreground">Source: {entry.source === "history" ? "Demo history (simulated)" : `Live session · ${entry.source ?? "inbox"}`}</p>
+            <DecisionTrace entry={entry} />
             <details className="rounded-lg border p-4 text-muted-foreground">
               <summary className="text-xs">PayPal response · JSON</summary>
               <pre>
@@ -110,7 +116,7 @@ function LedgerView({
   const entry = state.ledger.find((e) => e.id === selected);
   const mixedCurrencies = new Set(state.ledger.map(entryCurrency)).size > 1;
   const ledgerCurrency = entryCurrency(state.ledger[0] ?? { currency: state.policy.policy.currency });
-  const storageKey = `floorwalker:ledger-views:c2:${state.workspace?.id ?? "film"}:${state.me?.userId ?? "demo"}`;
+  const storageKey = `floorwalker:ledger-views:c3:${state.workspace?.id ?? "film"}:${state.me?.userId ?? "demo"}`;
   const [savedViews] = useState<Record<string, GridState>>(() => {
     try { const value = JSON.parse(localStorage.getItem(storageKey) ?? "{}"); return value && typeof value === "object" && !Array.isArray(value) ? value : {}; } catch { return {}; }
   });
@@ -127,15 +133,34 @@ function LedgerView({
   function chooseView(name: string) {
     const api = grid.current?.api;
     if (!api) return;
-    remember(api); activeView.current = name; setView(name); setSearch(savedViews[name]?.quickFilter?.text ?? "");
-    if (savedViews[name]) api.setState(mixedCurrencies ? { ...savedViews[name], aggregation: undefined } : savedViews[name]);
-    else {
-      api.setFilterModel(name === "All" ? null : { status: { filterType: "set", values: name === "Waiting" ? ["awaiting_approval"] : name === "Stopped" ? ["blocked", "declined", "failed"] : ["executed"] } });
+    remember(api); activeView.current = name; setView(name);
+    if (name === "All" || name === "Investigate stopped requests") {
+      setSearch(""); api.setGridOption("quickFilterText", "");
+      api.deselectAll(); api.collapseAll();
+      setSelected(undefined); location.hash = "ledger";
+      api.setFilterModel(name === "All" ? null : { status: { filterType: "set", values: ["blocked", "declined"] } });
+      api.setRowGroupColumns(name === "All" ? [] : ["agent_id"]);
+      api.applyColumnState({ state: name === "All" ? [] : [{ colId: "amount", sort: "desc" }], defaultState: { sort: null } });
+      if (name !== "All") {
+        const blocked = largestBlocked(state.ledger);
+        const node = blocked && api.getRowNode(String(blocked.id));
+        if (node) { api.setRowNodeExpanded(node, true, true, true); api.ensureNodeVisible(node, "top"); }
+      }
+      return;
     }
+    setSearch(savedViews[name]?.quickFilter?.text ?? "");
+    if (savedViews[name]) api.setState(savedViews[name]);
+    else {
+      api.setFilterModel({ status: { filterType: "set", values: name === "Waiting" ? ["awaiting_approval"] : ["executed"] } });
+    }
+  }
+  function processExportCell(p: ProcessCellForExportParams) {
+    return p.node?.data ? exportCell(p.node.data as LedgerEntry, p.column.getColId(), p.value) : "";
   }
   const columns = useMemo<ColDef<LedgerEntry>[]>(
     () => [
-      { field: "id", headerName: "#", width: 80, minWidth: 80, cellRenderer: "agGroupCellRenderer", chartDataType: "excluded" },
+      { field: "id", headerName: "#", width: 100, minWidth: 80, chartDataType: "excluded",
+        cellRendererSelector: (p) => !p.api.getRowGroupColumns().length ? { component: "agGroupCellRenderer" } : undefined },
       {
         field: "created_at",
         headerName: "Time",
@@ -170,18 +195,20 @@ function LedgerView({
       {
         field: "amount",
         headerName: "Amount",
-        aggFunc: mixedCurrencies ? undefined : "sum", enableValue: !mixedCurrencies, chartDataType: mixedCurrencies ? "excluded" : "series",
+        aggFunc: "sum", enableValue: !mixedCurrencies, chartDataType: mixedCurrencies ? "excluded" : "series",
         useValueFormatterForExport: false,
-        width: 125,
+        width: 170,
+        minWidth: 155,
+        tooltipValueGetter: (p) => p.valueFormatted ?? "",
         valueGetter: (p) => (p.data ? amountOf(p.data) : 0),
         valueFormatter: (p) =>
           p.data
             ? `${money(amountOf(p.data), entryCurrency(p.data))}${p.data.approved_amount != null && p.data.approved_amount !== p.data.amount ? ` of ${money(p.data.amount, entryCurrency(p.data))}` : ""}`
-            : p.value == null || mixedCurrencies ? "" : money(p.value, p.data ? entryCurrency(p.data) : ledgerCurrency),
+            : formatAggregate(p.value, p.node?.aggData?.currency ?? ""),
         cellClass: ["currency", "tabular-nums", "font-medium"],
         cellRenderer: (p: ICellRendererParams<LedgerEntry>) => {
           if (p.value == null) return null;
-          return <span className="ledger-amount-cell"><span>{p.data ? money(Number(p.value), entryCurrency(p.data)) : ""}</span>{p.data?.approved_amount != null && p.data.approved_amount !== p.data.amount && <small>of {money(p.data.amount, entryCurrency(p.data))}</small>}</span>;
+          return <span className="ledger-amount-cell"><span>{p.data ? money(Number(p.value), entryCurrency(p.data)) : p.valueFormatted}</span>{p.data?.approved_amount != null && p.data.approved_amount !== p.data.amount && <small>of {money(p.data.amount, entryCurrency(p.data))}</small>}</span>;
         },
       },
       {
@@ -222,7 +249,16 @@ function LedgerView({
         tooltipValueGetter: (p) => p.value,
       },
       { field: "source", headerName: "Source", hide: true, filter: "agSetColumnFilter", width: 110,
-        valueGetter: (p) => p.data ? p.data.source ?? "inbox" : null },
+        valueGetter: (p) => p.data ? exportCell(p.data, "source", null) : null },
+      { field: "currency", headerName: "Currency", hide: true, chartDataType: "excluded", aggFunc: "ledgerCurrency",
+        valueGetter: (p) => p.data ? entryCurrency(p.data) : null },
+      { field: "policy_id", headerName: "Policy version", hide: true, chartDataType: "excluded",
+        valueFormatter: (p) => p.value == null ? "Not recorded" : `v${p.value}` },
+      { field: "decision", headerName: "Decision", hide: true, chartDataType: "excluded" },
+      { field: "decided_by", headerName: "Decided by", hide: true, chartDataType: "excluded",
+        valueGetter: (p) => p.data ? decisionAttribution(p.data).text : null },
+      { field: "decided_at", headerName: "Decision time", hide: true, chartDataType: "excluded",
+        valueGetter: (p) => p.data ? decisionAttribution(p.data).at : null },
       { colId: "requests", headerName: "Count", hide: true, valueGetter: (p) => p.data ? 1 : null, aggFunc: "sum", width: 85, chartDataType: "excluded" },
       ...Object.entries(STATUS_LABEL).map(([status, label]): ColDef<LedgerEntry> => ({
         colId: `chart_${status}`, headerName: label, hide: true, suppressColumnsToolPanel: true,
@@ -280,16 +316,16 @@ function LedgerView({
         <Button variant="outline" disabled={mixedCurrencies} title={mixedCurrencies ? "Use the per-currency charts on Overview for mixed currencies." : undefined} onClick={() => {
           const api = grid.current?.api;
           if (!api) return;
-          // The category is always Agent, regardless of the previous row grouping.
-          api.setRowGroupColumns([]);
+          // AG Grid 36.2 range charts can use the existing group column as category.
           api.createRangeChart({
           chartType: "stackedColumn", aggFunc: "sum",
+          useGroupColumnAsCategory: api.getRowGroupColumns().length > 0,
           cellRange: { columns: ["agent_id", ...Object.keys(STATUS_LABEL).map((status) => `chart_${status}`)] },
           chartThemeName: resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light",
-          chartThemeOverrides: { common: { title: { enabled: true, text: `Money moves by agent and outcome · ${ledgerCurrency}` }, animation: { enabled: !isFilm() && !window.matchMedia("(prefers-reduced-motion: reduce)").matches } } },
+          chartThemeOverrides: { common: { title: { enabled: true, text: `Amounts by ${groupBy ? "group" : "agent"} and outcome · ${ledgerCurrency}` }, animation: { enabled: !isFilm() && !window.matchMedia("(prefers-reduced-motion: reduce)").matches } } },
           });
         }}>Chart</Button>
-        <Button variant="outline" onClick={() => grid.current?.api.exportDataAsExcel({ fileName: "floorwalker-ledger.xlsx", sheetName: "Ledger" })}>
+        <Button variant="outline" onClick={() => grid.current?.api.exportDataAsExcel({ fileName: "floorwalker-ledger.xlsx", sheetName: "Ledger", columnKeys: exportColumns, skipRowGroups: true, processCellCallback: processExportCell })}>
           <Download size={15} />Excel
         </Button>
         <Button
@@ -297,18 +333,7 @@ function LedgerView({
           onClick={() =>
             grid.current?.api.exportDataAsCsv({
               fileName: "floorwalker-ledger.csv",
-              processCellCallback: (p) => {
-                const field = p.column.getColId();
-                const row = p.node?.data as LedgerEntry | undefined;
-                const raw =
-                  field === "amount" && row
-                    ? `${money(amountOf(row), entryCurrency(row))}${row.approved_amount != null ? ` of ${money(row.amount, entryCurrency(row))}` : ""}`
-                    : field === "status" && row
-                      ? `${STATUS_LABEL[row.status]}${row.source === "history" ? " · Demo history" : ""}`
-                      : p.value;
-                const text = String(raw ?? "");
-                return /^[\s]*[=+@\-\t\r\n]/.test(text) ? `'${text}` : text;
-              },
+              columnKeys: exportColumns, skipRowGroups: true, processCellCallback: processExportCell,
             })
           }
         >
@@ -317,30 +342,32 @@ function LedgerView({
         </Button>
       </CardHeader>
       <div className="ledger-views" role="group" aria-label="Saved ledger views">
-        {["All", "Waiting", "Stopped", "Done by agents"].map(name => <button type="button" key={name} aria-pressed={view === name} onClick={() => chooseView(name)}>{name}</button>)}
+        {["All", "Waiting", "Investigate stopped requests", "Done by agents"].map(name => <button type="button" key={name} aria-pressed={view === name} onClick={() => chooseView(name)}>{name === "All" ? "All requests" : name}</button>)}
         <span>Filters, columns and grouping are saved per view</span>
       </div>
       <div className="h-[max(520px,calc(100dvh-230px))] min-w-0 w-full">
         <AgGridReact<LedgerEntry>
           ref={grid}
-          initialState={mixedCurrencies && savedViews.All ? { ...savedViews.All, aggregation: undefined } : savedViews.All}
+          initialState={savedViews.All}
           onStateUpdated={e => remember(e.api)}
           onGridPreDestroyed={e => remember(e.api)}
           theme={theme}
           columnDefs={columns}
+          aggFuncs={ledgerAggFuncs}
           rowData={state.ledger}
           animateRows={!isFilm() && !window.matchMedia("(prefers-reduced-motion: reduce)").matches}
           masterDetail
           detailRowAutoHeight
           detailCellRenderer={({ data }: ICellRendererParams<LedgerEntry>) => data ? <DecisionTrace entry={data} /> : null}
           groupDefaultExpanded={0}
-          autoGroupColumnDef={{ minWidth: 240, cellRendererParams: { suppressCount: false } }}
-          onColumnRowGroupChanged={(e) => setGroupBy(e.api.getRowGroupColumns()[0]?.getColId() ?? "")}
+          autoGroupColumnDef={{ field: "id", minWidth: 240, cellRendererParams: { suppressCount: false } }}
+          onColumnRowGroupChanged={(e) => { setGroupBy(e.api.getRowGroupColumns()[0]?.getColId() ?? ""); e.api.refreshCells({ columns: ["id"], force: true }); }}
           rowSelection={{ mode: "multiRow", enableClickSelection: false, selectAll: "filtered" }}
           cellSelection
           enableCharts={!mixedCurrencies}
           chartThemes={[resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light"]}
           customChartThemes={{ [resolvedTheme === "dark" ? "floorwalker-dark" : "floorwalker-light"]: chartTheme(resolvedTheme === "dark") }}
+          chartThemeOverrides={{ common: { title: { enabled: true, text: `Amounts by outcome · ${ledgerCurrency}` }, subtitle: { enabled: true, text: state.ledger.some(row => row.source === "history") ? "Filtered ledger · includes simulated demo history" : "Filtered ledger · live session" } } }}
           sideBar={{ toolPanels: ["columns", "filters"], hiddenByDefault: true }}
           statusBar={{ statusPanels: [
             { statusPanel: LedgerTotals, align: "left" },

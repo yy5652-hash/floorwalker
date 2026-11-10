@@ -6,19 +6,33 @@ import { useTheme } from "./theme-provider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { type LearnedRules, type State } from "../api";
+import { type LearnedRules, type State, type LedgerEntry } from "../api";
 import { emptyLearnedRules, useLearnedRules } from "../hooks/use-learned-rules";
 
 type Week = LearnedRules["weeks"][number];
 
+export function scopedTaps(rows: LedgerEntry[], weeks: Week[], days: number, now: number, scope: "This session" | "Example history") {
+  const moves = rows.filter(row => (row.source === "history") === (scope === "Example history") && (row.kind === "refund" || row.kind === "payout"));
+  const count = (entries: LedgerEntry[]) => ({ moves: entries.length, taps: entries.filter(row => row.decision === "hold").length,
+    per100: entries.length ? Math.round(entries.filter(row => row.decision === "hold").length / entries.length * 100) : 0 });
+  return { summary: { ...count(moves.filter(row => Date.parse(row.created_at) >= now - days * 86400000)), days },
+    weeks: weeks.map(week => ({ week: week.week, ...count(moves.filter(row => Date.parse(row.created_at) >= Date.parse(week.week) && Date.parse(row.created_at) < Date.parse(week.week) + 7 * 86400000)) })) };
+}
+
 export function TapsChart({ state }: { state: State }) {
   const query = useLearnedRules(state);
-  const { weeks, changes, summary } = query.data ?? emptyLearnedRules;
+  return <>{(["This session", "Example history"] as const).filter(scope => scope === "This session" || state.ledger.some(row => row.source === "history")).map(scope => <ScopedTapsChart key={scope} state={state} query={query} scope={scope} />)}</>;
+}
+function ScopedTapsChart({ state, query, scope }: { state: State; query: ReturnType<typeof useLearnedRules>; scope: "This session" | "Example history" }) {
+  const source = query.data ?? emptyLearnedRules;
+  const rows = state.ledger.filter(row => (row.source === "history") === (scope === "Example history"));
+  const { weeks, summary } = scopedTaps(state.ledger, source.weeks, source.summary?.days ?? 90, Date.now(), scope);
+  const changes = source.changes;
   const { resolvedTheme } = useTheme();
   const latest = weeks.findLast((week) => week.moves > 0);
   const firstIndex = weeks.findIndex(week => week.moves > 0);
   const lastIndex = weeks.findLastIndex(week => week.moves > 0);
-  const lastActivity = state.ledger.filter(entry => entry.kind === "refund" || entry.kind === "payout").reduce<string | null>((latest, entry) => !latest || entry.created_at > latest ? entry.created_at : latest, null);
+  const lastActivity = rows.filter(entry => entry.kind === "refund" || entry.kind === "payout").reduce<string | null>((latest, entry) => !latest || entry.created_at > latest ? entry.created_at : latest, null);
   const currentWeek = new Date(); currentWeek.setUTCHours(0, 0, 0, 0); currentWeek.setUTCDate(currentWeek.getUTCDate() - currentWeek.getUTCDay());
   const oldActivity = !!lastActivity && Date.parse(lastActivity) < currentWeek.getTime();
   const best = [...changes].sort((a, b) => b.impact.tapsSaved - a.impact.tapsSaved)[0];
@@ -45,7 +59,7 @@ export function TapsChart({ state }: { state: State }) {
           marker: { size: 5, fill: chartColor("--chart-2") },
           tooltip: {
             renderer: ({ datum }) => ({
-              title: datum.week,
+              title: `${datum.week} · ${scope}`,
               data: [
                 { label: "taps/moves", value: `${datum.taps}/${datum.moves}` },
               ],
@@ -63,10 +77,10 @@ export function TapsChart({ state }: { state: State }) {
         },
       },
     };
-  }, [weeks, firstIndex, lastIndex, resolvedTheme]);
+  }, [weeks, firstIndex, lastIndex, resolvedTheme, scope]);
   return (
     <Card className="taps-primary min-w-0 gap-3 p-5 shadow-none">
-      <h2>How often agents need you</h2>
+      <h2>How often agents need you · {scope}{scope === "Example history" && <span className="mt-2 block text-xs font-normal text-muted-foreground">Simulated requests · not sent to PayPal</span>}</h2>
       {query.isPending ? (
         <div
           role="status"
@@ -95,7 +109,7 @@ export function TapsChart({ state }: { state: State }) {
         <>
           <div>
             <div className="chart-number">
-              {summary?.per100 ?? latest?.per100 ?? "—"}
+              {summary.per100}<span className="ml-2 text-xs font-normal tracking-normal text-muted-foreground">{scope}</span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               taps per 100 money moves
@@ -109,12 +123,12 @@ export function TapsChart({ state }: { state: State }) {
             <p className="text-xs text-muted-foreground">No money moves yet.</p>
           )}
           </div>
-          {best && (
+          {best && scope === "This session" && (
             <a
               href="#rules"
               className="taps-suggestion text-sm underline-offset-4 hover:underline"
             >
-              <strong>{best.title}</strong><span>Saves {best.impact.tapsSaved} taps in replay · {best.impact.tapsPer100.before} → {best.impact.tapsPer100.after} per 100 moves</span><span>See suggestions →</span>
+              <strong>{best.title}</strong><span>{state.ledger.some(row => row.source === "history") ? `Example history${state.ledger.some(row => row.source !== "history") ? " + This session" : ""}` : "This session"} · recorded-request replay</span><span>Saves {best.impact.tapsSaved} taps in replay · {best.impact.tapsPer100.before} → {best.impact.tapsPer100.after} per 100 moves</span><span>See suggestions →</span>
             </a>
           )}
         </>

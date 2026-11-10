@@ -1,7 +1,8 @@
 import { BlockReasons } from "./RecordedExplanation";
 import { Badge } from "./ui/badge";
 import { ReviewNote } from "./Verdict";
-import { money, type LedgerEntry } from "../api";
+import { entryCurrency, money, statusTone, type LedgerEntry } from "../api";
+import { decisionAttribution, outcomeLabels } from "./ledger/helpers";
 
 export function DecisionTrace({ entry }: { entry: LedgerEntry }) {
   let facts: Exclude<LedgerEntry["facts"], string>;
@@ -9,11 +10,13 @@ export function DecisionTrace({ entry }: { entry: LedgerEntry }) {
   catch { facts = null; }
   const rules = facts?.rules;
   const age = rules?.capturedAt ? Math.floor((Date.parse(entry.created_at) - Date.parse(rules.capturedAt)) / 86400000) : NaN;
+  const attribution = decisionAttribution(entry);
+  const currency = entryCurrency(entry);
   const values = entry.kind === "payout"
-    ? [["Paid to this payee in 30 days", rules?.paidToPayee30d == null ? "Not recorded" : money(rules.paidToPayee30d)]]
+    ? [["Paid to this payee in 30 days", rules?.paidToPayee30d == null ? "Not recorded" : money(rules.paidToPayee30d, currency)]]
     : [
-      ["Captured amount", rules?.capturedAmount == null ? "Not recorded" : money(rules.capturedAmount)],
-      ["Refunded so far", rules?.refundedSoFar == null ? "Not recorded" : money(rules.refundedSoFar)],
+      ["Captured amount", rules?.capturedAmount == null ? "Not recorded" : money(rules.capturedAmount, currency)],
+      ["Refunded so far", rules?.refundedSoFar == null ? "Not recorded" : money(rules.refundedSoFar, currency)],
       ["Buyer", rules?.buyerEmail ?? "Not recorded"],
       ["Requester", rules?.requesterEmail ?? "Not recorded"],
       ["Order age at request", Number.isFinite(age) ? `${age} days` : "Not recorded"],
@@ -36,10 +39,15 @@ export function DecisionTrace({ entry }: { entry: LedgerEntry }) {
         </dl>
       </div>
       <div className="space-y-3">
+        <div className="space-y-2 rounded-lg border p-4">
+          <h4 className="text-xs font-medium text-muted-foreground">Current outcome</h4>
+          <p className={`font-medium tone-${statusTone(entry.status)}`}>{outcomeLabels[entry.status]}</p>
+          <p className="text-xs">{attribution.text}{attribution.at && <> · <time dateTime={attribution.at}>{new Date(attribution.at).toLocaleString("en-US")}</time></>}</p>
+          {entry.decline_reason && <p className="text-xs">Decline reason: {entry.decline_reason}</p>}
+        </div>
+        <h4 className="text-xs font-medium text-muted-foreground">Initial AI review</h4>
         <ReviewNote review={entry.review} policyId={entry.policy_id} />
-        {entry.review && <p className="text-xs">Verdict: {entry.review.verdict} · Injection flag: {entry.review.injection_detected ? "Detected" : "Not detected"}</p>}
-        <p className="text-xs">Decided by {entry.decided_by ?? "Not recorded"} · {entry.decided_at ? new Date(entry.decided_at).toLocaleString("en-US") : "Decision time not recorded"}</p>
-        {entry.decline_reason && <p className="text-xs">Decline reason: {entry.decline_reason}</p>}
+        {entry.review && <p className="text-xs">AI verdict: {entry.review.verdict} · Injection flag: {entry.review.injection_detected ? "Detected" : "Not detected"}</p>}
         <p className="break-all text-xs">{entry.source === "history" ? "Simulated · not sent to PayPal" : `PayPal reference: ${entry.paypal_ref ?? "Not recorded"}`}</p>
         {entry.error && <p className="text-xs text-destructive">{entry.error}</p>}
       </div>

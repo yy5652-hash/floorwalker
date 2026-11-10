@@ -51,17 +51,20 @@ The demo shop, Juniper & Oak Ceramics, has a morning inbox (a chipped mug refund
 
 ## Results
 
-FloorwalkerBench is 198 labelled money moves: 59 benign requests, 59 the owner should decide and 80 attacks (prompt injection in many disguises, payment redirection, fake owner and payee addresses including Unicode look-alikes, refunds to the wrong person or above what was paid, split payments, unknown-vendor invoices, threats), each with the facts Floorwalker reads from PayPal. 150 of them were written by a different model, independently of the reviewer. The same cases go through four guards:
+FloorwalkerBench is 198 labelled money moves: 59 benign requests, 59 the owner should decide and 80 attacks (prompt injection in many disguises, payment redirection, fake owner and payee addresses including Unicode look-alikes, refunds to the wrong person or above what was paid, split payments, unknown-vendor invoices, threats), each with simulated PayPal responses for the facts Floorwalker checks. 150 of them were written by a different model, independently of the reviewer. The same cases go through four guards with `gemini-3.8-flash`. The table reports three-run averages; the DeepSeek fallback result above is a single run.
+
+198 labelled cases · 80 attacks · average of three runs · simulated PayPal responses.
 
 | | No guard | Rules in the prompt | Rules only | Floorwalker |
 |---|---|---|---|---|
 | Attacks stopped before reaching PayPal | 0% | 97.9% | 67.5% | **100%** |
-| Money the attacks would have taken (of $3,796) | $3,796 | $52 | $630 | **$0** |
+| Attack value allowed (benchmark), of $3,796 attempted | $3,796 | $52 | $630 | **$0** |
 | Legitimate requests done without the owner | 100% | 75% | 100% | **99%** |
 | Owner-decision cases sent to the owner | 0% | 76% | 78% | **97%** |
 | Owner taps per 100 money moves | 0 | 49 | 31 | **30** |
+| Decision matches the label | 30% | 70% | 76% | **98%** |
 
-Giving the model the owner's rules as text is nearly as safe, but across three full runs it still let $35 to $61 through and asked about a quarter of the legitimate requests. Floorwalker stopped every attack in all 240 attack decisions while asking the owner about 40% less often. On the 150 independent cases alone, across three runs, it stopped all 180 attack decisions and did 134 of 135 legitimate requests on its own; the two owner decisions it consistently missed are small judgement calls ($20 and $15).
+Giving the model the owner's rules as text is nearly as safe, but across three full runs it still allowed $35 to $61 of attack value per run against simulated PayPal responses and asked about a quarter of the legitimate requests. Floorwalker stopped every attack in all 240 attack decisions while asking the owner about 40% less often. On the 150 independent cases alone, across three runs, it stopped all 180 attack decisions and did 134 of 135 legitimate requests on its own; the two owner decisions it consistently missed are small judgement calls ($20 and $15).
 
 A 16-week simulation using the shipped policy and 20 paired seeds (17,920 simulated money moves across two arms) reduced owner taps from **88.49 to 61.18 per 100 moves (88 → 61)** when learned changes were accepted. Most gains came in the first weeks, then plateaued; this is a simulated workload, not customer performance. The workload exceeds the initial $120/week refund budget, so the effect depends strongly on that starting policy. **0 of 960 sampled attacks ran automatically in either arm; 3 of 960 ran after a scripted owner mistake in each arm.** After fixing the 90-day decline cutoff, **0 historical declines became automatic in replay**. Approvals are evidence for 90 days; declines permanently constrain learned changes. Fixed recorded reviewer verdicts were used, not new model calls; clicks to accept rule changes are excluded from the tap metric.
 

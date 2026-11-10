@@ -179,6 +179,7 @@ export type Incident = {
   kind: "refund" | "payout";
   paypal_ref: string;
   amount: number;
+  currency?: string;
   counterparty: string | null;
   capture_id: string | null;
   detail: string;
@@ -189,12 +190,20 @@ export type Incident = {
   resolved_by: string | null;
   resolution: "mine" | "not_mine" | null;
 };
+export type WatchSweep = {
+  attempted: number;
+  checked: number;
+  failed: number;
+  orders: number;
+  refunds: number;
+  at: string;
+};
 export type IncidentsResponse = {
   incidents: Incident[];
   watch: {
     webhook: boolean;
     webhook_error: string | null;
-    last_sweep: { at: string; orders: number; refunds: number } | null;
+    last_sweep: WatchSweep | { at: string; orders: number; refunds: number } | null;
     last_event: { at: string; type: string } | null;
     freeze: boolean;
   };

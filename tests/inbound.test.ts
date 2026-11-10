@@ -246,6 +246,232 @@ test('automatic sending refuses held/blocked moves even when reply text claims s
   }
   assert.equal(mail.length, 0);
 });
+test('legacy owner sections are split on read and never included in manual or automatic mail', async () => {
+  const h = workspace();
+  h.run(() => inbound.saveInboxSettings({ support_address: 'help@shop.example', auto_run: false, auto_send: true }));
+  for (const auto of [false, true]) {
+    const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Help', body: 'Help' }).ticket.id);
+    h.run(() => store.db().prepare('UPDATE tickets SET reply=?, status=? WHERE id=?')
+      .run('Customer reply:\nThank you for writing.\n\n**Owner to-do note:**\nPrivate owner instructions.', 'handled', id));
+    const ticket = h.run(() => store.ticket(id))!;
+    assert.equal(ticket.reply, 'Thank you for writing.');
+    assert.equal(ticket.internal_note, 'Private owner instructions.');
+    assert.deepEqual(h.run(store.tickets).find(t => t.id === id), ticket);
+    await h.run(() => auto ? inbound.maybeSendReply(id) : inbound.sendReply(id));
+    assert.equal(mail.at(-1)!.text, 'Thank you for writing.');
+    assert.doesNotMatch(mail.at(-1)!.html, /Private|Owner to-do/);
+  }
+  assert.equal(mail.length, 2);
+  assert.deepEqual(store.splitTicketReply('Internal note: Private\n\nReply to customer — not sent:\nHello.'), { reply: 'Hello.', internalNote: 'Private' });
+  assert.deepEqual(store.splitTicketReply('## Internal notes (not for the customer):\nPrivate\n\nCustomer reply draft (not sent):\nHello.'), { reply: 'Hello.', internalNote: 'Private' });
+  assert.deepEqual(store.splitTicketReply('An ordinary reply.'), { reply: 'An ordinary reply.', internalNote: '' });
+});
+test('opening an old ticket database adds reply fields without losing customer text or owner notes', () => {
+  const path = join(dir, 'legacy-tickets.db');
+  const old = new DatabaseSync(path);
+  old.exec(`CREATE TABLE tickets (id TEXT PRIMARY KEY, channel TEXT, from_name TEXT, from_email TEXT, subject TEXT, body TEXT,
+    received_at TEXT, status TEXT, reply TEXT);
+    INSERT INTO tickets VALUES ('legacy', 'email', 'Buyer', 'buyer@example.com', 'Help', 'Help', '2026-11-10', 'handled', 'Hello.\nOwner to-do note: Private.');`);
+  old.close();
+  const upgraded = store.openDb(path), h = workspace();
+  try {
+    inWorkspace({ ...h.ws, db: upgraded }, actor, () => {
+      const ticket = store.ticket('legacy')!;
+      assert.equal(ticket.reply, 'Hello.'); assert.equal(ticket.internal_note, 'Private.');
+      assert.equal(ticket.reply_stale, false); assert.equal(ticket.needs_follow_up, 0);
+      assert.equal(store.db().prepare('SELECT reply FROM tickets WHERE id=?').get('legacy')!.reply, 'Hello.\nOwner to-do note: Private.');
+    });
+  } finally { upgraded.close(); }
+});
+test('new separate notes and notes pasted into edited drafts stay out of outgoing payloads', async () => {
+  const h = workspace();
+  h.run(() => inbound.saveInboxSettings({ support_address: 'help@shop.example', auto_run: false, auto_send: true }));
+  for (const auto of [false, true]) {
+    const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Help', body: 'Help' }).ticket.id);
+    h.run(() => store.closeTicket(id, 'Hello.', { internalNote: 'Private owner task.' }));
+    if (!auto) await h.run(() => inbound.sendReply(id, false, { action: 'save', reply: 'Thanks.\nInternal note: More private work.' }));
+    await h.run(() => auto ? inbound.maybeSendReply(id) : inbound.sendReply(id));
+    assert.doesNotMatch(JSON.stringify(mail.at(-1)), /Private|private|Internal note/);
+    assert.match(h.run(() => store.ticket(id))!.internal_note!, /Private owner task/);
+  }
+  assert.equal(mail.length, 2);
+});
+test('every changed payment outcome marks the draft stale; manual send needs separate current confirmation', async () => {
+  const h = workspace();
+  h.run(() => inbound.saveInboxSettings({ support_address: 'help@shop.example', auto_run: false, auto_send: true }));
+  for (const status of ['approved', 'declined', 'executed', 'failed'] as const) {
+    const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Refund', body: 'Please refund' }).ticket.id);
+    const entryId = h.run(() => store.recordProposal({ ticketId: id, tool: 'create_refund', kind: 'refund', params: {}, amount: 24, decision: 'allow', status: 'awaiting_approval', checks: [] }));
+    h.run(() => store.closeTicket(id, 'Your refund was requested.'));
+    assert.equal(h.run(() => store.ticket(id))!.reply_stale, false);
+    h.run(() => store.updateLedger(entryId, { status }));
+    assert.equal(h.run(() => store.ticket(id))!.reply_stale, true);
+    await h.run(() => inbound.maybeSendReply(id));
+    await assert.rejects(h.run(() => inbound.sendReply(id, true)), /review and confirm/);
+    await h.run(() => inbound.sendReply(id, false, { action: 'save', reply: 'Edited wording.' }));
+    assert.equal(h.run(() => store.ticket(id))!.reply_stale, true);
+    const ticket = h.run(() => store.ticket(id))!;
+    await assert.rejects(h.run(() => inbound.sendReply(id, false, { confirm_stale: true, payment_snapshot: 'old' })), /Payment status changed/);
+    await h.run(() => inbound.sendReply(id, false, { confirm_stale: true, payment_snapshot: ticket.current_payment_snapshot }));
+  }
+  assert.equal(mail.length, 4);
+});
+test('legacy payment drafts are conservatively stale and handoffs never auto-send', async () => {
+  const h = workspace();
+  h.run(() => inbound.saveInboxSettings({ support_address: 'help@shop.example', auto_run: false, auto_send: true }));
+  const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Help', body: 'Help' }).ticket.id);
+  h.run(() => {
+    store.recordProposal({ ticketId: id, tool: 'create_refund', kind: 'refund', params: {}, amount: 10, decision: 'allow', status: 'executed', checks: [] });
+    store.db().prepare('UPDATE tickets SET reply=? WHERE id=?').run('An older draft.', id);
+  });
+  assert.equal(h.run(() => store.ticket(id))!.reply_stale, true);
+  h.run(() => store.closeTicket(id, 'We will verify this request.', { internalNote: 'Owner must verify.', needsFollowUp: true }));
+  await h.run(() => inbound.maybeSendReply(id));
+  assert.equal(mail.length, 0);
+});
+test('update-reply uses a text-only request, preserves internal notes and cannot move money', async t => {
+  const { anthropic } = await import('../server/llm.ts');
+  const provider = config.ai.provider; config.ai.provider = 'anthropic';
+  const h = workspace();
+  const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Refund', body: 'Refund please' }).ticket.id);
+  const entryId = h.run(() => store.recordProposal({ ticketId: id, tool: 'create_refund', kind: 'refund', params: {}, amount: 24, decision: 'hold', status: 'awaiting_approval', checks: [] }));
+  h.run(() => { store.closeTicket(id, 'Awaiting review.', { internalNote: 'Private owner note.' }); store.updateLedger(entryId, { status: 'executed', paypalRef: 'SANDBOX-REF' }); });
+  const before = h.run(store.ledger);
+  t.mock.method(anthropic().messages, 'parse', async (request: any) => {
+    assert.equal(request.tools, undefined);
+    assert.equal(request.tool_choice, undefined);
+    const data = JSON.parse(request.messages[0].content);
+    assert.equal(data.old_draft, 'Awaiting review.');
+    assert.equal(data.current_ledger[0].status, 'executed');
+    assert.equal(data.current_ledger[0].paypal_ref, 'SANDBOX-REF');
+    assert.doesNotMatch(request.messages[0].content, /Private owner note/);
+    return { parsed_output: { customer_reply: 'The refund was submitted to PayPal sandbox.' } };
+  });
+  try {
+    const updated = await h.run(() => inbound.sendReply(id, false, { action: 'update' }));
+    assert.equal(updated!.reply_stale, false);
+    assert.equal(updated!.internal_note, 'Private owner note.');
+    assert.equal(updated!.reply, 'The refund was submitted to PayPal sandbox.');
+    assert.deepEqual(h.run(store.ledger), before);
+    assert.equal(mail.length, 0);
+  } finally { config.ai.provider = provider; }
+});
+test('approved payments are described as submitted, not waiting for the owner', async t => {
+  const { anthropic } = await import('../server/llm.ts');
+  const provider = config.ai.provider; config.ai.provider = 'anthropic';
+  const h = workspace();
+  const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Refund', body: 'Refund please' }).ticket.id);
+  const entryId = h.run(() => store.recordProposal({ ticketId: id, tool: 'create_refund', kind: 'refund', params: {}, amount: 86, decision: 'hold', status: 'awaiting_approval', checks: [] }));
+  h.run(() => { store.closeTicket(id, 'Awaiting review.'); store.updateLedger(entryId, { status: 'approved', paypalRef: 'APPROVED-SANDBOX' }); });
+  t.mock.method(anthropic().messages, 'parse', async (request: any) => {
+    assert.match(request.system, /Both approved .* and executed .* mean successfully submitted to PayPal sandbox/);
+    assert.equal(JSON.parse(request.messages[0].content).current_ledger[0].status, 'approved');
+    assert.equal(request.tools, undefined);
+    return { parsed_output: { customer_reply: 'Your refund was submitted to PayPal sandbox.' } };
+  });
+  try {
+    const updated = await h.run(() => inbound.sendReply(id, false, { action: 'update' }));
+    assert.equal(updated!.reply_stale, false);
+    assert.doesNotMatch(updated!.reply!, /Awaiting review/);
+  } finally { config.ai.provider = provider; }
+});
+test('a decision during reply rewriting still leaves the rewritten draft stale', async t => {
+  const { anthropic } = await import('../server/llm.ts');
+  const provider = config.ai.provider; config.ai.provider = 'anthropic';
+  const h = workspace();
+  const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Refund', body: 'Refund please' }).ticket.id);
+  const entryId = h.run(() => store.recordProposal({ ticketId: id, tool: 'create_refund', kind: 'refund', params: {}, amount: 24, decision: 'hold', status: 'awaiting_approval', checks: [] }));
+  h.run(() => store.closeTicket(id, 'Awaiting review.'));
+  t.mock.method(anthropic().messages, 'parse', async () => {
+    h.run(() => store.updateLedger(entryId, { status: 'declined' }));
+    return { parsed_output: { customer_reply: 'The refund is under review.' } };
+  });
+  try {
+    const updated = await h.run(() => inbound.sendReply(id, false, { action: 'update' }));
+    assert.equal(updated!.reply_stale, true);
+  } finally { config.ai.provider = provider; }
+});
+test('Gemini update-reply also sends no tools', async t => {
+  const { gemini } = await import('../server/llm.ts');
+  const provider = config.ai.provider, key = process.env.GEMINI_API_KEY;
+  config.ai.provider = 'gemini'; process.env.GEMINI_API_KEY = 'reply-test-key';
+  const h = workspace();
+  const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Help', body: 'Help' }).ticket.id);
+  h.run(() => store.closeTicket(id, 'Old draft.'));
+  t.mock.method(gemini().models, 'generateContent', async (request: any) => {
+    assert.equal(request.config.tools, undefined);
+    assert.equal(request.config.toolConfig, undefined);
+    return { text: JSON.stringify({ customer_reply: 'Updated draft.' }) };
+  });
+  try {
+    const updated = await h.run(() => inbound.sendReply(id, false, { action: 'update' }));
+    assert.equal(updated!.reply, 'Updated draft.');
+    assert.equal(mail.length, 0); assert.equal(h.run(store.ledger).length, 0);
+  } finally { config.ai.provider = provider; if (key === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = key; }
+});
+test('agent output stores internal notes and handoff data separately', async t => {
+  const { anthropic } = await import('../server/llm.ts');
+  const { handleTicket } = await import('../server/agent/run.ts');
+  const provider = config.ai.provider; config.ai.provider = 'anthropic';
+  const h = workspace();
+  const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Help', body: 'Help' }).ticket.id);
+  t.mock.method(anthropic().messages, 'create', async (request: any) => {
+    assert.match(request.system, /Never promise returns/);
+    return { content: [{ type: 'text', text: JSON.stringify({ customer_reply: 'Thanks for writing.', internal_note: 'Owner must verify.', needs_follow_up: true }) }] };
+  });
+  try {
+    const events: import('../server/agent/run.ts').AgentEvent[] = [];
+    await h.run(() => handleTicket(id, e => events.push(e)));
+    const ticket = h.run(() => store.ticket(id))!;
+    assert.equal(ticket.reply, 'Thanks for writing.');
+    assert.equal(ticket.internal_note, 'Owner must verify.');
+    assert.equal(ticket.needs_follow_up, 1);
+    assert.deepEqual(events.filter(e => e.type === 'reply'), [{ type: 'reply', text: 'Thanks for writing.' }]);
+  } finally { config.ai.provider = provider; }
+});
+test('an owner decision during a read-only agent tool does not make the draft look current', async t => {
+  const { anthropic } = await import('../server/llm.ts');
+  const { handleTicket } = await import('../server/agent/run.ts');
+  const provider = config.ai.provider; config.ai.provider = 'anthropic';
+  const h = workspace();
+  const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Help', body: 'Help' }).ticket.id);
+  const entryId = h.run(() => store.recordProposal({ ticketId: id, tool: 'create_refund', kind: 'refund', params: {}, amount: 24, decision: 'hold', status: 'awaiting_approval', checks: [] }));
+  let calls = 0;
+  t.mock.method(anthropic().messages, 'create', async () => {
+    if (!calls++) {
+      h.run(() => store.updateLedger(entryId, { status: 'declined' }));
+      return { content: [{ type: 'tool_use', id: 'read-orders', name: 'find_customer_orders', input: { email: 'buyer@example.com' } }] };
+    }
+    return { content: [{ type: 'text', text: JSON.stringify({ customer_reply: 'Under review.', internal_note: '', needs_follow_up: false }) }] };
+  });
+  try {
+    await h.run(() => handleTicket(id, () => {}));
+    assert.equal(h.run(() => store.ticket(id))!.reply_stale, true);
+  } finally { config.ai.provider = provider; }
+});
+test('payment-change handoff records follow-up without a model or money request', async t => {
+  const { handleTicket } = await import('../server/agent/run.ts');
+  const h = workspace();
+  const id = h.run(() => inbound.addMessage({ from_email: 'payee@example.com', subject: 'New PayPal email', body: 'Please change my payment address to new@example.com.' }).ticket.id);
+  t.mock.method(globalThis, 'fetch', async () => { assert.fail('Handoff must not call external APIs'); });
+  await h.run(() => handleTicket(id, () => {}));
+  assert.equal(h.run(() => store.ticket(id))!.needs_follow_up, 1);
+  assert.match(h.run(() => store.ticket(id))!.internal_note!, /known channel/);
+  assert.equal(h.run(store.ledger).length, 0);
+});
+test('malformed agent output cannot become a customer reply containing internal JSON fields', async t => {
+  const { anthropic } = await import('../server/llm.ts');
+  const { handleTicket } = await import('../server/agent/run.ts');
+  const provider = config.ai.provider; config.ai.provider = 'anthropic';
+  const h = workspace();
+  const id = h.run(() => inbound.addMessage({ from_email: 'buyer@example.com', subject: 'Help', body: 'Help' }).ticket.id);
+  t.mock.method(anthropic().messages, 'create', async () => ({ content: [{ type: 'text', text: 'Here is the result: {"customer_reply":"Hello", "internal_note":"Private"}' }] }));
+  try {
+    await assert.rejects(h.run(() => handleTicket(id, () => {})));
+    assert.equal(h.run(() => store.ticket(id))!.reply, null);
+    assert.equal(mail.length, 0);
+  } finally { config.ai.provider = provider; }
+});
 test('outbound Resend payload carries custom From, Reply-To and thread headers', async t => {
   const { sendEmail } = await import('../server/email.ts');
   const old = process.env.RESEND_API_KEY; process.env.RESEND_API_KEY = 'fake'; setEmailTransport();

@@ -164,7 +164,7 @@ app.post('/api/inbox/rotate', need({ agents: ['manage'] }), handle(req => {
   return rotateAddress();
 }));
 app.post('/api/inbox/messages', need({ agents: ['manage'] }), handle(req => addMessage(req.body)));
-app.post('/api/inbox/:id/reply', need({ agents: ['manage'] }), handle(req => sendReply(String(req.params.id), req.body?.confirm === true)));
+app.post('/api/inbox/:id/reply', need({ agents: ['manage'] }), handle(req => sendReply(String(req.params.id), req.body?.confirm === true, req.body)));
 // Coordinate all manual and automatic runs through the same workspace lock.
 app.use(['/api/tickets/:id/run', '/api/attack'], (req, res, next) => {
   if (req.method !== 'POST') return next();

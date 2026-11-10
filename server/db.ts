@@ -134,6 +134,9 @@ const COLUMNS: [table: string, column: string, type: string][] = [
   ["tickets", "thread_references", "TEXT"],
   ["tickets", "attachment_note", "TEXT"],
   ["tickets", "reply_sent_at", "TEXT"],
+  ["tickets", "internal_note", "TEXT"],
+  ["tickets", "needs_follow_up", "INTEGER NOT NULL DEFAULT 0"],
+  ["tickets", "reply_ledger_snapshot", "TEXT"],
   ["tickets", "inbound_kind", "TEXT"],
   ["tickets", "confirmation_link", "TEXT"],
   ["tickets", "confirmation_code", "TEXT"],
@@ -347,6 +350,11 @@ export type Ticket = {
   received_at: string;
   status: "open" | "handled";
   reply: string | null;
+  internal_note?: string | null;
+  needs_follow_up?: number;
+  reply_ledger_snapshot?: string | null;
+  current_payment_snapshot?: string;
+  reply_stale?: boolean;
   message_id?: string | null;
   external_id?: string | null;
   thread_references?: string | null;
@@ -365,15 +373,61 @@ export function upsertTicket(t: Omit<Ticket, "status" | "reply">) {
 }
 
 export function tickets(): Ticket[] {
-  return db().prepare("SELECT * FROM tickets ORDER BY received_at ASC").all() as any;
+  return (db().prepare("SELECT * FROM tickets ORDER BY received_at ASC").all() as unknown as Ticket[]).map(readTicketReply);
 }
 
 export function ticket(id: string): Ticket | undefined {
-  return db().prepare("SELECT * FROM tickets WHERE id = ?").get(id) as any;
+  const row = db().prepare("SELECT * FROM tickets WHERE id = ?").get(id) as Ticket | undefined;
+  return row ? readTicketReply(row) : undefined;
 }
 
-export function closeTicket(id: string, reply: string) {
-  db().prepare("UPDATE tickets SET status = 'handled', reply = ? WHERE id = ?").run(reply, id);
+/** Older drafts sometimes mixed owner-only sections into customer text. */
+export function splitTicketReply(reply: string | null) {
+  const customer: string[] = [], internal: string[] = [];
+  let ownerOnly = false;
+  for (const line of (reply ?? "").split("\n")) {
+    const heading = /^\s*(?:#{1,6}\s*)?(?:[-*]\s+)?(Owner(?:['’]s)? to[- ]do notes?|Internal notes?|Customer reply(?: draft)?|Reply to (?:the )?customer(?:\s*[—–-]\s*not sent)?)(?:\s*\([^\n)]*\))?(?:\s*[:—–-]\s*|\s*$)(.*)$/i.exec(line.replaceAll("**", ""));
+    if (heading) {
+      ownerOnly = /^(owner|internal)/i.test(heading[1]);
+      if (heading[2]) (ownerOnly ? internal : customer).push(heading[2]);
+    } else (ownerOnly ? internal : customer).push(line);
+  }
+  return { reply: customer.join("\n").trim(), internalNote: internal.join("\n").trim() };
+}
+
+export function ticketReplySnapshot(id: string): string {
+  return JSON.stringify(db().prepare(`SELECT id, status, amount, approved_amount, currency, paypal_ref, decided_at, decline_reason
+    FROM ledger WHERE ticket_id = ? ORDER BY id`).all(id));
+}
+
+function readTicketReply(row: Ticket): Ticket {
+  const parts = splitTicketReply(row.reply);
+  const current = ticketReplySnapshot(row.id);
+  return { ...row, reply: row.reply === null ? null : parts.reply,
+    internal_note: [row.internal_note, parts.internalNote].filter(Boolean).join("\n\n") || null,
+    current_payment_snapshot: current,
+    // Without a legacy snapshot, any recorded payment needs a fresh review.
+    reply_stale: !!parts.reply && (row.reply_ledger_snapshot ?? "[]") !== current };
+}
+
+export function closeTicket(id: string, reply: string, options: { internalNote?: string; needsFollowUp?: boolean; snapshot?: string } = {}) {
+  const parts = splitTicketReply(reply);
+  db().prepare(`UPDATE tickets SET status = 'handled', reply = ?, internal_note = ?, needs_follow_up = ?,
+    reply_ledger_snapshot = ?, reply_sent_at = NULL WHERE id = ?`).run(parts.reply,
+    [options.internalNote, parts.internalNote].filter(Boolean).join("\n\n") || null,
+    options.needsFollowUp ? 1 : 0, options.snapshot ?? ticketReplySnapshot(id), id);
+}
+
+/** Editing wording alone must not mark an older draft as current. */
+export function saveTicketReply(id: string, reply: string, snapshot?: string) {
+  const t = ticket(id);
+  if (!t) throw new Error("No ticket reply to edit");
+  const parts = splitTicketReply(reply);
+  db().prepare(`UPDATE tickets SET reply = ?, internal_note = ?, reply_ledger_snapshot = ?,
+    reply_sent_at = CASE WHEN reply = ? THEN reply_sent_at ELSE NULL END WHERE id = ?`).run(parts.reply,
+    [t.internal_note, parts.internalNote].filter(Boolean).join("\n\n") || null,
+    snapshot ?? t.reply_ledger_snapshot ?? null, parts.reply, id);
+  return ticket(id)!;
 }
 
 export type LedgerStatus = "executed" | "awaiting_approval" | "executing" | "approved" | "declined" | "blocked" | "failed";

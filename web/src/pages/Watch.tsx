@@ -10,7 +10,7 @@ import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   api, canManage, errorMessage, personName, post, relativeTime,
-  type BypassResult, type Incident, type State,
+  type BypassResult, type Incident, type State, type WatchSweep,
 } from "../api";
 import { money } from "../lib/money";
 import { useIncidents, useRefreshIncidents } from "../hooks/use-incidents";
@@ -40,6 +40,7 @@ const defaultColDef: ColDef<Incident> = {
   sortable: true, resizable: true, tooltipValueGetter: ({ valueFormatted, value }) => valueFormatted ?? value,
 };
 
+const sweepStatus = (sweep: WatchSweep) => `Checked ${sweep.checked} of ${sweep.attempted} tracked orders${sweep.failed ? ` · ${sweep.failed} ${sweep.failed === 1 ? "needs" : "need"} retry` : ""}`;
 
 export function Watch({ state }: { state: State }) {
   const currency = state.policy.policy.currency ?? "USD";
@@ -49,8 +50,12 @@ export function Watch({ state }: { state: State }) {
   const [checking, setChecking] = useState(false);
   const onError = (error: unknown) => toast.error(errorMessage(error));
   const sweep = useMutation({
-    mutationFn: () => post<{ orders: number; refunds: number; incidents: Incident[] }>("/api/incidents/sweep"),
-    onSuccess: (result) => toast.success(`${result.orders} orders, ${result.refunds} refunds checked`),
+    mutationFn: () => post<WatchSweep & { incidents: Incident[] }>("/api/incidents/sweep"),
+    onSuccess: (result) => {
+      if (result.failed) toast.warning(sweepStatus(result));
+      else if (result.attempted) toast.success(sweepStatus(result));
+      else toast.message("No tracked orders to check");
+    },
     onError, onSettled: refresh, retry: false,
   });
   const settings = useMutation({
@@ -68,6 +73,10 @@ export function Watch({ state }: { state: State }) {
   const busy = sweep.isPending || settings.isPending || bypass.isPending;
   const manageable = canManage(state);
   const watch = query.data?.watch;
+  const lastSweep = watch?.last_sweep;
+  // Older sweeps counted failures as checked; their coverage is unknown.
+  const coverage = lastSweep && "checked" in lastSweep ? lastSweep : null;
+  const complete = coverage && coverage.attempted > 0 && coverage.checked === coverage.attempted && coverage.failed === 0;
   // An open incident, or one the owner marked "not me" while its agents are still frozen: the next step stays on screen.
   const attention = (query.data?.incidents ?? []).filter(incident => !incident.resolved_at
     || (incident.resolution === "not_mine" && frozenAgentIds(incident.frozen_agents).some(id => state.agents.find(agent => agent.id === id)?.status === "frozen")));
@@ -82,20 +91,24 @@ export function Watch({ state }: { state: State }) {
                 <div className="flex flex-wrap items-start justify-between gap-3 py-4">
                   <h2 className="text-sm font-medium">PayPal webhooks</h2>
                   <div className="space-y-1 text-sm">
-                    {watch.webhook ? (
-                      <span className="flex items-center gap-1.5">Connected <Check className="size-4 text-allow" aria-label="Connected" /></span>
-                    ) : <p>Not available on this server</p>}
+                    <p>{watch.webhook ? "Registered" : "Not registered"}</p>
                     {watch.webhook_error && <p className="max-w-lg break-words text-xs text-destructive">{watch.webhook_error}</p>}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 py-4">
                   <div className="space-y-1">
                     <h2 className="text-sm font-medium">Order check</h2>
-                    {watch.last_sweep ? (
-                      <p className="text-xs text-muted-foreground">
-                        <time dateTime={watch.last_sweep.at} title={new Date(watch.last_sweep.at).toLocaleString("en-US")}>{relativeTime(watch.last_sweep.at)}</time>
-                        {` · ${watch.last_sweep.orders} orders, ${watch.last_sweep.refunds} refunds checked`}
-                      </p>
+                    {lastSweep ? (
+                      <>
+                        <p className={`flex items-center gap-1.5 text-sm ${complete ? "text-allow" : coverage?.failed ? "text-destructive" : "text-muted-foreground"}`}>
+                          {complete && <Check className="size-4" aria-label="Complete" />}
+                          {coverage ? sweepStatus(coverage) : "Coverage unavailable. Check again."}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Last sweep: <time dateTime={lastSweep.at}>{new Date(lastSweep.at).toLocaleString("en-US")}</time>
+                          {coverage && ` · ${coverage.refunds} refunds checked`}
+                        </p>
+                      </>
                     ) : <p className="text-xs text-muted-foreground">Not checked yet</p>}
                   </div>
                   <Button variant="outline" disabled={!manageable || busy || !state.configured.paypal}
@@ -106,11 +119,11 @@ export function Watch({ state }: { state: State }) {
                   </Button>
                 </div>
                 <div className="flex flex-wrap items-start justify-between gap-3 py-4">
-                  <h2 className="text-sm font-medium">Last PayPal event</h2>
+                  <h2 className="text-sm font-medium">Last verified PayPal event</h2>
                   <p className="break-all text-sm text-muted-foreground">
                     {watch.last_event ? <>{watch.last_event.type}{" · "}
-                      <time dateTime={watch.last_event.at} title={new Date(watch.last_event.at).toLocaleString("en-US")}>{relativeTime(watch.last_event.at)}</time>
-                    </> : "None yet"}
+                      <time dateTime={watch.last_event.at} title={new Date(watch.last_event.at).toLocaleString("en-US")}>{new Date(watch.last_event.at).toLocaleString("en-US")}{" · "}{relativeTime(watch.last_event.at)}</time>
+                    </> : "No verified events yet"}
                   </p>
                 </div>
               </CardContent>
@@ -128,7 +141,7 @@ export function Watch({ state }: { state: State }) {
             <section className="watch-incidents" aria-label="Incidents">
               <h2>Incidents</h2>
               {attention.length ? attention.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id).map(incident => <IncidentBanner key={`${state.workspace?.id ?? "film"}:${incident.id}`} incident={incident} state={state} />)
-                : <div className="watch-empty"><h3>{query.data?.incidents.length ? "No open incidents" : "No incidents recorded"}</h3><p>Watching for PayPal refunds and payout events that have no matching Floorwalker action. Order checks compare refunds on tracked PayPal orders; connected webhooks report PayPal events.</p><p>{watch.last_sweep ? `Last order check: ${new Date(watch.last_sweep.at).toLocaleString("en-US")}. ${watch.last_sweep.orders} orders and ${watch.last_sweep.refunds} refunds checked.` : "No order check has completed yet."}</p>{watch.last_event && <p>Last PayPal event: {new Date(watch.last_event.at).toLocaleString("en-US")}.</p>}</div>}
+                : <div className="watch-empty"><h3>{query.data?.incidents.length ? "No open incidents" : "No incidents recorded"}</h3><p>Watching for PayPal refunds and payout events that have no matching Floorwalker action. Order checks compare refunds on tracked PayPal orders; registered webhooks report PayPal events.</p><p>{coverage ? sweepStatus(coverage) : lastSweep ? "Coverage unavailable. Check again." : "No order check has completed yet."}</p></div>}
             </section>
             <details className="watch-history" open>
               <summary>Incident history · expand a row for its timeline</summary>

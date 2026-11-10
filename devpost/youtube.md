@@ -1,6 +1,6 @@
 # YouTube upload
 
-- File: ~/Desktop/Floorwalker-PayPal-demo.mp4 (under 3 minutes, 1080p). Subtitles: ~/Desktop/Floorwalker-PayPal-demo.srt (English).
+- File: ~/Desktop/PayPal-影片/Floorwalker_20261103_1355_v1_横屏.mp4 (v1, 177.5 s, 1920x1080). Subtitles: ~/Desktop/PayPal-影片/配套材料/Floorwalker_20261103_1355_v1_横屏.srt (English).
 - Visibility: **Public** (the rules require the video to be publicly visible on YouTube).
 - Audience: not made for kids.
 
@@ -21,4 +21,4 @@ Try it live: https://floorwalker.yingzhilu.cn
 Built with the PayPal Agent Toolkit, PayPal Orders, Payments, Payouts, Webhooks and Subscriptions APIs (sandbox), Gemini, DeepSeek (chat), shadcn/ui, AG Grid Enterprise, AG Charts and MCP.
 Code: https://github.com/yy5652-hash/floorwalker
 
-Narration: Kokoro-82M (Apache-2.0). Music generated with Google Lyria and still images with Google Gemini, for this video; no third-party music. 3D scenes rendered with three.js (MIT). The product footage is the real app replaying a recorded live run; the demo shop and its people are fictional.
+Narration: Kokoro-82M (Apache-2.0). Music: "Air on the G String" (J. S. Bach), performed by Golden Cut Reborn, from the YouTube Audio Library. Still images generated with Google Gemini for this video. 3D scenes rendered with three.js (MIT). The product footage is the real app replaying a recorded live run; the demo shop and its people are fictional.
